@@ -1,0 +1,122 @@
+{
+  "_note": "Canonical tag vocabulary. Everything filters on these. Closed list \u2014 adding a tag means adding it here first, or table validation fails at import.",
+  "room": {
+    "space": [
+      "indoor",
+      "outdoor",
+      "underground"
+    ],
+    "light": [
+      "lit",
+      "dim",
+      "dark"
+    ],
+    "traffic": [
+      "path",
+      "open",
+      "dead-end",
+      "junction"
+    ],
+    "use": [
+      "dwelling",
+      "storage",
+      "workspace",
+      "shrine",
+      "market",
+      "ruin",
+      "grave",
+      "cell"
+    ],
+    "nature": [
+      "wild",
+      "cultivated",
+      "water",
+      "stone",
+      "wood",
+      "flooded",
+      "settled"
+    ],
+    "mood": [
+      "quiet",
+      "grim",
+      "lush",
+      "austere",
+      "corrupt",
+      "holy",
+      "opulent"
+    ],
+    "feature": [
+      "landmark",
+      "vantage",
+      "hazard",
+      "concealment",
+      "hearth"
+    ]
+  },
+  "creature": {
+    "taxonomy": [
+      "beast",
+      "humanoid",
+      "undead",
+      "construct",
+      "fey",
+      "demon",
+      "plant"
+    ],
+    "mind": [
+      "mindless",
+      "cunning",
+      "proud",
+      "venal",
+      "timid",
+      "relentless"
+    ],
+    "build": [
+      "armoured",
+      "swift",
+      "hulking",
+      "frail"
+    ],
+    "appetite": [
+      "hungry",
+      "lustful",
+      "greedy",
+      "vengeful"
+    ]
+  },
+  "object": {
+    "kind": [
+      "weapon",
+      "armour",
+      "shield",
+      "light",
+      "tool",
+      "key",
+      "consumable",
+      "treasure",
+      "curio",
+      "container",
+      "door"
+    ],
+    "quality": [
+      "crude",
+      "plain",
+      "fine",
+      "masterwork"
+    ],
+    "trait": [
+      "heavy",
+      "fragile",
+      "cursed",
+      "blessed",
+      "stolen",
+      "sealed"
+    ]
+  },
+  "operators": {
+    "_note": "How requires[] is read",
+    "plain": "indoor          \u2014 must have",
+    "any": "dark|wild       \u2014 must have at least one",
+    "not": "!water          \u2014 must not have"
+  }
+}

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Project Aimon — main view</title>
+<style>
+:root{
+  --black:#000000; --grey:#aaaaaa; --white:#ffffff;
+  --cyan:#55ffff; --amber:#ffaa00; --red:#ff5555; --green:#55ff55; --dim:#555555;
+  --bg:var(--black); --fg:var(--grey);
+}
+body[data-mono="amber"]{ --grey:#ffb000; --white:#ffd88a; --cyan:#ffb000;
+  --green:#ffb000; --red:#ff8a3d; --amber:#ffd88a; --dim:#7a5200; }
+body[data-mono="green"]{ --grey:#33ff66; --white:#b6ffcc; --cyan:#33ff66;
+  --green:#33ff66; --red:#ff8a8a; --amber:#b6ffcc; --dim:#146b2c; }
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:"Cascadia Mono","Consolas","DejaVu Sans Mono","Liberation Mono",Menlo,monospace;
+  font-size:15px; line-height:1.45; letter-spacing:.01em;
+  display:flex; flex-direction:column;
+  -webkit-font-smoothing:none; font-smooth:never;
+}
+
+/* ── Status line: inverted block, one line. Stats, HP, turn. ───────── */
+.status{
+  background:var(--grey); color:var(--black); font-weight:700;
+  flex:0 0 auto; padding:3px 10px; display:flex; gap:1.5em; flex-wrap:wrap;
+  position:sticky; top:0; z-index:5;
+}
+.status .sp{margin-left:auto}
+.status button{background:none;border:0;font:inherit;font-weight:700;
+  color:var(--black);cursor:pointer;padding:0}
+
+/* ── Map section: map, room name, room description ─────────────────── */
+.panel{
+  flex:0 0 auto; display:flex; gap:16px; align-items:flex-start;
+  width:100%; max-width:80ch; margin:0 auto;
+  padding:10px 10px 9px; border-bottom:1px solid var(--dim);
+}
+.panel[hidden]{display:none}
+.panel .where{min-width:0}
+.panel .rname{color:var(--white); font-weight:700; margin:0 0 .2em}
+.panel .rdesc{color:var(--grey); margin:0; font-size:.92em}
+
+.map{display:grid; gap:2px; width:max-content}
+.map i{
+  width:1.05em; height:1.05em; display:block; font-style:normal;
+  font-size:1.05em; line-height:1.05em; text-align:center; color:var(--dim);
+}
+.map i.seen{color:var(--grey)}
+.map i.here{color:var(--white); font-weight:700}
+.map i.ln{color:var(--dim)}
+
+/* ── Log: everything scrolls, prompt included ──────────────────────── */
+.log{
+  flex:1 1 auto; overflow-y:auto;
+  padding:12px 10px calc(14px + env(safe-area-inset-bottom));
+  width:100%; max-width:80ch; margin:0 auto;
+  scrollbar-width:thin; scrollbar-color:var(--dim) transparent;
+}
+.log::-webkit-scrollbar{width:8px}
+.log::-webkit-scrollbar-thumb{background:var(--dim)}
+.b{margin:0 0 .95em}
+.echo{color:var(--white); font-weight:700}
+.echo::before{content:"> "; color:var(--dim)}
+.roll{color:var(--cyan)}
+.hit{color:var(--red)}
+.ok{color:var(--green)}
+.warnline{color:var(--amber)}
+.speak{color:var(--white)}
+.rule{color:var(--dim)}
+.sep{color:var(--dim); margin:0 0 .95em}
+
+/* Inline prompt — sits at the end of the log and scrolls with it */
+#promptline{display:flex; align-items:baseline; gap:.5ch; margin:0}
+#promptline .caret{color:var(--dim); font-weight:700}
+input{
+  flex:1; background:transparent; border:0; outline:none; font:inherit;
+  color:var(--white); font-weight:700; padding:0; min-width:0;
+}
+.cursor{color:var(--white); animation:blink 1.06s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){ .cursor{animation:none} }
+
+.mono{position:fixed; right:8px; bottom:calc(10px + env(safe-area-inset-bottom));
+  display:flex; gap:4px; z-index:6; opacity:.5}
+.mono:hover{opacity:1}
+.mono button{width:20px;height:20px;border:1px solid var(--dim);cursor:pointer;font-size:0}
+.mono button[aria-pressed="true"]{border-color:var(--white);border-width:2px}
+.mono .m1{background:#aaaaaa}.mono .m2{background:#ffb000}.mono .m3{background:#33ff66}
+
+@media (max-width:560px){
+  body{font-size:14px}
+  .status{gap:1em; font-size:.85em}
+  .panel{gap:12px; padding:9px 8px 8px}
+  .log{padding:11px 8px calc(14px + env(safe-area-inset-bottom))}
+}
+@media (min-width:900px){ body{font-size:16px} }
+</style>
+</head>
+<body data-mono="cga">
+
+<div class="status" role="status">
+  <span>HRD 14</span><span>AGI 11</span><span>CHA 16</span>
+  <span>HP 11/14</span><span>T 47</span>
+  <span class="sp"><button id="tg" aria-expanded="true" aria-controls="panel">[-]</button></span>
+</div>
+
+<div class="panel" id="panel">
+  <div id="mini"></div>
+  <div class="where">
+    <p class="rname">Fish Market</p>
+    <p class="rdesc">Gutting tables run the length of the quay, scaled silver
+    and slick. Two stalls are still trading this late. The third is shuttered,
+    and its shutters are newer than the stall.</p>
+  </div>
+</div>
+
+<div class="log" id="log" aria-live="polite">
+
+  <p class="b echo">take brass key</p>
+  <p class="b">Taken. Someone kicked it under the scaling bench and did not
+  come back for it.</p>
+
+  <p class="b echo">ask bern about the shuttered stall</p>
+  <p class="b roll">Charisma 16 · moderate · 52% — rolled 31. Success.</p>
+  <p class="b"><span class="speak">"Marda's."</span> Old Bern does not look up
+  from his knife. <span class="speak">"Was Marda's. Harbourmaster's men put
+  those boards up Tuesday and nobody's asked why out loud since."</span> He
+  turns the fish over. <span class="speak">"You didn't hear it here."</span></p>
+
+  <p class="b echo">tell brannoc to watch the stair</p>
+  <p class="b"><span class="speak">"Aye."</span> Brannoc drifts to the foot of
+  the stair without being told twice, and stops looking like a man waiting for
+  someone.</p>
+
+  <p class="b echo">map</p>
+  <div id="mapslot"></div>
+  <p class="b rule">Eight rooms walked.</p>
+
+  <p class="b echo">force the boards</p>
+  <p class="b roll">Hardiness 14 · hard · 38% — rolled 61. Failed.</p>
+  <p class="b">The top board flexes, holds, and lets go of exactly one nail
+  with a sound like a dropped coin in a quiet room.</p>
+
+  <p class="b warnline">Somewhere behind you, boots stop walking.</p>
+  <p class="sep">─────────────────────────────</p>
+
+  <p class="b">A harbour tough comes around the crates with a gaff hook held
+  low and comfortable, the way you hold a thing you have used.</p>
+
+  <p class="b echo">attack tough</p>
+  <p class="b roll">To hit 47% — rolled 03. <span class="ok">Critical.</span>
+  Ignores armour.</p>
+  <p class="b">Your swing goes in under the arm before he has finished
+  deciding to raise it. <span class="hit">6 damage.</span></p>
+  <p class="b roll">Tough attacks — rolled 88. Miss.</p>
+  <p class="b">Brannoc takes him from the side. <span class="hit">3 damage.</span>
+  The gaff hook rings off the cobbles.</p>
+  <p class="b roll">Courage check — <span class="ok">broken.</span></p>
+  <p class="b">He runs. Nobody follows, and the gulls resettle.</p>
+
+  <p class="b warnline">Your torch is guttering. Twelve turns of light left.</p>
+
+  <p id="promptline">
+    <span class="caret">&gt;</span>
+    <input id="in" autocomplete="off" autocapitalize="off" spellcheck="false"
+           aria-label="Enter a command">
+    <span class="cursor" aria-hidden="true">█</span>
+  </p>
+</div>
+
+<div class="mono" role="group" aria-label="Monitor">
+  <button class="m1" data-m="cga" aria-pressed="true">CGA</button>
+  <button class="m2" data-m="amber" aria-pressed="false">Amber</button>
+  <button class="m3" data-m="green" aria-pressed="false">Green</button>
+</div>
+
+<script>
+/* ── Map: rooms at stored world coordinates, connections drawn ────────
+   Adjacency does NOT imply connection — the rooms along an inn corridor
+   sit side by side and share no doors — so the map renders on a HALF-STEP
+   grid. (2x,2y) holds a room; (2x+1,2y) and (2x,2y+1) hold connector
+   slots, drawn only where an edge exists. The absence of an edge IS the
+   wall; nothing stores "not connected".
+   ▧ nothing known · □ walked · ▣ here. No glyph for "seen but not
+   entered", so the map can never spoil what lies ahead. */
+const ROOMS = {
+  quay:[3,2], market:[3,1], bern:[4,1], shut:[5,1], ware:[3,0],
+  stair:[3,3], alley:[2,2], tap:[1,2], pier:[4,2], snug:[2,1]
+};
+const EDGES = [
+  ['quay','market'], ['market','bern'], ['bern','shut'], ['market','ware'],
+  ['quay','stair'],  ['quay','alley'],  ['alley','tap'], ['quay','pier'],
+  ['pier','shut']
+];
+/* snug sits beside both market and alley and connects to NEITHER — the
+   walled-off case the half-step grid exists to show honestly. */
+const HERE = 'market';
+const VISITED = ['quay','market','bern','ware','stair','alley','tap','pier','snug'];
+
+const linked = (a,b) => EDGES.some(([x,y]) => (x===a&&y===b)||(x===b&&y===a));
+const at = (gx,gy) => Object.keys(ROOMS).find(id =>
+  VISITED.includes(id) && ROOMS[id][0]===gx && ROOMS[id][1]===gy);
+const cell = id => id===HERE ? '<i class="here">▣</i>'
+                 : id       ? '<i class="seen">□</i>'
+                            : '<i>▧</i>';
+
+function render(x0,x1,y0,y1){
+  const w=(x1-x0)*2+1; let out='';
+  for(let ry=0; ry<=(y1-y0)*2; ry++){
+    for(let rx=0; rx<=(x1-x0)*2; rx++){
+      const gx=x0+rx/2, gy=y0+ry/2;
+      if(rx%2===0 && ry%2===0){ out+=cell(at(gx,gy)); continue; }
+      if(rx%2===1 && ry%2===0){
+        const a=at(gx-.5,gy), b=at(gx+.5,gy);
+        out += (a&&b&&linked(a,b)) ? '<i class="ln">─</i>' : '<i> </i>'; continue;
+      }
+      if(rx%2===0 && ry%2===1){
+        const a=at(gx,gy-.5), b=at(gx,gy+.5);
+        out += (a&&b&&linked(a,b)) ? '<i class="ln">│</i>' : '<i> </i>'; continue;
+      }
+      out+='<i> </i>';
+    }
+  }
+  return '<div class="map" style="grid-template-columns:repeat('+w+',1fr)" '+
+         'role="img" aria-label="Map">'+out+'</div>';
+}
+const drawMini = () => { const [hx,hy]=ROOMS[HERE]; return render(hx-1,hx+1,hy-1,hy+1); };
+const drawMap  = () => { const p=VISITED.map(id=>ROOMS[id]);
+  return render(Math.min(...p.map(q=>q[0]))-1, Math.max(...p.map(q=>q[0]))+1,
+                Math.min(...p.map(q=>q[1]))-1, Math.max(...p.map(q=>q[1]))+1); };
+document.getElementById('mini').innerHTML=drawMini();
+document.getElementById('mapslot').innerHTML=drawMap();
+
+/* ── Inline prompt: no fixed input box. The caret lives at the end of the
+   log and scrolls with everything else, as a terminal does. */
+const log=document.getElementById('log'), input=document.getElementById('in'),
+      pl=document.getElementById('promptline');
+const add=(html,cls='b')=>{
+  const el=document.createElement(cls==='raw'?'div':'p');
+  if(cls!=='raw') el.className=cls;
+  el.innerHTML=html; log.insertBefore(el,pl);
+};
+const replies={
+  look:'Gutting tables, gulls, and two stalls still trading. The third is shuttered.',
+  i:'A brass key, a guttering torch, a short sword, and thirty-eight gold.',
+  wait:'You wait. The gulls do not.',
+  n:'The warehouse door is shut, and its lock is older than the one behind you.',
+  s:'The quay runs on into dark you have no light to spend on.',
+  e:'The boards hold.',
+  w:'Stalls, and a man who stops talking as you pass.'
+};
+function run(cmd){
+  const c=cmd.trim().toLowerCase(); if(!c) return;
+  add(c,'b echo');
+  if(c==='map'){ add(drawMap(),'raw'); add('Eight rooms walked.','b rule'); }
+  else if(replies[c]) add(replies[c]);
+  else add('<span class="rule">[no such verb — the narrator answers in world-voice and nothing changes]</span>');
+  input.value=''; log.scrollTop=log.scrollHeight;
+}
+input.addEventListener('keydown',e=>{ if(e.key==='Enter') run(input.value); });
+log.addEventListener('click',e=>{ if(!getSelection().toString()) input.focus(); });
+
+const tg=document.getElementById('tg'), panel=document.getElementById('panel');
+tg.addEventListener('click',e=>{
+  e.stopPropagation();
+  const open=panel.hidden;
+  panel.hidden=!open; tg.textContent=open?'[-]':'[+]';
+  tg.setAttribute('aria-expanded',String(open)); input.focus();
+});
+document.querySelectorAll('.mono button').forEach(b=>
+  b.addEventListener('click',()=>{
+    document.body.dataset.mono=b.dataset.m;
+    document.querySelectorAll('.mono button').forEach(x=>
+      x.setAttribute('aria-pressed',String(x===b)));
+    input.focus();
+  }));
+log.scrollTop=log.scrollHeight; input.focus();
+</script>
+</body>
+</html>

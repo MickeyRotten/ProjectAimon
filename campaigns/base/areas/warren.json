@@ -1,0 +1,133 @@
+{
+  "id": "warren",
+  "name": "Under-Warren",
+  "size": [
+    12,
+    20
+  ],
+  "shapes": [
+    "warren",
+    "sprawl"
+  ],
+  "areaTags": [
+    "underground",
+    "dark",
+    "stone"
+  ],
+  "themeTokens": [
+    "hunger",
+    "old blood",
+    "fungus",
+    "echoes",
+    "the deep road",
+    "something kept"
+  ],
+  "roomTypes": {
+    "tunnel": {
+      "w": 28,
+      "tags": [
+        "underground",
+        "path",
+        "dark",
+        "stone"
+      ]
+    },
+    "chamber": {
+      "w": 16,
+      "tags": [
+        "underground",
+        "open",
+        "dark",
+        "stone"
+      ]
+    },
+    "cistern": {
+      "w": 9,
+      "tags": [
+        "underground",
+        "water",
+        "flooded",
+        "dark",
+        "hazard"
+      ]
+    },
+    "fungal": {
+      "w": 9,
+      "tags": [
+        "underground",
+        "lush",
+        "dim",
+        "hazard",
+        "corrupt"
+      ]
+    },
+    "midden": {
+      "w": 8,
+      "tags": [
+        "underground",
+        "storage",
+        "dark",
+        "grim"
+      ]
+    },
+    "nest": {
+      "w": 8,
+      "tags": [
+        "underground",
+        "dwelling",
+        "dark",
+        "grim"
+      ]
+    },
+    "shaft": {
+      "w": 7,
+      "tags": [
+        "underground",
+        "vantage",
+        "dim",
+        "junction"
+      ]
+    },
+    "crypt": {
+      "w": 6,
+      "tags": [
+        "underground",
+        "grave",
+        "dark",
+        "grim",
+        "landmark"
+      ]
+    },
+    "seam": {
+      "w": 5,
+      "tags": [
+        "underground",
+        "workspace",
+        "dark",
+        "stone",
+        "dead-end"
+      ]
+    },
+    "cell": {
+      "w": 4,
+      "tags": [
+        "underground",
+        "cell",
+        "dark",
+        "grim",
+        "dead-end"
+      ]
+    }
+  },
+  "gates": {
+    "warren": 40,
+    "ruin": 30,
+    "farmland": 30
+  },
+  "sexOverride": null,
+  "sexOverrideRespects": [
+    "none"
+  ],
+  "tierFloor": 2,
+  "tierCeil": 5
+}

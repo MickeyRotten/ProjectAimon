@@ -1,0 +1,615 @@
+{
+  "_note": "Items generate as: base + quality + up to two affixes. 20 bases x 4 qualities x 24 affixes gives thousands of distinct results from a table you can read in one screen. Affixes may ONLY modify values the engine already has — no affix introduces a mechanic.",
+  "qualities": [
+    {
+      "id": "crude",
+      "w": 30,
+      "mult": 0.7,
+      "priceMult": 0.4,
+      "affixes": 0,
+      "tags": [
+        "crude"
+      ]
+    },
+    {
+      "id": "plain",
+      "w": 45,
+      "mult": 1.0,
+      "priceMult": 1.0,
+      "affixes": 0,
+      "tags": [
+        "plain"
+      ]
+    },
+    {
+      "id": "fine",
+      "w": 20,
+      "mult": 1.2,
+      "priceMult": 3.0,
+      "affixes": 1,
+      "tags": [
+        "fine"
+      ]
+    },
+    {
+      "id": "masterwork",
+      "w": 5,
+      "mult": 1.4,
+      "priceMult": 9.0,
+      "affixes": 2,
+      "tags": [
+        "masterwork"
+      ]
+    }
+  ],
+  "bases": [
+    {
+      "id": "sword",
+      "kind": "weapon",
+      "w": 10,
+      "nouns": [
+        "sword",
+        "blade"
+      ],
+      "adjectives": [
+        "straight",
+        "long"
+      ]
+    },
+    {
+      "id": "axe",
+      "kind": "weapon",
+      "w": 10,
+      "nouns": [
+        "axe"
+      ],
+      "adjectives": [
+        "bearded",
+        "broad"
+      ]
+    },
+    {
+      "id": "spear",
+      "kind": "weapon",
+      "w": 9,
+      "nouns": [
+        "spear",
+        "shaft"
+      ],
+      "adjectives": [
+        "ash",
+        "long"
+      ]
+    },
+    {
+      "id": "club",
+      "kind": "weapon",
+      "w": 10,
+      "nouns": [
+        "club",
+        "cudgel"
+      ],
+      "adjectives": [
+        "knotted",
+        "heavy"
+      ]
+    },
+    {
+      "id": "bow",
+      "kind": "weapon",
+      "w": 7,
+      "nouns": [
+        "bow"
+      ],
+      "adjectives": [
+        "short",
+        "horn"
+      ]
+    },
+    {
+      "id": "leather",
+      "kind": "armour",
+      "w": 10,
+      "nouns": [
+        "jerkin",
+        "leathers"
+      ],
+      "adjectives": [
+        "boiled",
+        "scuffed"
+      ]
+    },
+    {
+      "id": "chain",
+      "kind": "armour",
+      "w": 7,
+      "nouns": [
+        "hauberk",
+        "mail"
+      ],
+      "adjectives": [
+        "riveted",
+        "close"
+      ]
+    },
+    {
+      "id": "plate",
+      "kind": "armour",
+      "w": 3,
+      "nouns": [
+        "plate",
+        "harness"
+      ],
+      "adjectives": [
+        "banded",
+        "full"
+      ]
+    },
+    {
+      "id": "shield",
+      "kind": "shield",
+      "w": 7,
+      "nouns": [
+        "shield",
+        "buckler"
+      ],
+      "adjectives": [
+        "round",
+        "banded"
+      ]
+    },
+    {
+      "id": "torch",
+      "kind": "light",
+      "w": 12,
+      "nouns": [
+        "torch",
+        "brand"
+      ],
+      "adjectives": [
+        "pitch",
+        "guttering"
+      ],
+      "burn": 60
+    },
+    {
+      "id": "lantern",
+      "kind": "light",
+      "w": 5,
+      "nouns": [
+        "lantern",
+        "lamp"
+      ],
+      "adjectives": [
+        "hooded",
+        "tin"
+      ],
+      "burn": 220
+    },
+    {
+      "id": "rope",
+      "kind": "tool",
+      "w": 8,
+      "nouns": [
+        "rope",
+        "coil"
+      ],
+      "adjectives": [
+        "hemp",
+        "tarred"
+      ]
+    },
+    {
+      "id": "crowbar",
+      "kind": "tool",
+      "w": 6,
+      "nouns": [
+        "crowbar",
+        "pry bar"
+      ],
+      "adjectives": [
+        "iron",
+        "bent"
+      ]
+    },
+    {
+      "id": "lockpick",
+      "kind": "tool",
+      "w": 5,
+      "nouns": [
+        "picks",
+        "wires"
+      ],
+      "adjectives": [
+        "thin",
+        "bone-handled"
+      ]
+    },
+    {
+      "id": "key",
+      "kind": "key",
+      "w": 6,
+      "nouns": [
+        "key"
+      ],
+      "adjectives": [
+        "brass",
+        "iron",
+        "toothed"
+      ]
+    },
+    {
+      "id": "salve",
+      "kind": "consumable",
+      "w": 9,
+      "nouns": [
+        "salve",
+        "poultice"
+      ],
+      "adjectives": [
+        "green",
+        "cloying"
+      ],
+      "heals": "hp"
+    },
+    {
+      "id": "draught",
+      "kind": "consumable",
+      "w": 7,
+      "nouns": [
+        "draught",
+        "tonic"
+      ],
+      "adjectives": [
+        "bitter",
+        "clouded"
+      ],
+      "heals": "resolve"
+    },
+    {
+      "id": "cordial",
+      "kind": "consumable",
+      "w": 4,
+      "nouns": [
+        "cordial",
+        "philtre"
+      ],
+      "adjectives": [
+        "rose",
+        "warm"
+      ],
+      "libido": 8
+    },
+    {
+      "id": "coinpurse",
+      "kind": "treasure",
+      "w": 10,
+      "nouns": [
+        "purse",
+        "pouch"
+      ],
+      "adjectives": [
+        "cut",
+        "fat"
+      ]
+    },
+    {
+      "id": "curio",
+      "kind": "curio",
+      "w": 8,
+      "nouns": [
+        "carving",
+        "token",
+        "icon",
+        "ring"
+      ],
+      "adjectives": [
+        "worn",
+        "strange",
+        "tarnished"
+      ]
+    },
+    {
+      "id": "waystone_token",
+      "kind": "consumable",
+      "w": 4,
+      "nouns": [
+        "token",
+        "waystone"
+      ],
+      "adjectives": [
+        "chipped",
+        "humming"
+      ],
+      "returnsToHub": true
+    }
+  ],
+  "affixes": {
+    "_note": "requires[] filters by base kind or tag. Effects name engine fields only.",
+    "prefix": [
+      {
+        "id": "keen",
+        "w": 10,
+        "name": "Keen",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "penetration": 10
+        }
+      },
+      {
+        "id": "weighted",
+        "w": 10,
+        "name": "Weighted",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "damage": 1,
+          "accuracy": -4
+        }
+      },
+      {
+        "id": "balanced",
+        "w": 10,
+        "name": "Balanced",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "accuracy": 8
+        }
+      },
+      {
+        "id": "cruel",
+        "w": 7,
+        "name": "Cruel",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "critChance": 6
+        }
+      },
+      {
+        "id": "notched",
+        "w": 9,
+        "name": "Notched",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "damage": -1,
+          "accuracy": 4
+        },
+        "tags": [
+          "crude"
+        ]
+      },
+      {
+        "id": "reinforced",
+        "w": 10,
+        "name": "Reinforced",
+        "requires": [
+          "armour|shield"
+        ],
+        "mods": {
+          "reduction": 6
+        }
+      },
+      {
+        "id": "supple",
+        "w": 10,
+        "name": "Supple",
+        "requires": [
+          "armour"
+        ],
+        "mods": {
+          "penalty": -6
+        }
+      },
+      {
+        "id": "gilded",
+        "w": 6,
+        "name": "Gilded",
+        "requires": [
+          "armour|shield|curio"
+        ],
+        "mods": {
+          "presence": 6,
+          "priceMult": 2.0
+        }
+      },
+      {
+        "id": "hooded",
+        "w": 8,
+        "name": "Hooded",
+        "requires": [
+          "light"
+        ],
+        "mods": {
+          "burn": 60
+        }
+      },
+      {
+        "id": "heirloom",
+        "w": 4,
+        "name": "Heirloom",
+        "requires": [
+          "weapon|armour|curio"
+        ],
+        "mods": {
+          "priceMult": 3.0,
+          "composure": 4
+        }
+      }
+    ],
+    "suffix": [
+      {
+        "id": "of_the_boar",
+        "w": 10,
+        "name": "of the Boar",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "damage": 1
+        }
+      },
+      {
+        "id": "of_the_adder",
+        "w": 10,
+        "name": "of the Adder",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "penetration": 15,
+          "damage": -1
+        }
+      },
+      {
+        "id": "of_quarrels",
+        "w": 8,
+        "name": "of Quarrels",
+        "requires": [
+          "weapon"
+        ],
+        "mods": {
+          "threat": 10
+        }
+      },
+      {
+        "id": "of_the_bear",
+        "w": 10,
+        "name": "of the Bear",
+        "requires": [
+          "armour"
+        ],
+        "mods": {
+          "hp": 4
+        }
+      },
+      {
+        "id": "of_stillness",
+        "w": 9,
+        "name": "of Stillness",
+        "requires": [
+          "armour|curio"
+        ],
+        "mods": {
+          "composure": 8
+        }
+      },
+      {
+        "id": "of_the_cat",
+        "w": 9,
+        "name": "of the Cat",
+        "requires": [
+          "armour|curio"
+        ],
+        "mods": {
+          "evasion": 4
+        }
+      },
+      {
+        "id": "of_wanting",
+        "w": 7,
+        "name": "of Wanting",
+        "requires": [
+          "curio|armour"
+        ],
+        "mods": {
+          "allure": 10,
+          "composure": -6
+        }
+      },
+      {
+        "id": "of_cold_water",
+        "w": 7,
+        "name": "of Cold Water",
+        "requires": [
+          "curio|armour"
+        ],
+        "mods": {
+          "composure": 10,
+          "allure": -6
+        }
+      },
+      {
+        "id": "of_the_silver_tongue",
+        "w": 6,
+        "name": "of the Silver Tongue",
+        "requires": [
+          "curio"
+        ],
+        "mods": {
+          "presence": 10
+        }
+      },
+      {
+        "id": "of_the_hoard",
+        "w": 6,
+        "name": "of the Hoard",
+        "requires": [
+          "curio"
+        ],
+        "mods": {
+          "rapport": 5,
+          "priceMult": 1.5
+        }
+      },
+      {
+        "id": "of_long_roads",
+        "w": 7,
+        "name": "of Long Roads",
+        "requires": [
+          "armour|tool"
+        ],
+        "mods": {
+          "carry": 20
+        }
+      },
+      {
+        "id": "of_the_grave",
+        "w": 4,
+        "name": "of the Grave",
+        "requires": [
+          "weapon|curio"
+        ],
+        "mods": {
+          "damage": 2,
+          "libidoDrift": 1
+        },
+        "tags": [
+          "cursed"
+        ]
+      }
+    ]
+  },
+  "lootTiers": {
+    "_note": "Rolled per placement. Higher area tier shifts the quality roll upward.",
+    "1": {
+      "qualityBias": 0,
+      "goldRange": [
+        4,
+        30
+      ]
+    },
+    "2": {
+      "qualityBias": 8,
+      "goldRange": [
+        12,
+        70
+      ]
+    },
+    "3": {
+      "qualityBias": 18,
+      "goldRange": [
+        30,
+        160
+      ]
+    }
+  }
+}

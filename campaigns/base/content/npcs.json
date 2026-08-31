@@ -1,0 +1,284 @@
+{
+  "_note": "NPCs generate as: role + two traits + one want. The engine assembles a persona STRING from those; the Narrator writes the voice. No dialogue is authored.",
+  "roles": [
+    {
+      "id": "farmer",
+      "w": 12,
+      "requires": [
+        "cultivated|dwelling"
+      ],
+      "vendor": false,
+      "quests": [
+        "fetch",
+        "clear",
+        "find"
+      ]
+    },
+    {
+      "id": "trader",
+      "w": 10,
+      "requires": [
+        "market|path"
+      ],
+      "vendor": true,
+      "quests": [
+        "deliver",
+        "fetch"
+      ]
+    },
+    {
+      "id": "innkeeper",
+      "w": 8,
+      "requires": [
+        "hearth|dwelling"
+      ],
+      "vendor": true,
+      "quests": [
+        "find",
+        "investigate"
+      ]
+    },
+    {
+      "id": "watchman",
+      "w": 9,
+      "requires": [
+        "path|junction|cell"
+      ],
+      "vendor": false,
+      "quests": [
+        "kill",
+        "clear"
+      ]
+    },
+    {
+      "id": "priest",
+      "w": 7,
+      "requires": [
+        "shrine|holy"
+      ],
+      "vendor": false,
+      "quests": [
+        "fetch",
+        "investigate"
+      ]
+    },
+    {
+      "id": "smith",
+      "w": 7,
+      "requires": [
+        "workspace"
+      ],
+      "vendor": true,
+      "quests": [
+        "fetch"
+      ]
+    },
+    {
+      "id": "beggar",
+      "w": 8,
+      "requires": [
+        "path|market|dim"
+      ],
+      "vendor": false,
+      "quests": [
+        "find",
+        "deliver"
+      ]
+    },
+    {
+      "id": "scholar",
+      "w": 6,
+      "requires": [
+        "quiet|shrine|ruin"
+      ],
+      "vendor": false,
+      "quests": [
+        "investigate",
+        "fetch"
+      ]
+    },
+    {
+      "id": "fence",
+      "w": 6,
+      "requires": [
+        "concealment|dim"
+      ],
+      "vendor": true,
+      "quests": [
+        "deliver",
+        "fetch"
+      ]
+    },
+    {
+      "id": "hedge_witch",
+      "w": 5,
+      "requires": [
+        "wild|lush|quiet"
+      ],
+      "vendor": true,
+      "quests": [
+        "fetch",
+        "investigate"
+      ]
+    },
+    {
+      "id": "prisoner",
+      "w": 4,
+      "requires": [
+        "cell"
+      ],
+      "vendor": false,
+      "quests": [
+        "deliver",
+        "find"
+      ]
+    },
+    {
+      "id": "wanderer",
+      "w": 8,
+      "requires": [
+        "path|open"
+      ],
+      "vendor": false,
+      "quests": [
+        "find",
+        "deliver"
+      ]
+    }
+  ],
+  "traits": [
+    {
+      "id": "blunt",
+      "w": 10
+    },
+    {
+      "id": "wheedling",
+      "w": 9
+    },
+    {
+      "id": "grieving",
+      "w": 7
+    },
+    {
+      "id": "boastful",
+      "w": 9
+    },
+    {
+      "id": "watchful",
+      "w": 10
+    },
+    {
+      "id": "sly",
+      "w": 9
+    },
+    {
+      "id": "devout",
+      "w": 7
+    },
+    {
+      "id": "exhausted",
+      "w": 8
+    },
+    {
+      "id": "flirtatious",
+      "w": 8,
+      "tags": [
+        "lustful"
+      ]
+    },
+    {
+      "id": "bitter",
+      "w": 8
+    },
+    {
+      "id": "generous",
+      "w": 7
+    },
+    {
+      "id": "superstitious",
+      "w": 8
+    },
+    {
+      "id": "drunk",
+      "w": 6
+    },
+    {
+      "id": "guarded",
+      "w": 9
+    },
+    {
+      "id": "delighted",
+      "w": 6
+    }
+  ],
+  "wants": [
+    {
+      "id": "a debt paid",
+      "w": 10
+    },
+    {
+      "id": "someone found",
+      "w": 10
+    },
+    {
+      "id": "a rival humbled",
+      "w": 8
+    },
+    {
+      "id": "a secret kept",
+      "w": 9
+    },
+    {
+      "id": "safe passage out",
+      "w": 8
+    },
+    {
+      "id": "an heirloom back",
+      "w": 10
+    },
+    {
+      "id": "news from elsewhere",
+      "w": 9
+    },
+    {
+      "id": "the nights quiet again",
+      "w": 8
+    },
+    {
+      "id": "a body buried properly",
+      "w": 6
+    },
+    {
+      "id": "company",
+      "w": 7
+    },
+    {
+      "id": "to be left alone",
+      "w": 7
+    },
+    {
+      "id": "a fair price, for once",
+      "w": 8
+    }
+  ],
+  "dispositionRoll": {
+    "base": [
+      -20,
+      40
+    ],
+    "perRapport": 2
+  },
+  "friendlinessRoll": {
+    "base": [
+      10,
+      70
+    ],
+    "perRapport": 2
+  },
+  "personaTemplate": "{role}. {traitA} and {traitB}. Wants {want}.",
+  "sexDefault": {
+    "m": 50,
+    "f": 50
+  },
+  "_sexNote": "Same field and same resolution order as monsters. An area override applies to NPCs too, or an all-female area with mixed shopkeepers reads as a bug."
+}

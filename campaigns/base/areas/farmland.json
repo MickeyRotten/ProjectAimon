@@ -1,0 +1,131 @@
+{
+  "id": "farmland",
+  "name": "Open Farmland",
+  "size": [
+    9,
+    15
+  ],
+  "shapes": [
+    "sprawl",
+    "loop",
+    "hub"
+  ],
+  "areaTags": [
+    "cultivated",
+    "lit"
+  ],
+  "themeTokens": [
+    "harvest",
+    "debt",
+    "crows",
+    "drought",
+    "tithe",
+    "scarecrows"
+  ],
+  "roomTypes": {
+    "field": {
+      "w": 26,
+      "tags": [
+        "outdoor",
+        "open",
+        "cultivated",
+        "lit"
+      ]
+    },
+    "lane": {
+      "w": 18,
+      "tags": [
+        "outdoor",
+        "path",
+        "cultivated",
+        "lit"
+      ]
+    },
+    "hedgerow": {
+      "w": 10,
+      "tags": [
+        "outdoor",
+        "path",
+        "wild",
+        "concealment"
+      ]
+    },
+    "farmhouse": {
+      "w": 10,
+      "tags": [
+        "indoor",
+        "dwelling",
+        "hearth",
+        "dim"
+      ]
+    },
+    "barn": {
+      "w": 9,
+      "tags": [
+        "indoor",
+        "storage",
+        "dark",
+        "wood"
+      ]
+    },
+    "millhouse": {
+      "w": 6,
+      "tags": [
+        "indoor",
+        "workspace",
+        "water",
+        "dim",
+        "landmark"
+      ]
+    },
+    "well": {
+      "w": 6,
+      "tags": [
+        "outdoor",
+        "water",
+        "landmark",
+        "quiet"
+      ]
+    },
+    "shrine": {
+      "w": 5,
+      "tags": [
+        "outdoor",
+        "shrine",
+        "holy",
+        "quiet",
+        "landmark"
+      ]
+    },
+    "burnt": {
+      "w": 5,
+      "tags": [
+        "outdoor",
+        "ruin",
+        "grim",
+        "dead-end"
+      ]
+    },
+    "orchard": {
+      "w": 5,
+      "tags": [
+        "outdoor",
+        "cultivated",
+        "lush",
+        "concealment"
+      ]
+    }
+  },
+  "gates": {
+    "warren": 25,
+    "ruin": 20,
+    "town": 30,
+    "farmland": 25
+  },
+  "sexOverride": null,
+  "sexOverrideRespects": [
+    "none"
+  ],
+  "tierFloor": 1,
+  "tierCeil": 4
+}

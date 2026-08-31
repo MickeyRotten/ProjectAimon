@@ -1,0 +1,677 @@
+{
+  "_note": "Monsters generate as: base + role + optional elite prefix. Stats derive from area tier, never authored per monster. Taxonomy tags drive Presence resistance via TAXONOMY in rules.json.",
+  "statCurve": {
+    "_note": "Attribute mean by tier; each rolls tier-mean +/- 3. HP = toughness x 2, Resolve = willpower x 2.",
+    "1": {
+      "mean": 9,
+      "damage": "1d4",
+      "reduction": 0,
+      "penetration": 0
+    },
+    "2": {
+      "mean": 12,
+      "damage": "1d6",
+      "reduction": 10,
+      "penetration": 5
+    },
+    "3": {
+      "mean": 15,
+      "damage": "1d8",
+      "reduction": 20,
+      "penetration": 12
+    },
+    "4": {
+      "mean": 18,
+      "damage": "1d10",
+      "reduction": 28,
+      "penetration": 18
+    },
+    "5": {
+      "mean": 21,
+      "damage": "2d6",
+      "reduction": 35,
+      "penetration": 25
+    }
+  },
+  "bases": [
+    {
+      "id": "rat_swarm",
+      "name": "rat swarm",
+      "w": 12,
+      "tier": 1,
+      "tags": [
+        "beast",
+        "mindless",
+        "swift",
+        "frail"
+      ],
+      "areas": [
+        "warren",
+        "farmland",
+        "town"
+      ],
+      "requires": [
+        "dark|storage|underground"
+      ],
+      "attacks": 2,
+      "sex": {
+        "none": 100
+      }
+    },
+    {
+      "id": "crow_flock",
+      "name": "flock of crows",
+      "w": 8,
+      "tier": 1,
+      "tags": [
+        "beast",
+        "timid",
+        "swift",
+        "frail"
+      ],
+      "areas": [
+        "farmland",
+        "ruin"
+      ],
+      "requires": [
+        "outdoor"
+      ],
+      "sex": {
+        "none": 100
+      }
+    },
+    {
+      "id": "wild_dog",
+      "name": "wild dog",
+      "w": 12,
+      "tier": 1,
+      "tags": [
+        "beast",
+        "timid",
+        "swift"
+      ],
+      "areas": [
+        "farmland",
+        "town",
+        "ruin"
+      ],
+      "requires": [
+        "!holy"
+      ]
+    },
+    {
+      "id": "boar",
+      "name": "wood boar",
+      "w": 8,
+      "tier": 2,
+      "tags": [
+        "beast",
+        "relentless",
+        "hulking"
+      ],
+      "areas": [
+        "farmland"
+      ],
+      "requires": [
+        "outdoor|wild"
+      ]
+    },
+    {
+      "id": "footpad",
+      "name": "footpad",
+      "w": 14,
+      "tier": 1,
+      "tags": [
+        "humanoid",
+        "cunning",
+        "venal",
+        "swift"
+      ],
+      "areas": [
+        "town",
+        "farmland",
+        "ruin"
+      ],
+      "requires": [
+        "concealment|path|market"
+      ]
+    },
+    {
+      "id": "bravo",
+      "name": "hired bravo",
+      "w": 11,
+      "tier": 2,
+      "tags": [
+        "humanoid",
+        "proud",
+        "venal",
+        "armoured"
+      ],
+      "areas": [
+        "town",
+        "ruin"
+      ],
+      "requires": [
+        "!grave"
+      ]
+    },
+    {
+      "id": "deserter",
+      "name": "deserter",
+      "w": 9,
+      "tier": 2,
+      "tags": [
+        "humanoid",
+        "timid",
+        "venal",
+        "armoured"
+      ],
+      "areas": [
+        "ruin",
+        "farmland",
+        "warren"
+      ]
+    },
+    {
+      "id": "cutthroat",
+      "name": "cutthroat",
+      "w": 8,
+      "tier": 3,
+      "tags": [
+        "humanoid",
+        "cunning",
+        "relentless",
+        "swift"
+      ],
+      "areas": [
+        "town",
+        "ruin"
+      ],
+      "requires": [
+        "concealment|dim|dark"
+      ]
+    },
+    {
+      "id": "skeleton",
+      "name": "bone-thing",
+      "w": 10,
+      "tier": 2,
+      "tags": [
+        "undead",
+        "mindless",
+        "frail"
+      ],
+      "areas": [
+        "warren",
+        "ruin"
+      ],
+      "requires": [
+        "grave|ruin|underground"
+      ],
+      "sex": {
+        "none": 100
+      }
+    },
+    {
+      "id": "barrow_wight",
+      "name": "barrow wight",
+      "w": 5,
+      "tier": 3,
+      "tags": [
+        "undead",
+        "relentless",
+        "armoured"
+      ],
+      "areas": [
+        "warren",
+        "ruin"
+      ],
+      "requires": [
+        "grave|crypt|dark"
+      ],
+      "sex": {
+        "m": 60,
+        "f": 40
+      }
+    },
+    {
+      "id": "clay_sentry",
+      "name": "clay sentry",
+      "w": 5,
+      "tier": 3,
+      "tags": [
+        "construct",
+        "mindless",
+        "hulking",
+        "armoured"
+      ],
+      "areas": [
+        "ruin"
+      ],
+      "requires": [
+        "indoor|shrine"
+      ],
+      "sex": {
+        "none": 100
+      }
+    },
+    {
+      "id": "fen_hag",
+      "name": "fen hag",
+      "w": 5,
+      "tier": 3,
+      "tags": [
+        "fey",
+        "cunning",
+        "proud",
+        "lustful"
+      ],
+      "areas": [
+        "warren",
+        "farmland"
+      ],
+      "requires": [
+        "water|flooded|lush"
+      ],
+      "sex": {
+        "f": 100
+      }
+    },
+    {
+      "id": "hearth_pixie",
+      "name": "hearth pixie",
+      "w": 7,
+      "tier": 1,
+      "tags": [
+        "fey",
+        "timid",
+        "swift",
+        "greedy",
+        "frail"
+      ],
+      "areas": [
+        "farmland",
+        "town"
+      ],
+      "requires": [
+        "hearth|dwelling|lush"
+      ],
+      "sex": {
+        "f": 60,
+        "m": 40
+      }
+    },
+    {
+      "id": "creeper_vine",
+      "name": "creeper vine",
+      "w": 7,
+      "tier": 2,
+      "tags": [
+        "plant",
+        "mindless",
+        "hulking"
+      ],
+      "areas": [
+        "warren",
+        "ruin",
+        "farmland"
+      ],
+      "requires": [
+        "lush|flooded|corrupt"
+      ],
+      "sex": {
+        "none": 100
+      }
+    },
+    {
+      "id": "cambion",
+      "name": "cambion",
+      "w": 4,
+      "tier": 3,
+      "tags": [
+        "demon",
+        "cunning",
+        "proud",
+        "lustful"
+      ],
+      "areas": [
+        "ruin",
+        "warren",
+        "town"
+      ],
+      "requires": [
+        "corrupt|opulent|dark"
+      ],
+      "sex": {
+        "f": 55,
+        "m": 45
+      }
+    }
+  ],
+  "roles": [
+    {
+      "id": "skirmisher",
+      "w": 30,
+      "name": "",
+      "mods": {
+        "agility": 3,
+        "toughness": -2,
+        "threat": 0
+      },
+      "gambits": "skirmisher",
+      "excludeTags": []
+    },
+    {
+      "id": "brute",
+      "w": 25,
+      "name": "big ",
+      "mods": {
+        "brawn": 3,
+        "toughness": 3,
+        "agility": -3,
+        "threat": 10
+      },
+      "gambits": "brute",
+      "excludeTags": []
+    },
+    {
+      "id": "lurker",
+      "w": 20,
+      "name": "",
+      "mods": {
+        "agility": 2,
+        "wits": 3,
+        "threat": -10
+      },
+      "tags": [
+        "cunning"
+      ],
+      "gambits": "lurker",
+      "excludeTags": [
+        "mindless",
+        "hulking"
+      ]
+    },
+    {
+      "id": "leader",
+      "w": 15,
+      "name": "",
+      "mods": {
+        "charisma": 4,
+        "willpower": 3,
+        "threat": 15
+      },
+      "escort": [
+        1,
+        3
+      ],
+      "gambits": "leader",
+      "excludeTags": [
+        "mindless",
+        "undead",
+        "construct",
+        "plant"
+      ]
+    },
+    {
+      "id": "wretch",
+      "w": 10,
+      "name": "half-starved ",
+      "mods": {
+        "toughness": -3,
+        "willpower": -3
+      },
+      "gambits": "wretch",
+      "excludeTags": [
+        "construct",
+        "undead"
+      ]
+    }
+  ],
+  "elites": {
+    "_note": "Rolled at 8% for tier 1, 12% tier 2, 18% tier 3. Adds a title, a tag and a stat lift.",
+    "chance": {
+      "1": 0.08,
+      "2": 0.12,
+      "3": 0.18,
+      "4": 0.22,
+      "5": 0.26
+    },
+    "table": [
+      {
+        "id": "scarred",
+        "w": 10,
+        "title": "Scarred",
+        "mods": {
+          "toughness": 4
+        },
+        "tags": [
+          "relentless"
+        ]
+      },
+      {
+        "id": "quick",
+        "w": 10,
+        "title": "Quick",
+        "mods": {
+          "agility": 5
+        },
+        "tags": [
+          "swift"
+        ]
+      },
+      {
+        "id": "ironbound",
+        "w": 8,
+        "title": "Ironbound",
+        "mods": {
+          "reduction": 15
+        },
+        "tags": [
+          "armoured"
+        ]
+      },
+      {
+        "id": "silvered",
+        "w": 7,
+        "title": "Silver-Tongued",
+        "mods": {
+          "charisma": 5
+        },
+        "tags": [
+          "proud"
+        ]
+      },
+      {
+        "id": "hungering",
+        "w": 6,
+        "title": "Hungering",
+        "mods": {
+          "brawn": 4
+        },
+        "tags": [
+          "relentless",
+          "hungry"
+        ]
+      },
+      {
+        "id": "beguiling",
+        "w": 5,
+        "title": "Beguiling",
+        "mods": {
+          "charisma": 6
+        },
+        "tags": [
+          "lustful"
+        ]
+      }
+    ]
+  },
+  "groupSize": {
+    "_note": "Rolled by role and tag. Swarming things come in numbers.",
+    "default": [
+      1,
+      1
+    ],
+    "byTag": {
+      "swift": [
+        1,
+        3
+      ],
+      "frail": [
+        2,
+        4
+      ],
+      "mindless": [
+        1,
+        3
+      ],
+      "hulking": [
+        1,
+        1
+      ]
+    }
+  },
+  "tierGate": {
+    "_note": "A base may appear if base.tier <= area.tier + 1. Over-tier spawns are rarer.",
+    "overTierWeight": 0.35
+  },
+  "_sexNote": "Sex is a FIELD rolled per instance, never a tag and never a variant. It drives pronouns for the Narrator and the parser, and nothing mechanical. Omit it for a 50/50 roll. Resolution order: area.sexOverride, then room, then base, then default.",
+  "sexDefault": {
+    "m": 50,
+    "f": 50
+  },
+  "compositions": {
+    "_note": "Explicit encounter shapes. Picked before bases, then each part filters by area and room tags as usual. Replaces relying on the leader role alone.",
+    "table": [
+      {
+        "w": 34,
+        "name": "lone",
+        "parts": [
+          [
+            "any",
+            1,
+            1
+          ]
+        ]
+      },
+      {
+        "w": 26,
+        "name": "pack",
+        "parts": [
+          [
+            "any",
+            2,
+            4
+          ]
+        ]
+      },
+      {
+        "w": 18,
+        "name": "warband",
+        "parts": [
+          [
+            "leader",
+            1,
+            1
+          ],
+          [
+            "any",
+            2,
+            4
+          ]
+        ]
+      },
+      {
+        "w": 12,
+        "name": "pair",
+        "parts": [
+          [
+            "brute",
+            1,
+            1
+          ],
+          [
+            "lurker",
+            1,
+            2
+          ]
+        ]
+      },
+      {
+        "w": 10,
+        "name": "ambush",
+        "parts": [
+          [
+            "lurker",
+            2,
+            3
+          ]
+        ],
+        "requires": [
+          "concealment|dim|dark"
+        ]
+      }
+    ]
+  },
+  "spawnUpgrades": {
+    "_note": "World state changes what spawns. Nearly free with the flag system, and the best long-term texture available — the world visibly answers what the player did.",
+    "table": [
+      {
+        "ifFlag": "smugglers_unbeaten",
+        "replace": {
+          "footpad": "cutthroat"
+        },
+        "weight": 1.0
+      },
+      {
+        "ifFlag": "crypt_disturbed",
+        "replace": {
+          "skeleton": "barrow_wight"
+        },
+        "weight": 0.5
+      },
+      {
+        "ifFlag": "coven_provoked",
+        "replace": {
+          "hearth_pixie": "fen_hag"
+        },
+        "weight": 0.5
+      }
+    ]
+  },
+  "conditionalStats": {
+    "_note": "Player actions elsewhere weaken or strengthen what they meet later. One conditional block buys an enormous swing on an elite — the single best idea taken from CoC2's enemy design.",
+    "table": [
+      {
+        "ifFlag": "smugglers_unbeaten",
+        "appliesTo": [
+          "humanoid"
+        ],
+        "mods": {
+          "damage": 2,
+          "reduction": 15
+        },
+        "title": "well-armed "
+      },
+      {
+        "ifFlag": "smugglers_beaten",
+        "appliesTo": [
+          "humanoid"
+        ],
+        "mods": {
+          "damage": -1,
+          "reduction": -10
+        },
+        "title": "ill-equipped "
+      }
+    ]
+  },
+  "likes": {
+    "_note": "CoC2 modifies Tease damage by 10% per matching body tag. Schema accepted, UNUSED in v1 — it needs a player appearance-tag system that does not exist yet. When it lands: keep it off sex, cap it near +/-15%, and make Sensing reveal it.",
+    "perMatch": 10,
+    "cap": 15,
+    "enabled": false
+  },
+  "_roleNote": "A role is refused if the base carries any excludeTags. A mindless skeleton cannot be a leader, because leader gambits use Presence abilities it can never land."
+}

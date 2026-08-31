@@ -1,0 +1,82 @@
+{
+  "_note": "Rolled per room after room types are assigned. requires[] filters on room tags.",
+  "container": {
+    "chance": 0.3,
+    "requires": [
+      "indoor|storage|grave"
+    ],
+    "lootRolls": [
+      1,
+      2
+    ]
+  },
+  "loot": {
+    "chance": 0.16,
+    "requires": [
+      "!path"
+    ]
+  },
+  "hostile": {
+    "chance": 0.22,
+    "requires": [
+      "!hearth",
+      "!shrine"
+    ]
+  },
+  "npc": {
+    "chance": 0.2,
+    "requires": [
+      "dwelling|market|path|cell|hearth"
+    ]
+  },
+  "curiosity": {
+    "chance": 0.18,
+    "requires": [
+      "landmark|shrine|ruin|vantage"
+    ]
+  },
+  "lightSource": {
+    "chance": 0.12,
+    "requires": [
+      "dwelling|storage|workspace"
+    ]
+  },
+  "lockedDoor": {
+    "chance": 0.14,
+    "requires": [
+      "indoor|underground"
+    ],
+    "keyBand": "near"
+  },
+  "hazard": {
+    "chance": 0.1,
+    "requires": [
+      "hazard|flooded|collapse"
+    ]
+  },
+  "corpse": {
+    "chance": 0.09,
+    "requires": [
+      "grim|grave|ruin|dark"
+    ],
+    "lootRolls": [
+      1,
+      1
+    ]
+  },
+  "goldPile": {
+    "chance": 0.1,
+    "requires": [
+      "!path"
+    ]
+  },
+  "guarantees": {
+    "_note": "Applied after rolling, so an area is never barren or unlit.",
+    "minHostiles": 3,
+    "minLootRooms": 2,
+    "minNpcs": 1,
+    "lightSourceIfDarkArea": false,
+    "maxHostilesPerRoom": 1,
+    "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering."
+  }
+}

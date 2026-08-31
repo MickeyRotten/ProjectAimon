@@ -1,0 +1,98 @@
+{
+  "_note": "The parser's whole vocabulary. Global, not per-campaign — a campaign that needs its own verbs needs its own engine, which is the road back to complexity. Every verb lists the grammar patterns it accepts; anything not matching falls to Tier 2 classification, then Tier 3 flavour.",
+
+  "patterns": {
+    "V":       "verb alone",
+    "VN":      "verb + noun",
+    "VNPN":    "verb + noun + preposition + noun",
+    "VD":      "verb + direction"
+  },
+
+  "directions": {
+    "north": ["n"], "south": ["s"], "east": ["e"], "west": ["w"],
+    "northeast": ["ne"], "northwest": ["nw"],
+    "southeast": ["se"], "southwest": ["sw"],
+    "up": ["u"], "down": ["d"], "in": [], "out": []
+  },
+
+  "verbs": [
+    { "id": "go",       "words": ["go","walk","head","travel"], "patterns": ["VD","VN"] },
+    { "id": "enter",    "words": ["enter"],   "patterns": ["VN"] },
+    { "id": "exit",     "words": ["exit","leave"], "patterns": ["V","VN"] },
+    { "id": "climb",    "words": ["climb","scale"], "patterns": ["VN"] },
+
+    { "id": "look",     "words": ["look","l"], "patterns": ["V"] },
+    { "id": "examine",  "words": ["examine","x","inspect","study"], "patterns": ["VN"],
+      "note": "Against a creature in combat this is Sensing — costs the turn, reveals stats, gambits and resistances permanently." },
+    { "id": "search",   "words": ["search"],  "patterns": ["VN"] },
+    { "id": "read",     "words": ["read"],    "patterns": ["VN"] },
+    { "id": "listen",   "words": ["listen"],  "patterns": ["V","VN"], "flavourOnly": true },
+    { "id": "smell",    "words": ["smell"],   "patterns": ["V","VN"], "flavourOnly": true },
+    { "id": "touch",    "words": ["touch","feel"], "patterns": ["VN"], "flavourOnly": true },
+
+    { "id": "take",     "words": ["take","get","grab","pick"], "patterns": ["VN","VNPN"], "supportsAll": true },
+    { "id": "drop",     "words": ["drop","discard"], "patterns": ["VN"], "supportsAll": true },
+    { "id": "put",      "words": ["put","place","insert"], "patterns": ["VNPN"] },
+    { "id": "open",     "words": ["open"],    "patterns": ["VN"] },
+    { "id": "close",    "words": ["close","shut"], "patterns": ["VN"] },
+    { "id": "lock",     "words": ["lock"],    "patterns": ["VN","VNPN"] },
+    { "id": "unlock",   "words": ["unlock"],  "patterns": ["VN","VNPN"] },
+    { "id": "push",     "words": ["push","press"], "patterns": ["VN"] },
+    { "id": "pull",     "words": ["pull"],    "patterns": ["VN"] },
+    { "id": "turn",     "words": ["turn","rotate"], "patterns": ["VN"] },
+    { "id": "throw",    "words": ["throw"],   "patterns": ["VN","VNPN"] },
+    { "id": "give",     "words": ["give"],    "patterns": ["VNPN"] },
+    { "id": "show",     "words": ["show"],    "patterns": ["VNPN"] },
+    { "id": "light",    "words": ["light","kindle"], "patterns": ["VN"] },
+    { "id": "extinguish","words":["extinguish","douse"], "patterns": ["VN"] },
+
+    { "id": "wear",     "words": ["wear","don","equip"], "patterns": ["VN"] },
+    { "id": "remove",   "words": ["remove","doff","unequip"], "patterns": ["VN"] },
+    { "id": "wield",    "words": ["wield","draw"], "patterns": ["VN"] },
+    { "id": "eat",      "words": ["eat"],     "patterns": ["VN"] },
+    { "id": "drink",    "words": ["drink"],   "patterns": ["VN"] },
+
+    { "id": "inventory","words": ["inventory","i","inv"], "patterns": ["V"] },
+    { "id": "stats",    "words": ["stats","sheet","score"], "patterns": ["V"] },
+    { "id": "map",      "words": ["map"],     "patterns": ["V"] },
+    { "id": "quests",   "words": ["quests","journal","log"], "patterns": ["V"] },
+    { "id": "wait",     "words": ["wait","z"], "patterns": ["V"] },
+    { "id": "again",    "words": ["again","g"], "patterns": ["V"] },
+    { "id": "rest",     "words": ["rest","sleep"], "patterns": ["V"], "hubOnly": true },
+
+    { "id": "talk",     "words": ["talk","greet"], "patterns": ["VN","VNPN"] },
+    { "id": "ask",      "words": ["ask"],     "patterns": ["VNPN"] },
+    { "id": "tell",     "words": ["tell"],    "patterns": ["VNPN"],
+      "note": "Also how a companion is commanded: TELL <companion> TO <action>." },
+    { "id": "say",      "words": ["say"],     "patterns": ["VN","VNPN"] },
+
+    { "id": "attack",   "words": ["attack","hit","kill","fight"], "patterns": ["VN","VNPN"] },
+    { "id": "use",      "words": ["use","cast","perform"], "patterns": ["VN","VNPN"],
+      "note": "USE <ability> ON <target>. Falls through to normal handling for non-ability nouns, so USE TORCH lights it." },
+    { "id": "flee",     "words": ["flee","run","escape"], "patterns": ["V"] },
+
+    { "id": "buy",      "words": ["buy","purchase"], "patterns": ["VN","VNPN"] },
+    { "id": "sell",     "words": ["sell"],    "patterns": ["VN","VNPN"] },
+    { "id": "list",     "words": ["list","browse","wares"], "patterns": ["V","VN"] },
+    { "id": "deposit",  "words": ["deposit","bank"], "patterns": ["VN"], "hubOnly": true },
+    { "id": "withdraw", "words": ["withdraw"], "patterns": ["VN"], "hubOnly": true },
+    { "id": "repair",   "words": ["repair","mend"], "patterns": ["VN"], "hubOnly": true },
+    { "id": "train",    "words": ["train","practise","practice"], "patterns": ["VN"], "hubOnly": true },
+    { "id": "hire",     "words": ["hire","recruit"], "patterns": ["VN"], "hubOnly": true },
+
+    { "id": "dismiss",  "words": ["dismiss"], "patterns": ["VN"] },
+    { "id": "bench",    "words": ["bench"],   "patterns": ["VN"] },
+
+    { "id": "save",     "words": ["save"],    "patterns": ["V","VN"] },
+    { "id": "load",     "words": ["load","restore"], "patterns": ["V","VN"] },
+    { "id": "help",     "words": ["help","?","commands"], "patterns": ["V"] },
+    { "id": "brief",    "words": ["brief","verbose"], "patterns": ["V"] }
+  ],
+
+  "articlesStripped": ["a","an","the","some","my","his","her","their"],
+  "pronouns": ["it","him","her","them"],
+  "allWord": "all",
+  "exceptWords": ["except","but"],
+
+  "_count": "58 verbs. Adding one means adding a system — be reluctant."
+}

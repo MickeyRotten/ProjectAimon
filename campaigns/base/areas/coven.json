@@ -1,0 +1,125 @@
+{
+  "id": "coven",
+  "name": "The Coven Hold",
+  "size": [
+    9,
+    14
+  ],
+  "shapes": [
+    "hub",
+    "loop"
+  ],
+  "areaTags": [
+    "indoor",
+    "corrupt",
+    "opulent"
+  ],
+  "sexOverride": {
+    "f": 85,
+    "m": 15
+  },
+  "sexOverrideRespects": [
+    "none"
+  ],
+  "_note": "85/15 rather than 100/0 on purpose: the exception carries meaning. A lone man here is a hook; an absolute rule is just a setting.",
+  "themeTokens": [
+    "initiation",
+    "a debt of blood",
+    "smoke",
+    "the third sister",
+    "what was promised",
+    "hunger"
+  ],
+  "roomTypes": {
+    "gallery": {
+      "w": 20,
+      "tags": [
+        "indoor",
+        "path",
+        "opulent",
+        "dim"
+      ]
+    },
+    "solar": {
+      "w": 14,
+      "tags": [
+        "indoor",
+        "dwelling",
+        "opulent",
+        "hearth"
+      ]
+    },
+    "sanctum": {
+      "w": 10,
+      "tags": [
+        "indoor",
+        "shrine",
+        "corrupt",
+        "dim",
+        "landmark"
+      ]
+    },
+    "stillroom": {
+      "w": 12,
+      "tags": [
+        "indoor",
+        "workspace",
+        "lush",
+        "dim"
+      ]
+    },
+    "bathhouse": {
+      "w": 10,
+      "tags": [
+        "indoor",
+        "water",
+        "opulent",
+        "lush"
+      ]
+    },
+    "cellar": {
+      "w": 10,
+      "tags": [
+        "underground",
+        "storage",
+        "dark"
+      ]
+    },
+    "aviary": {
+      "w": 8,
+      "tags": [
+        "indoor",
+        "open",
+        "lush",
+        "vantage"
+      ]
+    },
+    "cell": {
+      "w": 6,
+      "tags": [
+        "indoor",
+        "cell",
+        "dark",
+        "grim",
+        "dead-end"
+      ]
+    },
+    "hall": {
+      "w": 10,
+      "tags": [
+        "indoor",
+        "open",
+        "opulent",
+        "lit",
+        "junction"
+      ]
+    }
+  },
+  "gates": {
+    "ruin": 35,
+    "warren": 30,
+    "town": 35
+  },
+  "tierFloor": 3,
+  "tierCeil": 5
+}

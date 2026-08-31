@@ -1,0 +1,138 @@
+{
+  "id": "ruin",
+  "name": "Fallen Hold",
+  "size": [
+    10,
+    17
+  ],
+  "shapes": [
+    "loop",
+    "hub",
+    "sprawl"
+  ],
+  "areaTags": [
+    "ruin",
+    "stone",
+    "grim"
+  ],
+  "themeTokens": [
+    "the last siege",
+    "a broken oath",
+    "ivy",
+    "hoarding",
+    "banners",
+    "unfinished work"
+  ],
+  "roomTypes": {
+    "hall": {
+      "w": 20,
+      "tags": [
+        "indoor",
+        "open",
+        "ruin",
+        "stone",
+        "dim"
+      ]
+    },
+    "corridor": {
+      "w": 18,
+      "tags": [
+        "indoor",
+        "path",
+        "ruin",
+        "stone",
+        "dim"
+      ]
+    },
+    "solar": {
+      "w": 10,
+      "tags": [
+        "indoor",
+        "dwelling",
+        "opulent",
+        "ruin",
+        "dim"
+      ]
+    },
+    "armoury": {
+      "w": 9,
+      "tags": [
+        "indoor",
+        "storage",
+        "ruin",
+        "stone",
+        "dark"
+      ]
+    },
+    "chapel": {
+      "w": 8,
+      "tags": [
+        "indoor",
+        "shrine",
+        "holy",
+        "ruin",
+        "landmark"
+      ]
+    },
+    "courtyard": {
+      "w": 8,
+      "tags": [
+        "outdoor",
+        "open",
+        "ruin",
+        "lit",
+        "junction"
+      ]
+    },
+    "battlement": {
+      "w": 8,
+      "tags": [
+        "outdoor",
+        "vantage",
+        "ruin",
+        "lit",
+        "landmark"
+      ]
+    },
+    "undercroft": {
+      "w": 8,
+      "tags": [
+        "underground",
+        "storage",
+        "dark",
+        "stone"
+      ]
+    },
+    "oubliette": {
+      "w": 6,
+      "tags": [
+        "underground",
+        "cell",
+        "dark",
+        "grim",
+        "dead-end"
+      ]
+    },
+    "collapse": {
+      "w": 5,
+      "tags": [
+        "indoor",
+        "hazard",
+        "ruin",
+        "dead-end"
+      ]
+    }
+  },
+  "gates": {
+    "warren": 35,
+    "ruin": 25,
+    "farmland": 20,
+    "town": 20
+  },
+  "sexOverride": null,
+  "sexOverrideRespects": [
+    "none"
+  ],
+  "tierFloor": 2,
+  "tierCeil": 5
+}

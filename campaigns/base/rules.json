@@ -1,0 +1,614 @@
+{
+  "_note": "Defaults for every tunable named in the gameplay rules section. Campaigns override selectively.",
+  "STAT_ROLL": {
+    "dice": 3,
+    "sides": 8,
+    "attributes": [
+      "brawn",
+      "agility",
+      "toughness",
+      "charisma",
+      "willpower",
+      "wits"
+    ]
+  },
+  "RANGE_BANDS": {
+    "feeble": [
+      0,
+      8
+    ],
+    "ordinary": [
+      9,
+      15
+    ],
+    "notable": [
+      16,
+      99
+    ]
+  },
+  "LIBIDO_BANDS": [
+    {
+      "name": "Cold",
+      "range": [
+        0,
+        24
+      ],
+      "allure": -5,
+      "composure": 10
+    },
+    {
+      "name": "Even",
+      "range": [
+        25,
+        59
+      ],
+      "allure": 0,
+      "composure": 0
+    },
+    {
+      "name": "Heated",
+      "range": [
+        60,
+        84
+      ],
+      "allure": 10,
+      "composure": -10
+    },
+    {
+      "name": "Consumed",
+      "range": [
+        85,
+        100
+      ],
+      "allure": 20,
+      "composure": -25
+    }
+  ],
+  "LIBIDO_START": 30,
+  "LIBIDO_AREA_CAP": 12,
+  "LIBIDO_REST_PULL": 8,
+  "DIFFICULTY_BASE": {
+    "easy": 30,
+    "moderate": 20,
+    "hard": 10,
+    "severe": 0
+  },
+  "TO_HIT_BASE": 40,
+  "CLAMP": [
+    5,
+    95
+  ],
+  "WEAPON_TABLE": {
+    "club": {
+      "startSkill": 20,
+      "complexity": 10,
+      "damage": "1d4",
+      "penetration": 5,
+      "weight": 3,
+      "price": 8
+    },
+    "axe": {
+      "startSkill": 5,
+      "complexity": 10,
+      "damage": "1d6",
+      "penetration": 15,
+      "weight": 5,
+      "price": 22
+    },
+    "spear": {
+      "startSkill": 10,
+      "complexity": 5,
+      "damage": "1d6",
+      "penetration": 20,
+      "weight": 4,
+      "price": 18
+    },
+    "sword": {
+      "startSkill": 0,
+      "complexity": 5,
+      "damage": "1d8",
+      "penetration": 10,
+      "weight": 4,
+      "price": 35
+    },
+    "bow": {
+      "startSkill": -10,
+      "complexity": 0,
+      "damage": "1d8",
+      "penetration": 25,
+      "weight": 3,
+      "price": 40
+    }
+  },
+  "ARMOUR_TABLE": {
+    "none": {
+      "reduction": 0,
+      "penalty": 0,
+      "weight": 0,
+      "price": 0
+    },
+    "leather": {
+      "reduction": 15,
+      "penalty": 5,
+      "weight": 6,
+      "price": 25
+    },
+    "chain": {
+      "reduction": 30,
+      "penalty": 12,
+      "weight": 14,
+      "price": 90
+    },
+    "plate": {
+      "reduction": 45,
+      "penalty": 20,
+      "weight": 26,
+      "price": 260
+    },
+    "shield": {
+      "reduction": 10,
+      "penalty": 4,
+      "weight": 7,
+      "price": 30
+    }
+  },
+  "ARMOUR_CAP": 80,
+  "APPROACH_TABLE": {
+    "intimidate": {
+      "pressure": "1d6",
+      "startSkill": 10,
+      "blockedBy": [
+        "undead",
+        "construct",
+        "mindless"
+      ]
+    },
+    "taunt": {
+      "pressure": "1d4",
+      "startSkill": 5,
+      "threat": 15,
+      "blockedBy": [
+        "undead",
+        "construct",
+        "mindless",
+        "beast"
+      ]
+    },
+    "seduce": {
+      "pressure": "1d6",
+      "startSkill": 0,
+      "blockedBy": [
+        "undead",
+        "construct",
+        "mindless",
+        "beast",
+        "plant"
+      ]
+    }
+  },
+  "TAXONOMY": {
+    "undead": {
+      "presenceImmune": true
+    },
+    "construct": {
+      "presenceImmune": true,
+      "reduction": 10
+    },
+    "mindless": {
+      "presenceImmune": true,
+      "senseImmune": true
+    },
+    "beast": {
+      "onlyApproaches": [
+        "intimidate"
+      ]
+    },
+    "proud": {
+      "pressureMult": {
+        "taunt": 2.0,
+        "seduce": 0.5
+      }
+    },
+    "venal": {
+      "bribeMult": 0.5
+    },
+    "timid": {
+      "pressureMult": {
+        "intimidate": 1.5
+      }
+    },
+    "armoured": {
+      "reduction": 15
+    },
+    "swift": {
+      "evasion": 4
+    },
+    "hulking": {
+      "hp": 1.4,
+      "evasion": -3
+    },
+    "frail": {
+      "hp": 0.7
+    },
+    "relentless": {
+      "pursues": true
+    },
+    "lustful": {
+      "pressureMult": {
+        "seduce": 1.5
+      },
+      "libidoAura": 2
+    }
+  },
+  "CRIT_TABLE": [
+    [
+      "ignoreArmour",
+      50
+    ],
+    [
+      "x1.5",
+      35
+    ],
+    [
+      "x2",
+      10
+    ],
+    [
+      "x3",
+      4
+    ],
+    [
+      "autoDefeat",
+      1
+    ]
+  ],
+  "FUMBLE_TABLE": [
+    [
+      "recover",
+      35
+    ],
+    [
+      "dropWeapon",
+      40
+    ],
+    [
+      "breakWeapon",
+      20
+    ],
+    [
+      "hitSelf",
+      5
+    ]
+  ],
+  "FUMBLE_RANGE": [
+    96,
+    100
+  ],
+  "SKILL_GROWTH": {
+    "chanceOnHit": 0.12,
+    "step": 1,
+    "cap": 30,
+    "_check": "At AGI 13, capped sword: 26 + 30 + 5 - 13 + 40 = 88. Sits under the 95 clamp, so mastery is strong but never automatic."
+  },
+  "DEPLETION_RATES": {
+    "torch": 60,
+    "lantern": 220,
+    "candle": 25
+  },
+  "DISTANCE_BANDS": {
+    "near": [
+      1,
+      2
+    ],
+    "quiteNear": [
+      3,
+      5
+    ],
+    "far": [
+      6,
+      99
+    ],
+    "_metric": "hops along edges. NEVER euclidean coordinate distance."
+  },
+  "DEFEAT": {
+    "mode": "setback",
+    "lose": [
+      "purse",
+      "carried"
+    ],
+    "recovery": "onVictor",
+    "decayTurns": 200,
+    "skillLoss": 0,
+    "hubStarterKit": [
+      "club",
+      "leather",
+      "torch"
+    ],
+    "_kitNote": "Q4=A: the Hub always issues a free crude kit, so a corpse run is never attempted naked.",
+    "hubStarterKitTags": [
+      "untradable"
+    ],
+    "_kitFarmNote": "Untradable, or a player suicides out of the Hub repeatedly and sells the free kit at 40%."
+  },
+  "PARTY_LIMIT": 4,
+  "CARRY_PER_BRAWN": 10,
+  "DEPTH_TIER": {
+    "_note": "Difficulty comes from distance travelled, not from which archetype. Rolled ONCE per area at generation and stored, so an area never changes tier and backtracking is always safe.",
+    "step": 2,
+    "base": 1,
+    "jitter": [
+      [
+        -1,
+        15
+      ],
+      [
+        0,
+        55
+      ],
+      [
+        1,
+        25
+      ],
+      [
+        2,
+        5
+      ]
+    ],
+    "spikeChance": 0.05,
+    "spikeBonus": 2,
+    "max": 5,
+    "roomDepthBonus": {
+      "near": 0,
+      "quiteNear": 0,
+      "far": 1
+    },
+    "_roomNote": "Within an area, rooms further from the entrance lean harder, reusing DISTANCE_BANDS. The deepest room is guaranteed an elite.",
+    "signposting": "Every gate carries a prose hint of what is behind it. The player must be able to read danger before walking into it."
+  },
+  "ABILITIES": {
+    "_note": "Gambits REPLACE the hardcoded role-behaviour list. flees_low is a gambit line now, not engine code.",
+    "maxAbilitiesPerCombatant": 5,
+    "stanceSlots": 1,
+    "primerSlots": 1,
+    "primerHasDuration": false,
+    "baseAbilityCap": 24,
+    "cap_note": "Hard cap of 24 in base. CoC2 has hundreds; that is a decade of content, not a v1."
+  },
+  "LIGHT": {
+    "_note": "Q6=B: no supply guarantee underground. Q5=C: running out is not a softlock, it is a forced retreat.",
+    "onExhausted": "retreatToLit",
+    "retreatTarget": "nearestLitRoom|areaEntrance",
+    "retreatCostTurns": 3,
+    "retreatPenalty": {
+      "dropsCarriedGold": 0.0,
+      "libido": 0,
+      "hp": 0
+    },
+    "guaranteeInDarkAreas": false,
+    "warnAtTurnsLeft": 10
+  },
+  "REPOPULATE": {
+    "_note": "Q2=C: hostiles AND loot return. Structure never does. The multiplier is the guard against farming — see the warning in CLAUDE.md.",
+    "afterTurnsAway": 400,
+    "repopulates": [
+      "hostile",
+      "loot",
+      "container",
+      "goldPile",
+      "corpse"
+    ],
+    "neverRepopulates": [
+      "rooms",
+      "edges",
+      "lockedDoor",
+      "npc",
+      "questObjective",
+      "persistent"
+    ],
+    "valueMultiplierPerCycle": 0.6,
+    "valueFloor": 0.2,
+    "_persistNote": "Dropped player gear is flagged persistent. npc was already excluded and decay at 200 fires before repopulate at 400, so this is belt-and-braces rather than a hole."
+  },
+  "QUESTS": {
+    "killTargetSpawn": "onAccept",
+    "orphanBehaviour": "fail",
+    "_orphanNote": "Q11=B: killing a giver fails their quest outright. Killing people therefore costs something.",
+    "distantBand": {
+      "_note": "The reason coordinates came back. A cube is allocated when the GATE is created, before the area behind it exists — so a quest can name a coordinate inside an ungenerated area.",
+      "reserveCoordInUngeneratedArea": true,
+      "onAreaGenerate": "guaranteeARoomLandsOnEachReservedCoord"
+    }
+  },
+  "ATTRIBUTE_GROWTH": {
+    "_note": "Q8=C: rare items and an expensive trainer. Attributes are no longer fate, but they move slowly.",
+    "items": {
+      "dropChance": 0.01,
+      "requiresTier": 3,
+      "gain": 1
+    },
+    "trainer": {
+      "location": "hub",
+      "baseCost": 400,
+      "costGrowth": 2.0,
+      "maxPerAttributePerCampaign": 1
+    },
+    "hardCeiling": 24
+  },
+  "GOLD_SINKS": {
+    "repair": {
+      "enabled": true,
+      "costPerPoint": 3,
+      "conditionLossPerFumble": 5,
+      "_note": "Acts on objects.condition, which starts at 100 and drops by conditionLossPerFumble. At 0 the item is broken and unusable until mended."
+    },
+    "consumables": {
+      "enabled": true
+    },
+    "training": {
+      "enabled": true,
+      "skillPointCost": 120
+    },
+    "bribes": {
+      "enabled": true
+    },
+    "hireCompanion": {
+      "enabled": true,
+      "baseCost": 250,
+      "perTierCost": 120
+    },
+    "fastTravel": {
+      "enabled": true
+    }
+  },
+  "FAST_TRAVEL": {
+    "_note": "Q10=B: a consumable that returns you to the Hub. No gate-to-gate travel; the walk out is still the game.",
+    "mode": "hubReturnItem",
+    "itemId": "waystone_token",
+    "price": 90,
+    "usableInCombat": false
+  },
+  "COMPANIONS": {
+    "gambits": "ownList",
+    "scaleToAreaTier": true,
+    "dismissVerb": "dismiss",
+    "benchVerb": "bench",
+    "partyLimit": 4,
+    "benchedRecruitTravel": "walksToHubOverTurns",
+    "_benchNote": "A benched recruit that vanished to the Hub roster would make Presence a free dungeon-clearing teleport."
+  },
+  "TURNS": {
+    "combatRoundIsWorldTurn": true
+  },
+  "SAVES": {
+    "autosaveWritesDeath": true,
+    "permadeathDeletesSlotsOnDeath": true,
+    "_note": "Q14=A: the death is saved, then permadeath clears the character's slots. No reloading out of it."
+  },
+  "LAYOUT_FAILURE": {
+    "_note": "dropEdgeAndLog was unsafe as written. In a `sprawl` archetype every edge is a bridge, so dropping any one of them permanently severs part of the area.",
+    "order": [
+      "repackWithMoreSlack",
+      "dropNonBridgeEdge",
+      "growCubeAndRetry",
+      "logAndAccept"
+    ],
+    "mayDropBridgeEdge": false,
+    "repackSlackStep": 0.3,
+    "maxRepacks": 2,
+    "_bridgeNote": "An edge is a bridge if removing it raises the component count. Check before dropping, always."
+  },
+  "VENDORS": {
+    "sellPriceMultiplier": 0.4,
+    "restock": "onTurns",
+    "restockTurns": 400,
+    "_note": "Q15=B amended: restock on a turn timer rather than on area re-entry, which would have been a walk-out-walk-in loop.",
+    "refusesTags": [
+      "untradable"
+    ]
+  },
+  "DESCRIPTIONS": {
+    "_note": "Two layers. baseDesc is the stable spine, written once. The woven render is baseDesc plus current contents, cached per content signature — so cost scales with distinct content STATES, not with visits.",
+    "baseGeneration": "batchAtAreaCreation",
+    "baseBatchNote": "All rooms of an area in one call. Cheaper than lazy per-room generation, and the model sees the whole area at once so the rooms read as one place.",
+    "baseNeverNamesContents": true,
+    "wovenCacheKey": "roomId + baseDescHash + sorted(notableContentIds)",
+    "notableKinds": [
+      "takeable",
+      "creature",
+      "npc",
+      "doorState"
+    ],
+    "notableExcludes": [
+      "scenery",
+      "container.contentsWhenClosed"
+    ],
+    "validateRender": "rejectIfNamesAbsentObject",
+    "maxCachedRendersPerRoom": 8,
+    "evict": "leastRecentlyUsed",
+    "renderValidation": {
+      "matchAgainst": [
+        "nouns",
+        "adjectives"
+      ],
+      "_note": "Validate the woven render against each object's existing parser vocabulary, not its display name. 'the blade' is a legal way to say 'masterwork iron broadsword'. No new alias field — nouns[] already exists and stays in sync because the parser depends on it."
+    }
+  },
+  "WORLD": {
+    "_note": "A single X/Y/Z lattice for the whole campaign. Z is depth: negative underground, positive above. Areas are allocated non-overlapping cubes inside it.",
+    "bounds": {
+      "x": [
+        -4000,
+        4000
+      ],
+      "y": [
+        -4000,
+        4000
+      ],
+      "z": [
+        -40,
+        40
+      ]
+    },
+    "cubeSizing": {
+      "slotsPerRoom": 1.4,
+      "_slotNote": "40% slack. Sized to the room count so the map stays a filled shape and no filler rooms are needed to make space look right.",
+      "zSpanByArchetype": {
+        "warren": 3,
+        "ruin": 2,
+        "default": 1
+      },
+      "gap": 1
+    },
+    "allocation": {
+      "strategy": "adjacentToSourceInGateDirection",
+      "zOffsetByArchetype": {
+        "warren": -2,
+        "ruin": 0,
+        "farmland": 0,
+        "town": 0,
+        "coven": 0
+      },
+      "onCollision": "slideOutwardAlongGateAxis",
+      "maxSlideAttempts": 60,
+      "onExhausted": "placeAtNearestFreeCubeAndLogLongRoad",
+      "entryRoomRule": "The entry room MUST occupy the slot immediately adjacent to the incoming gate coordinate, so a one-hop crossing is one lattice step."
+    },
+    "roomCoords": "absolute world coordinates, not cube-relative",
+    "roomCode": "x.y.z — human-readable, unique, and directly usable as a debug and quest handle",
+    "CRITICAL": "Coordinates are identity and allocation ONLY. DISTANCE_BANDS stays on HOP COUNT, never euclidean distance. Two rooms one edge apart are one hop apart however far apart their coordinates sit. Making coordinates the distance metric reintroduces the filler-corridor problem they were removed for."
+  },
+  "FORMULAS": {
+    "_note": "Written out because two of these were ambiguous or incomplete in prose and shipped as bugs. Execution order is part of the spec.",
+    "weaponAttack": "(Accuracy - effectiveArmourPenalty) + weaponSkill + weaponComplexity",
+    "presenceAttack": "Presence + approachSkill + allure",
+    "chance": "clamp(attack - defence + TO_HIT_BASE, 5, 95)",
+    "effectiveArmourPenalty": "max(0, armourPenalty - armourExpertise)",
+    "rawDamage": "max(1, weaponDie + damageBonus)",
+    "_rawDamageNote": "Floored at 1 BEFORE reduction. Brawn 3 gives damageBonus -3, so a 1d4 club would otherwise roll negative. Use Math.floor, not Math.trunc: floor(-7/3) = -3, trunc(-7/3) = -2.",
+    "netArmour": "max(0, baseReduction * (1 + Toughness / 50) - penetration)",
+    "_netArmourNote": "Toughness scales reduction FIRST, then penetration subtracts. The other order makes high-penetration weapons useless against tough targets in light armour.",
+    "finalDamage": "max(1, round(rawDamage * (1 - min(netArmour, ARMOUR_CAP) / 100)))"
+  },
+  "CAMPAIGN_MERGE": {
+    "objects": "deepMerge",
+    "primitives": "campaignWins",
+    "arrays": "replaceEntirely",
+    "arrayAppendSyntax": "+key",
+    "_note": "Replace by default, or a campaign could never remove a base entry. `\"+affixes\": [...]` appends instead."
+  },
+  "MODELS": {
+    "translatorMaxTokens": 100,
+    "_latencyNote": "Classification and narration CANNOT be merged into one call: the engine has to roll between them, or the model is deciding outcomes. Keep two calls and make the first tiny."
+  },
+  "ITEM_VALUES": {
+    "_note": "Derived at read time from baseId + quality + affixes. Never stored on the object, or retuning a table would fail to reach items already in the world.",
+    "derived": [
+      "damage",
+      "penetration",
+      "reduction",
+      "penalty",
+      "price",
+      "weight"
+    ]
+  }
+}

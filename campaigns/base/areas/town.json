@@ -1,0 +1,131 @@
+{
+  "id": "town",
+  "name": "Crossroads Town",
+  "size": [
+    10,
+    16
+  ],
+  "shapes": [
+    "hub",
+    "loop"
+  ],
+  "areaTags": [
+    "lit",
+    "settled"
+  ],
+  "themeTokens": [
+    "a bad harvest",
+    "the toll",
+    "festival week",
+    "watchmen",
+    "arrivals",
+    "gossip"
+  ],
+  "roomTypes": {
+    "street": {
+      "w": 26,
+      "tags": [
+        "outdoor",
+        "path",
+        "lit",
+        "junction"
+      ]
+    },
+    "square": {
+      "w": 10,
+      "tags": [
+        "outdoor",
+        "market",
+        "open",
+        "lit",
+        "landmark"
+      ]
+    },
+    "taproom": {
+      "w": 7,
+      "tags": [
+        "indoor",
+        "dwelling",
+        "hearth",
+        "dim",
+        "opulent"
+      ]
+    },
+    "shopfront": {
+      "w": 9,
+      "tags": [
+        "indoor",
+        "market",
+        "workspace",
+        "lit"
+      ]
+    },
+    "workshop": {
+      "w": 9,
+      "tags": [
+        "indoor",
+        "workspace",
+        "dim"
+      ]
+    },
+    "lodging": {
+      "w": 9,
+      "tags": [
+        "indoor",
+        "dwelling",
+        "dim",
+        "quiet"
+      ]
+    },
+    "temple": {
+      "w": 7,
+      "tags": [
+        "indoor",
+        "shrine",
+        "holy",
+        "quiet",
+        "landmark"
+      ]
+    },
+    "backalley": {
+      "w": 9,
+      "tags": [
+        "outdoor",
+        "path",
+        "dim",
+        "concealment",
+        "grim"
+      ]
+    },
+    "warehouse": {
+      "w": 6,
+      "tags": [
+        "indoor",
+        "storage",
+        "dark"
+      ]
+    },
+    "gaol": {
+      "w": 4,
+      "tags": [
+        "indoor",
+        "cell",
+        "dim",
+        "grim",
+        "dead-end"
+      ]
+    }
+  },
+  "gates": {
+    "farmland": 40,
+    "ruin": 25,
+    "town": 15,
+    "warren": 20
+  },
+  "sexOverride": null,
+  "sexOverrideRespects": [
+    "none"
+  ],
+  "tierFloor": 1,
+  "tierCeil": 4
+}

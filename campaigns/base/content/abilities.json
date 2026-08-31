@@ -1,0 +1,149 @@
+{
+  "_note": "Abilities are data. Enemies choose via gambits (FFXII-style ordered condition->action, first match wins). Players type USE <ability> ON <target>. No ability introduces a value the engine does not already have — same rule as item affixes.",
+
+  "types": {
+    "atwill":    { "_": "usable every round" },
+    "recharge":  { "_": "usable, then locked for rc rounds" },
+    "encounter": { "_": "once per fight" }
+  },
+
+  "stanceRule": "ONE stance slot per combatant. A new stance replaces the old. Lasts until replaced or combat ends. No timers, no stacking, no expiry ordering — this is what keeps abilities off the status-effect cliff.",
+
+  "primerRule": "ONE primer slot per combatant, same as stances. No duration. A primer alone does NOTHING; it is pure potential. Triggering consumes it. A new primer overwrites the old.",
+
+  "primers": {
+    "exposed":     { "axis": "weapon",   "desc": "guard opened" },
+    "off_balance": { "axis": "weapon",   "desc": "footing lost" },
+    "charmed":     { "axis": "presence", "desc": "attention caught" },
+    "rattled":     { "axis": "presence", "desc": "nerve shaken" },
+    "marked":      { "axis": "any",      "desc": "singled out" }
+  },
+
+  "table": [
+    { "id": "attack", "name": "Attack", "type": "atwill", "attack": "weapon",
+      "targets": "enemy", "grantedBy": "always", "effect": {} },
+
+    { "id": "sunder", "name": "Sunder", "type": "recharge", "rc": 2, "attack": "weapon",
+      "targets": "enemy", "grantedBy": "weapon:axe|club",
+      "applies": "exposed", "effect": { "damageMult": 0.7 } },
+
+    { "id": "trip", "name": "Trip", "type": "recharge", "rc": 2, "attack": "weapon",
+      "targets": "enemy", "grantedBy": "weapon:spear|club",
+      "applies": "off_balance", "effect": { "damageMult": 0.5 } },
+
+    { "id": "pierce", "name": "Pierce", "type": "recharge", "rc": 3, "attack": "weapon",
+      "targets": "enemy", "grantedBy": "weapon:bow|spear|sword",
+      "triggers": ["exposed"], "effect": { "penetration": 20 },
+      "triggerEffect": { "ignoreArmour": true, "damageMult": 1.5 } },
+
+    { "id": "fury_strike", "name": "Fury Strike", "type": "recharge", "rc": 2, "attack": "weapon",
+      "targets": "enemy", "grantedBy": "weapon:axe|sword|club",
+      "triggers": ["off_balance"], "effect": { "damageMult": 1.2, "accuracy": -10 },
+      "triggerEffect": { "damageMult": 2.0, "accuracy": 15 } },
+
+    { "id": "cleave", "name": "Cleave", "type": "recharge", "rc": 3, "attack": "weapon",
+      "targets": "all_enemies", "grantedBy": "weapon:axe",
+      "effect": { "damageMult": 0.6 } },
+
+    { "id": "disarm", "name": "Disarm", "type": "encounter", "attack": "weapon",
+      "targets": "enemy", "grantedBy": "weapon:sword|spear",
+      "effect": { "dropWeapon": true, "damageMult": 0.3 } },
+
+    { "id": "guarded_stance", "name": "Guarded Stance", "type": "atwill", "attack": "none",
+      "targets": "self", "grantedBy": "armour:chain|plate", "stance": true,
+      "effect": { "reduction": 15, "evasion": -5, "threat": 20 } },
+
+    { "id": "shield_wall", "name": "Shield Wall", "type": "atwill", "attack": "none",
+      "targets": "self", "grantedBy": "armour:shield", "stance": true,
+      "effect": { "reduction": 20, "accuracy": -10, "protects": true } },
+
+    { "id": "duelists_stance", "name": "Duelist's Stance", "type": "atwill", "attack": "none",
+      "targets": "self", "grantedBy": "weapon:sword|spear", "stance": true,
+      "effect": { "evasion": 10, "accuracy": 8, "reduction": -10 } },
+
+    { "id": "setspear", "name": "Set Spear", "type": "atwill", "attack": "none",
+      "targets": "self", "grantedBy": "weapon:spear", "stance": true,
+      "effect": { "riposte": true, "evasion": -5 } },
+
+    { "id": "mark", "name": "Mark", "type": "recharge", "rc": 2, "attack": "none",
+      "targets": "enemy", "grantedBy": "always",
+      "applies": "marked", "effect": { "threat": 10 } },
+
+    { "id": "cow", "name": "Cow", "type": "atwill", "attack": "presence",
+      "targets": "enemy", "grantedBy": "skill:intimidate>=20",
+      "applies": "rattled", "effect": { "pressureMult": 0.8 } },
+
+    { "id": "jeer", "name": "Jeer", "type": "atwill", "attack": "presence",
+      "targets": "enemy", "grantedBy": "skill:taunt>=10",
+      "applies": "rattled", "effect": { "pressureMult": 0.6, "threat": 25 } },
+
+    { "id": "allure", "name": "Allure", "type": "atwill", "attack": "presence",
+      "targets": "enemy", "grantedBy": "skill:seduce>=10",
+      "applies": "charmed", "effect": { "pressureMult": 0.8 } },
+
+    { "id": "promise", "name": "Promise", "type": "recharge", "rc": 3, "attack": "presence",
+      "targets": "enemy", "grantedBy": "skill:seduce>=30",
+      "triggers": ["charmed"], "effect": { "pressureMult": 1.2 },
+      "triggerEffect": { "pressureMult": 2.2, "ignoreComposure": true } },
+
+    { "id": "browbeat", "name": "Browbeat", "type": "recharge", "rc": 3, "attack": "presence",
+      "targets": "enemy", "grantedBy": "skill:intimidate>=30",
+      "triggers": ["rattled"], "effect": { "pressureMult": 1.2 },
+      "triggerEffect": { "pressureMult": 2.0, "fleeCheck": true } },
+
+    { "id": "exploit", "name": "Exploit", "type": "recharge", "rc": 2, "attack": "weapon",
+      "targets": "enemy", "grantedBy": "always",
+      "triggers": ["charmed", "rattled", "marked"], "effect": { "damageMult": 0.8 },
+      "triggerEffect": { "damageMult": 1.8, "critChance": 25 },
+      "_note": "The cross-axis trigger. A Presence primer cashed in with a weapon, so a hybrid build is worth building." },
+
+    { "id": "rally", "name": "Rally", "type": "recharge", "rc": 3, "attack": "none",
+      "targets": "ally", "grantedBy": "role:leader", "effect": { "restoreResolve": 8 } },
+
+    { "id": "bind_wound", "name": "Bind Wound", "type": "recharge", "rc": 3, "attack": "none",
+      "targets": "ally", "grantedBy": "always", "effect": { "restoreHp": 6 } },
+
+    { "id": "call_help", "name": "Call Help", "type": "encounter", "attack": "none",
+      "targets": "self", "grantedBy": "role:leader", "effect": { "summon": [1, 2] } },
+
+    { "id": "flee", "name": "Flee", "type": "atwill", "attack": "none",
+      "targets": "self", "grantedBy": "always", "effect": { "leaveFight": true } }
+  ],
+
+  "gambitConditions": [
+    "self.hp<N", "self.resolve<N", "ally.hp<N", "target.hp<N", "target.resolve<N",
+    "target.primer==X", "round==N", "allies>N", "always"
+  ],
+
+  "gambitsByRole": {
+    "_note": "Ordered, first match wins. This REPLACES the hardcoded behaviour list — flees_low is now a gambit line, not engine code.",
+    "skirmisher": [
+      { "when": "target.primer==exposed", "use": "pierce" },
+      { "when": "round==1",               "use": "duelists_stance" },
+      { "when": "always",                 "use": "attack" }
+    ],
+    "brute": [
+      { "when": "self.hp<40",                "use": "guarded_stance" },
+      { "when": "target.primer==off_balance","use": "fury_strike" },
+      { "when": "round==1",                  "use": "trip" },
+      { "when": "always",                    "use": "attack" }
+    ],
+    "lurker": [
+      { "when": "round==1",             "use": "mark" },
+      { "when": "target.primer==marked","use": "exploit" },
+      { "when": "self.hp<30",           "use": "flee" },
+      { "when": "always",               "use": "attack" }
+    ],
+    "leader": [
+      { "when": "ally.hp<40",             "use": "bind_wound" },
+      { "when": "allies>2",               "use": "rally" },
+      { "when": "self.hp<50",             "use": "call_help" },
+      { "when": "target.primer==rattled", "use": "browbeat" },
+      { "when": "always",                 "use": "jeer" }
+    ],
+    "wretch": [
+      { "when": "self.hp<50", "use": "flee" },
+      { "when": "always",     "use": "attack" }
+    ]
+  }
+}
