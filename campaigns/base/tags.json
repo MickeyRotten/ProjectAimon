@@ -1,5 +1,5 @@
 {
-  "_note": "Canonical tag vocabulary. Everything filters on these. Closed list \u2014 adding a tag means adding it here first, or table validation fails at import.",
+  "_note": "Canonical tag vocabulary. Everything filters on these. Closed list — adding a tag means adding it here first, or table validation fails at import.",
   "room": {
     "space": [
       "indoor",
@@ -50,7 +50,8 @@
       "vantage",
       "hazard",
       "concealment",
-      "hearth"
+      "hearth",
+      "safe"
     ]
   },
   "creature": {
@@ -110,13 +111,14 @@
       "cursed",
       "blessed",
       "stolen",
-      "sealed"
+      "sealed",
+      "untradable"
     ]
   },
   "operators": {
     "_note": "How requires[] is read",
-    "plain": "indoor          \u2014 must have",
-    "any": "dark|wild       \u2014 must have at least one",
-    "not": "!water          \u2014 must not have"
+    "plain": "indoor          — must have",
+    "any": "dark|wild       — must have at least one",
+    "not": "!water          — must not have"
   }
 }

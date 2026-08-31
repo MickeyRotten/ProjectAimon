@@ -51,7 +51,7 @@
   "hazard": {
     "chance": 0.1,
     "requires": [
-      "hazard|flooded|collapse"
+      "hazard|flooded"
     ]
   },
   "corpse": {

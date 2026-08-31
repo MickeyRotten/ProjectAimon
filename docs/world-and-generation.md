@@ -104,8 +104,9 @@ means changing a number.**
 ```
 
 Other tables: `campaign.json` (identity, the hand-authored Hub, starter kit,
-character creation), `verbs.json` (the parser's whole vocabulary — **global, not
-per-campaign**), `content/items.json`, `content/monsters.json`,
+character creation), `data/verbs.json` (the parser's whole vocabulary — **global,
+not per-campaign**, and so it lives outside `campaigns/` entirely),
+`content/items.json`, `content/monsters.json`,
 `content/npcs.json`, `content/abilities.json`, `content/placement.json`,
 `content/lore.json`,
 `quests/*.json`, `prompts/*.md`, `rules.json`, and `tags.json` — the closed tag
