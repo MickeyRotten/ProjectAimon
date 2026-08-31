@@ -1,0 +1,27 @@
+/* Boot screen only. The real presentation layer lands with step 4. */
+:root {
+  --black: #000;
+  --grey: #aaa;
+  --white: #fff;
+  --green: #55ff55;
+  --red: #ff5555;
+  --amber: #ffaa00;
+  --dim: #555;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--black);
+  color: var(--grey);
+  font-family: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace;
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: none;
+}
+.boot { padding: 16px 12px; max-width: 90ch; margin: 0 auto; white-space: pre-wrap; }
+.boot h1 { color: var(--white); font-size: 1em; margin: 0 0 1em; font-weight: 700; }
+.boot .ok { color: var(--green); }
+.boot .warn { color: var(--amber); }
+.boot .err { color: var(--red); }
+.boot .dim { color: var(--dim); }

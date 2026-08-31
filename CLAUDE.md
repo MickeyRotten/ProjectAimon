@@ -197,7 +197,8 @@ interesting, no amount of generated prose will fix it.
 - How many theme tokens before generated areas stop repeating themselves. This
   is measurable once there is something to play.
 - ~~Whether a campaign can override the parser's verb list.~~ **Settled: verbs
-  are global.** `verbs.json` sits outside the campaign folder. A campaign needing
+  are global.** `verbs.json` sits outside the campaign folder, at `data/verbs.json`.
+  A campaign needing
   its own verbs needs its own engine, which is the road back to complexity.
 - Whether the event deck earns its place at this scope, or whether wandering
   monsters plus light depletion already carry the world-turn on their own.

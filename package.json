@@ -1,0 +1,22 @@
+{
+  "name": "aimon",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Aimon \u2014 a solo-play browser text adventure with an LLM narrator.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "validate": "vitest run tests/base-campaign.test.ts",
+    "sample": "cd campaigns/base && node ../../tools/sample-generate.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

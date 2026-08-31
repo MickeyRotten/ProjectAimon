@@ -227,7 +227,7 @@
         "ruin"
       ],
       "requires": [
-        "grave|crypt|dark"
+        "grave|dark"
       ],
       "sex": {
         "m": 60,
