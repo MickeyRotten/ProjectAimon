@@ -1,14 +1,28 @@
 name: Build Android APK
 
-# Builds the game into an installable Android APK. The web app is compiled with
+# Builds the game into an installable, signed Android APK and publishes it as a
+# GitHub Release so it can be installed and auto-updated with Obtainium (which
+# reads Releases, not zipped Actions artifacts). The web app is compiled with
 # Vite, Capacitor wraps `dist/` into a native shell, and Gradle assembles a
-# debug APK that is uploaded as a downloadable artifact on every run.
+# release APK signed with a key supplied through the repo's encrypted secrets.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   SIGNING_KEYSTORE_BASE64 - the keystore file, base64-encoded
+#   SIGNING_STORE_PASSWORD  - the keystore password
+#   SIGNING_KEY_ALIAS       - the key alias inside the keystore
+#   SIGNING_KEY_PASSWORD    - the key's password
+# Without them the build still runs (producing an unsigned APK artifact) but no
+# Release is published.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+# Needed to create a Release and its tag.
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -41,15 +55,58 @@ jobs:
       - name: Sync the web build into the Android project
         run: npx cap sync android
 
-      - name: Build the debug APK
+      - name: Decode the signing key (if configured)
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/android/aimon-release.keystore"
+            echo "RELEASE_STORE_FILE=$GITHUB_WORKSPACE/android/aimon-release.keystore" >> "$GITHUB_ENV"
+            echo "Signing key configured; the release APK will be signed."
+          else
+            echo "No SIGNING_KEYSTORE_BASE64 secret; building an unsigned release APK."
+          fi
+
+      - name: Build the release APK
         working-directory: android
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon \
+            -PaimonVersionCode=${{ github.run_number }} \
+            -PaimonVersionName=1.0.${{ github.run_number }}
 
-      - name: Upload the APK
+      - name: Collect the APK
+        run: |
+          DIR=android/app/build/outputs/apk/release
+          if [ -f "$DIR/app-release.apk" ]; then
+            cp "$DIR/app-release.apk" aimon.apk
+          else
+            cp "$DIR/app-release-unsigned.apk" aimon.apk
+          fi
+
+      - name: Upload the APK as a build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aimon-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: aimon-apk
+          path: aimon.apk
           if-no-files-found: error
+
+      # Publish a Release only for real pushes to main that produced a signed
+      # APK (an unsigned APK can't be installed, so there's nothing to ship).
+      - name: Publish a GitHub Release with the APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.RELEASE_STORE_FILE != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Aimon v1.0.${{ github.run_number }}
+          body: |
+            Automated build of Aimon.
+
+            Install or update with [Obtainium](https://obtainium.imranr.dev/)
+            by adding this repository as an app source, or download `aimon.apk`
+            below and open it on your Android device.
+          files: aimon.apk
