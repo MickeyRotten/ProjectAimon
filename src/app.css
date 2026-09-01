@@ -38,6 +38,9 @@ body {
   align-items: center; justify-content: center; padding: 16px;
   background: rgba(0, 0, 0, .7);
 }
+/* `display: flex` above beats the user agent's rule for [hidden], so closing
+   the panel must be spelled out or it never shuts. */
+.settings-overlay[hidden] { display: none; }
 .settings-box {
   width: 100%; max-width: 42ch; background: var(--bg); color: var(--fg);
   border: 1px solid var(--grey); padding: 16px; display: flex; flex-direction: column;
@@ -47,11 +50,14 @@ body {
 .settings-note { margin: 0; color: var(--dim); font-size: .85em; }
 .settings-box label { display: flex; flex-direction: column; gap: 3px; color: var(--grey); }
 .settings-hint { color: var(--dim); font-size: .8em; font-weight: 400; }
-.settings-box input {
+.settings-box input, .settings-box select {
   background: var(--bg); color: var(--white); border: 1px solid var(--dim);
   font: inherit; padding: 5px 6px; outline: none;
 }
-.settings-box input:focus { border-color: var(--grey); }
+.settings-box input:focus, .settings-box select:focus { border-color: var(--grey); }
+.settings-box select { max-width: 100%; }
+.settings-box input[type="range"] { padding: 0; border: none; accent-color: var(--white); }
+.settings-box [hidden] { display: none; }
 .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .settings-actions button {
   background: transparent; color: var(--grey); border: 1px solid var(--dim);
