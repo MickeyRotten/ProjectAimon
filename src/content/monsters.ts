@@ -264,6 +264,7 @@ function buildCreature(
   const gambits = role.gambits ?? role.id;
   const maxHp = Math.max(1, Math.round(deriveHp(rules, stats.toughness) * hpMult));
   const maxResolve = deriveResolve(rules, stats.willpower);
+  const friendliness = rollFriendliness(campaign, rng, tags);
 
   return {
     campaignId: campaign.id,
@@ -290,10 +291,10 @@ function buildCreature(
     damageBonus,
     attacksPerRound: (base as { attacks?: number }).attacks ?? 1,
     threat,
-    // Bribery, standing and prices belong to systems that land with combat and
-    // the shop. The columns exist so nothing needs a migration later; the
-    // numbers stay at rest until there is a rule to read for them.
-    friendliness: 0,
+    // Friendliness decides how a creature breaks under Presence — flee,
+    // surrender or join — read against PRESENCE_BREAK. Bribery, standing and
+    // prices still wait for the shop; those columns stay at rest.
+    friendliness,
     bribeThreshold: 0,
     disposition: 0,
     standing: 0,
@@ -307,6 +308,22 @@ function buildCreature(
     abilities: abilitiesFor(campaign, gambits),
     presenceImmune,
   };
+}
+
+/**
+ * How readily a creature breaks rather than dies. A base range, shifted by the
+ * tags it carries: the venal and lustful can be turned, the relentless run.
+ * Read against `PRESENCE_BREAK` the moment its Resolve hits zero.
+ */
+function rollFriendliness(campaign: ResolvedCampaign, rng: Rng, tags: readonly string[]): number {
+  const roll = (campaign.monsters as {
+    friendlinessRoll?: { base?: [number, number]; byTag?: Record<string, number> };
+  }).friendlinessRoll;
+  const [lo, hi] = roll?.base ?? [0, 0];
+  const byTag = roll?.byTag ?? {};
+  let value = rng.int(lo, hi);
+  for (const tag of tags) value += byTag[tag] ?? 0;
+  return Math.max(0, Math.min(100, value));
 }
 
 /** The elite roll: a title, a tag and a stat lift, at the tier's chance. */

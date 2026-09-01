@@ -393,4 +393,10 @@ export interface NpcRecord {
   abilities: string[];
   /** True when Presence pressure can never land — undead, constructs, minds. */
   presenceImmune: boolean;
+  /** Set once a creature is killed. A corpse, no longer a combatant. */
+  defeated?: boolean;
+  /** How it left the fight under Presence: `flee` · `surrender` · `join`. */
+  broke?: string;
+  /** Coin held — a victor's take, or a purse the corpse run parked on them. */
+  gold?: number;
 }

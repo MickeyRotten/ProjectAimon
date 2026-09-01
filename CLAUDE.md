@@ -2,12 +2,14 @@
 
 Project: **Aimon** *(Eamon, with the AI folded in)*
 
-Status: **design locked. Build order steps 1–5 are built** — campaign and table
+Status: **design locked. Build order steps 1–6 are built** — campaign and table
 loading, the graph generator, the placement roller, movement/map/inventory/
-autosave, and now quests: six templates, distance-band placement into the live
-graph, the Distant band reserving a coordinate before its area exists, a
-predicate registry, and a journal. The game is walkable and has work to do in it,
-with placeholder text. Step 6, combat, is next.
+autosave, quests (six templates, distance-band placement, the Distant reservation,
+a predicate registry and a journal), and now combat: the two-track resolver, the
+Presence route with break-by-friendliness, the ability/gambit/primer/stance
+engine, crits and fumbles, skill growth, and the corpse run. The game is walkable,
+has work to do in it, and fights back, with placeholder text. Step 7, the
+Narrator, is next.
 
 ---
 
@@ -148,7 +150,7 @@ during planning.
 3. **Placement roller** — contents into rooms by tag.
 4. **Movement, map, inventory, autosave** — playable with placeholder text.
 5. **Quests** — templates, distance bands, objective placement.
-6. **Combat.**
+6. **Combat.** *(built)*
 7. **The Narrator** — prose over a world that already works.
 
 **Step 4 is the honest checkpoint,** and it should arrive in a fortnight rather
@@ -170,6 +172,25 @@ An NPC that rolls a quest carries an `offered` quest; accepting places one
 objective into the graph that already exists, so it is always reachable. Kill and
 clear objectives place their targets now but can only be finished once combat
 lands at step 6.
+
+Step 6 is built. The resolver lives in `src/game/combat.ts`; it returns effects
+like every other handler and never writes state itself. A fight begins the turn
+the player walks into a room holding a hostile, and the enemy round is the world
+half's mover step (`enemyRound`), so both halves keep their single write point.
+One formula, read from `rules.json`, serves both routes: a **weapon** attack rolls
+Accuracy against Evasion and takes HP; a **Presence** approach
+(`USE intimidate|taunt|seduce ON <foe>`) rolls Presence against Composure and
+takes Resolve, and at zero Resolve the creature breaks the way its rolled
+`friendliness` says — flee, surrender or join, against `PRESENCE_BREAK`. Abilities
+are data: the player types `USE <ability> ON <foe>`, enemies choose off their
+gambit list (`gambitsByRole`, first match wins), and primers, stances and
+recharge counters live in the volatile `CombatState` that rides along in the save
+only while a fight is live. Crits and fumbles roll their outcome off `CRIT_TABLE`
+and `FUMBLE_TABLE`; weapon, approach and armour skills grow on a hit or on damage
+absorbed, at `SKILL_GROWTH`. Defeat by either track costs the same: the corpse run
+strips the player, parks their purse and carried gear on the victor where they
+fell, wakes them at the Hub, and issues the crude kit — losses moved, never
+deleted. Consumables and companions-in-combat stay out; they land after.
 
 
 ---

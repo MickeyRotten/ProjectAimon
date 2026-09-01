@@ -9,10 +9,28 @@
  * put in the way of it.
  */
 
-import type { Location, ObjectFlags } from '../world/types';
+import type { Location, ObjectFlags, NpcRecord } from '../world/types';
 
 /** The flags that are true-or-false. `lockedById` is a pointer, not a switch. */
 export type BooleanFlag = Exclude<keyof ObjectFlags, 'lockedById'>;
+
+/**
+ * A change to the volatile combat session. It is bookkeeping — primers,
+ * stances, recharge counters, the round — so it is grouped under one effect
+ * rather than spreading a dozen kinds across the union. `who` is `player` or an
+ * npc id. Applied at a write point like everything else.
+ */
+export type CombatOp =
+  | { t: 'begin' }
+  | { t: 'end' }
+  | { t: 'round' }
+  | { t: 'tickRecharge' }
+  | { t: 'primer'; who: string; value: string }
+  | { t: 'stance'; who: string; value: string }
+  | { t: 'recharge'; who: string; ability: string; rounds: number }
+  | { t: 'useEncounter'; who: string; ability: string }
+  | { t: 'threat'; who: string; delta: number }
+  | { t: 'sense'; id: string };
 
 export type Effect =
   | { kind: 'movePlayer'; roomId: string }
@@ -38,4 +56,19 @@ export type Effect =
   /** Mark a quest complete and grant its rewards, gold into the purse. */
   | { kind: 'completeQuest'; questId: string }
   /** Fail a quest whose giver has died. */
-  | { kind: 'failQuest'; questId: string };
+  | { kind: 'failQuest'; questId: string }
+  // ── combat ──────────────────────────────────────────────────────────
+  | { kind: 'npcHp'; id: string; delta: number }
+  | { kind: 'npcResolve'; id: string; delta: number }
+  /** A killing blow: the creature becomes a corpse and drops its purse. */
+  | { kind: 'npcDead'; id: string }
+  /** A Presence break — flee, surrender or join — read from friendliness. */
+  | { kind: 'npcBreak'; id: string; outcome: string }
+  /** A creature summoned mid-fight by `call_help` or a leader's escort. */
+  | { kind: 'spawnCreature'; record: NpcRecord }
+  /** Skill growth on a landed hit or absorbed damage. Player only. */
+  | { kind: 'growSkill'; axis: 'weapon' | 'approach' | 'armour'; id: string; delta: number }
+  /** The player is beaten — the corpse run. `victorId` keeps their goods. */
+  | { kind: 'defeatPlayer'; victorId: string; by: string }
+  /** A change to the volatile combat session. */
+  | { kind: 'combat'; op: CombatOp };
