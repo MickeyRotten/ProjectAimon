@@ -19,6 +19,10 @@ export interface TableSource {
   list(): Promise<string[]>;
   /** Parsed JSON, or undefined when the source has no such file. */
   read(path: string): Promise<Json | undefined>;
+  /** Prompt files (`prompts/*.md`) this source can supply, campaign-relative. */
+  listPrompts(): Promise<string[]>;
+  /** Raw prompt text, or undefined when the source has no such prompt. */
+  readPrompt(path: string): Promise<string | undefined>;
 }
 
 /**
@@ -28,6 +32,12 @@ export interface TableSource {
  * no public directory and no copy step to keep in sync.
  */
 const bundledFiles = import.meta.glob<Json>('/campaigns/**/*.json', { import: 'default' });
+
+/** Prompt fragments — Markdown, read as raw text, never parsed as data. */
+const bundledPrompts = import.meta.glob<string>('/campaigns/**/*.md', {
+  query: '?raw',
+  import: 'default',
+});
 
 /** The global verb list. Deliberately outside every campaign folder. */
 const globalFiles = import.meta.glob<Json>('/data/*.json', { import: 'default' });
@@ -59,6 +69,16 @@ export function bundledSource(campaignId: string): TableSource {
       const loader = bundledFiles[prefix + path];
       return loader ? await loader() : undefined;
     },
+    async listPrompts() {
+      return Object.keys(bundledPrompts)
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length))
+        .sort();
+    },
+    async readPrompt(path) {
+      const loader = bundledPrompts[prefix + path];
+      return loader ? await loader() : undefined;
+    },
   };
 }
 
@@ -76,10 +96,21 @@ export function bundleSource(bundle: CampaignBundle, label = 'imported'): TableS
   return {
     label,
     async list() {
-      return Object.keys(normalised).sort();
+      return Object.keys(normalised)
+        .filter((path) => !path.endsWith('.md'))
+        .sort();
     },
     async read(path) {
-      return normalised[path];
+      return path.endsWith('.md') ? undefined : normalised[path];
+    },
+    async listPrompts() {
+      return Object.keys(normalised)
+        .filter((path) => path.endsWith('.md') && typeof normalised[path] === 'string')
+        .sort();
+    },
+    async readPrompt(path) {
+      const value = normalised[path];
+      return typeof value === 'string' ? value : undefined;
     },
   };
 }

@@ -237,6 +237,21 @@ export class World {
     return [...this.rooms.values()].filter((room) => room.areaId === areaId);
   }
 
+  /**
+   * The one place the narrator's prose reaches a record. `name` and `baseDesc`
+   * are the two fields the design reserves for the narrator — the room's name
+   * and its permanent description, written once on first entry. This is prose,
+   * not structure: it changes nothing the engine reads, and it is written
+   * out-of-band from the turn loop's two mechanical write points on purpose.
+   * Empty strings are ignored, so a failed generation never blanks a room.
+   */
+  writeProse(roomId: string, prose: { name?: string; baseDesc?: string }): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    if (prose.name && prose.name.trim().length > 0) room.name = prose.name.trim();
+    if (prose.baseDesc && prose.baseDesc.trim().length > 0) room.baseDesc = prose.baseDesc.trim();
+  }
+
   roomAt(coord: Coord): RoomRecord | undefined {
     const id = this.byCoord.get(coordKey(coord));
     return id ? this.rooms.get(id) : undefined;

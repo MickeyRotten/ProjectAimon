@@ -27,6 +27,10 @@ import {
   type SaveStore,
 } from './game/save';
 import { mountScreen, type Screen } from './ui/screen';
+import { mountSettings } from './ui/settings';
+import { openRouterClient } from './narrator/llm';
+import { loadSettings, saveSettings, type NarratorSettings } from './narrator/settings';
+import { RoomNarrator } from './narrator/rooms';
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app') as HTMLElement;
@@ -62,11 +66,43 @@ async function boot(): Promise<void> {
     banner.push(line('HELP lists the verbs. Move with n s e w u d.', 'rule'));
   }
 
-  const screen: Screen = mountScreen(root, (raw) => handle(raw));
+  // The narrator: rebuilt whenever the key or a model changes. Absent until a
+  // key is set, and the game runs on placeholder text until then.
+  let settings = loadSettings();
+  let narrator = makeNarrator();
+
+  function makeNarrator(): RoomNarrator | undefined {
+    if (!settings.apiKey) return undefined;
+    const client = openRouterClient({
+      apiKey: settings.apiKey,
+      appTitle: 'Aimon',
+      ...(typeof location !== 'undefined' ? { appUrl: location.origin } : {}),
+    });
+    return new RoomNarrator({ campaign, client, settings });
+  }
+
+  const screen: Screen = mountScreen(root, (raw) => handle(raw), {
+    onSettings: () => settingsPanel.open(),
+  });
+  const settingsPanel = mountSettings(
+    document.body,
+    () => settings,
+    (next: NarratorSettings) => {
+      settings = saveSettings(next);
+      narrator = makeNarrator();
+      screen.print([line(narrator ? 'Narrator on.' : 'Narrator off — no API key set.', 'rule')]);
+      void narrateHere();
+    },
+  );
+
   screen.print(banner);
+  if (!settings.apiKey) {
+    screen.print([line('No narrator yet — open ⚙ to add an OpenRouter key. The world plays without one.', 'rule')]);
+  }
   screen.print(game.describeHere(true));
   screen.refresh(game);
   screen.focus();
+  void narrateHere();
 
   async function handle(raw: string): Promise<void> {
     // Storage is asynchronous and the turn loop is not, so saving is answered
@@ -83,6 +119,30 @@ async function boot(): Promise<void> {
     screen.refresh(game);
     // Step 15: persist. One write point, once per turn that was actually spent.
     if (result.spent) await store.put(recordOf(game, 'auto', 'autosave'));
+    // Steps 13-14 for the room: the narrator writes prose over the world the
+    // turn already resolved. It changes no state the engine reads, so it runs
+    // after the mechanical turn is done and saved, never inside it.
+    void narrateHere();
+  }
+
+  /**
+   * Ask the narrator to describe the room the player is in, and show it. Never
+   * blocks the turn loop; captures the room first and drops the result if the
+   * player has moved on by the time prose comes back. A baseDesc written on
+   * first entry is persisted, so it is generated once and never again.
+   */
+  async function narrateHere(): Promise<void> {
+    if (!narrator) return;
+    const room = game.room;
+    try {
+      const rendered = await narrator.describe(game.world, room);
+      if (!rendered) return;
+      if (game.room.id !== room.id) return; // moved while we waited
+      screen.setRoomProse(room.id, rendered.name, rendered.prose);
+      await store.put(recordOf(game, 'auto', 'autosave'));
+    } catch {
+      // A narrator failure never breaks play; the placeholder text stands.
+    }
   }
 
   async function runSave(verb: 'save' | 'load', label: string): Promise<Line[]> {

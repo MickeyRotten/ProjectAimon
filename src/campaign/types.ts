@@ -357,4 +357,10 @@ export interface ResolvedCampaign {
   readonly quests: ReadonlyMap<string, QuestTemplate>;
   /** Global, loaded from outside every campaign folder. */
   readonly verbs: VerbTable;
+  /**
+   * Narrator prompt fragments, keyed by campaign-relative path
+   * (`prompts/room-base.md`). Raw Markdown — the narrator reads them, the
+   * engine never does. A campaign overrides a prompt whole, by filename.
+   */
+  readonly prompts: Readonly<Record<string, string>>;
 }
