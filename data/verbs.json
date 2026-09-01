@@ -29,6 +29,13 @@
     { "id": "listen",   "words": ["listen"],  "patterns": ["V","VN"], "flavourOnly": true },
     { "id": "smell",    "words": ["smell"],   "patterns": ["V","VN"], "flavourOnly": true },
     { "id": "touch",    "words": ["touch","feel"], "patterns": ["VN"], "flavourOnly": true },
+    { "id": "grope",    "words": ["grope"],   "patterns": ["VN"], "flavourOnly": true },
+    { "id": "slap",     "words": ["slap"],    "patterns": ["VN"], "flavourOnly": true },
+    { "id": "fondle",   "words": ["fondle"],  "patterns": ["VN"], "flavourOnly": true },
+    { "id": "squeeze",  "words": ["squeeze"], "patterns": ["VN"], "flavourOnly": true },
+    { "id": "rub",      "words": ["rub"], "patterns": ["VN"], "flavourOnly": true },
+    { "id": "stroke",   "words": ["stroke"], "patterns": ["VN"], "flavourOnly": true },
+    { "id": "suck",     "words": ["suck"], "patterns": ["VN"], "flavourOnly": true },
 
     { "id": "take",     "words": ["take","get","grab","pick"], "patterns": ["VN","VNPN"], "supportsAll": true },
     { "id": "drop",     "words": ["drop","discard"], "patterns": ["VN"], "supportsAll": true },
@@ -94,5 +101,5 @@
   "allWord": "all",
   "exceptWords": ["except","but"],
 
-  "_count": "58 verbs. Adding one means adding a system — be reluctant."
+  "_count": "62 verbs. Adding one means adding a system — be reluctant."
 }
