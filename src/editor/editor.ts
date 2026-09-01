@@ -220,6 +220,22 @@ function renderCheckbox(value: boolean, onChange: () => void): HTMLElement {
   return input;
 }
 
+/**
+ * A string array shown as one comma-separated input — the compact form of the
+ * string list for table cells. Split on commas on change; empty items dropped.
+ */
+function renderCsvCell(list: string[], onChange: () => void): HTMLElement {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = list.join(', ');
+  input.addEventListener('change', () => {
+    list.length = 0;
+    list.push(...input.value.split(',').map((s) => s.trim()).filter((s) => s.length > 0));
+    onChange();
+  });
+  return input;
+}
+
 /** Editable list of strings — one input per item, add/remove buttons. */
 function renderStringList(list: string[], onChange: () => void): HTMLElement {
   const wrap = document.createElement('div');
@@ -340,15 +356,20 @@ function renderTable(rows: Record<string, Json>[], onChange: () => void, label: 
         if (typeof value === 'number') td.className = 'num';
         if (typeof value === 'boolean') td.className = 'bool';
         if (value === undefined || value === null || typeof value === 'object') {
-          // Rare in a row cell — fall back to a JSON text field.
-          const input = document.createElement('input');
-          input.type = 'text';
-          input.value = value === undefined ? '' : JSON.stringify(value);
-          input.addEventListener('change', () => {
-            try { row[col] = input.value ? (JSON.parse(input.value) as Json) : ''; onChange(); }
-            catch { setStatus('err', `invalid JSON in ${label}[${rowIndex}].${col}`); }
-          });
-          td.append(input);
+          if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+            // String list in a row cell — comma-separated, not raw JSON.
+            td.append(renderCsvCell(value as string[], onChange));
+          } else {
+            // Rare in a row cell — fall back to a JSON text field.
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = value === undefined ? '' : JSON.stringify(value);
+            input.addEventListener('change', () => {
+              try { row[col] = input.value ? (JSON.parse(input.value) as Json) : ''; onChange(); }
+              catch { setStatus('err', `invalid JSON in ${label}[${rowIndex}].${col}`); }
+            });
+            td.append(input);
+          }
         } else {
           const cell = value as string | number | boolean;
           td.append(
