@@ -76,6 +76,59 @@ somewhere to go at the top end.
 
 ---
 
+## What building the graph generator settled
+
+Four things the design did not have an answer for, found by watching the layout
+walk fail. All four come from the same fact: **a lattice cannot draw every
+graph**, and the design's own rule — connection implies adjacency within an
+area — means an undrawable connection is a bug the player can see.
+
+**Density is woven after placement, not built into the graph.** A `warren`
+originally rolled its extra connections while the graph was abstract, and the
+layout walk then had to satisfy every one of them exactly. It failed two runs in
+three and took seconds doing it. Adding those connections *after* the rooms have
+slots — between rooms that ended up side by side — makes every one of them
+drawable by construction, and gives the same feel, because a warren is dense
+precisely in the sense that neighbouring rooms all open into one another.
+Placement success went from a third to all of it, and generation got about fifty
+times faster.
+
+**A ring room takes at most one spur.** A six-room ring is a 2x3 block of slots,
+and the rooms on its long sides already have a neighbouring slot taken by the
+room across the ring. A second spur on such a room is a connection that can
+never be drawn, whatever the cube size. This was every single `loop` failure.
+
+**The entry room's connections are capped by the cube face it sits on.** The
+entry is pinned to the slot facing the gate, so it is on a face — three sides,
+or two in a corner. A graph that gives it four is a graph whose first room
+cannot be placed. The builders take an entry cap alongside the general degree
+cap, and the `hub` shape puts its centre one room *in* from the entry, which is
+also how arriving at a settlement should read.
+
+**A cramped entry slot gets nudged along the face.** Only reachable when the
+cube had to slide or take a long road, where the one-step crossing had already
+been lost — so stepping to a slot with room to build costs nothing that was
+still there to lose.
+
+**A promise is given up before the map is.** A coordinate reserved for a
+`Distant` objective is kept by three things: the graph is stretched until some
+branch is long enough to reach it, one room is assigned that slot outright
+rather than the walk being left to wander onto it, and the rooms along the
+route there are placed first, before the space that route needs is spent. That
+keeps about 96% of promises even when *every second area* carries one, which is
+far more than the quest system will ever ask for. When it still cannot be kept,
+`releaseReservedCoords` gives the coordinate up and the area is laid out
+without it — because an undrawable connection is a wrong exit the player can
+see, while a released coordinate is an objective the quest system places
+somewhere else. Both outcomes are reported; neither is silent.
+
+The `LAYOUT_FAILURE` ladder is still in place and still ordered by the table,
+but with the above in place it now almost never runs: five hundred generated
+areas across forty worlds hit two repacks, dropped no edges, and produced no
+undrawable connection at all.
+
+---
+
 ## Port manifest — harvesting Project Loom
 
 This is a **new repository**, not a fork. Files are copied in one at a time, on

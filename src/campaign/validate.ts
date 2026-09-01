@@ -18,7 +18,10 @@
  * *tags* are errors, because they cannot degrade — they simply stop working.
  */
 
+import { ruleAt } from '../engine/rules';
 import { parseRequires, TagVocabulary } from '../engine/tags';
+import { SHAPES, SHAPE_RULES, isShape } from '../world/shapes';
+import { directionBetween, isDirection } from '../world/types';
 import type { Json, JsonObject, MergeIssue } from './merge';
 import type { CompositionDef, Cube, ResolvedCampaign } from './types';
 
@@ -163,13 +166,29 @@ export function validateCampaign(
       error('campaign.json.hub.entryRoomId', `"${hub.entryRoomId}" is not a hub room`);
     }
 
+    const hubRoomsById = new Map((hub.rooms ?? []).map((room) => [room.id, room]));
     for (const [i, edge] of (hub.edges ?? []).entries()) {
-      const [from, , to] = edge;
+      const [from, dir, to] = edge;
       if (!hubRoomIds.has(from)) {
         error(`campaign.json.hub.edges[${i}]`, `"${from}" is not a hub room`);
       }
       if (!hubRoomIds.has(to)) {
         error(`campaign.json.hub.edges[${i}]`, `"${to}" is not a hub room`);
+      }
+      if (!isDirection(dir)) {
+        error(`campaign.json.hub.edges[${i}]`, `"${dir}" is not a direction`);
+        continue;
+      }
+      // Connection implies adjacency, in the Hub as everywhere else: the map
+      // draws a connector between the two slots, and it can only do that when
+      // they are one step apart in the direction the edge claims.
+      const a = hubRoomsById.get(from);
+      const b = hubRoomsById.get(to);
+      if (a && b && directionBetween(a, b) !== dir) {
+        error(
+          `campaign.json.hub.edges[${i}]`,
+          `"${from}" ${dir} "${to}" does not match their coordinates`,
+        );
       }
     }
 
@@ -185,6 +204,9 @@ export function validateCampaign(
     }
 
     for (const [i, gate] of (hub.gates ?? []).entries()) {
+      if (!isDirection(gate.dir)) {
+        error(`campaign.json.hub.gates[${i}].dir`, `"${gate.dir}" is not a direction`);
+      }
       if (!hubRoomIds.has(gate.fromRoom)) {
         error(`campaign.json.hub.gates[${i}].fromRoom`, `"${gate.fromRoom}" is not a hub room`);
       }
@@ -258,6 +280,20 @@ export function validateCampaign(
     }
 
     if (!area.shapes?.length) error(`${at}.shapes`, 'an area must allow at least one graph shape');
+    for (const [i, shape] of (area.shapes ?? []).entries()) {
+      if (!isShape(shape)) {
+        error(
+          `${at}.shapes[${i}]`,
+          `"${shape}" is not a graph shape the generator builds (${SHAPES.join(', ')})`,
+        );
+        continue;
+      }
+      for (const path of SHAPE_RULES[shape]) {
+        if (ruleAt(campaign.rules, path) === undefined) {
+          error(`rules.json.${path}`, `missing, and "${shape}" areas cannot be generated without it`);
+        }
+      }
+    }
     if (!area.themeTokens?.length) {
       warn(`${at}.themeTokens`, 'no theme tokens, so every generated area here reads the same');
     }

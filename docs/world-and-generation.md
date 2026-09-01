@@ -352,6 +352,15 @@ moment a quest is taken.
 Shape is rolled from the archetype's allowed list. It is the cheapest way to
 make two areas of the same type feel different.
 
+Shapes are built as connections only, and the parameters that make one branchy
+or dense live in `WORLD.shapes`. Two structural limits are not tunable, because
+they are properties of a grid rather than opinions: **degree** — four ways out
+of a slot in a flat area, six where the cube has depth, fewer for the entry room
+on its face — and **parity** — a lattice is bipartite, so an odd cycle cannot be
+drawn at all. A `warren`'s density is therefore woven in *after* placement,
+between rooms that ended up side by side. See *What building the graph generator
+settled* in [decisions-and-history.md](decisions-and-history.md).
+
 
 ---
 
