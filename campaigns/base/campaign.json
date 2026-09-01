@@ -46,7 +46,7 @@
     ],
     "gates": [
       { "fromRoom": "hub_gate", "dir": "e", "archetype": "farmland" },
-      { "fromRoom": "hub_gate", "dir": "n", "archetype": "town" }
+      { "fromRoom": "hub_gate", "dir": "s", "archetype": "town" }
     ],
     "npcs": [
       { "id": "hub_marda", "name": "Marda", "location": "room:hub_armoury",

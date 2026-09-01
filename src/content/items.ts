@@ -28,6 +28,11 @@ export interface ItemOptions {
   tier: number;
   /** A kind from `tags.json`, or `any`. `light` is how a lamp is asked for. */
   kind?: string | undefined;
+  /**
+   * A specific base, when something is asked for by name rather than rolled —
+   * the starter kit is a list of base ids, not a list of kinds.
+   */
+  baseId?: string | undefined;
   id: string;
   location: Location;
 }
@@ -79,9 +84,11 @@ export function generateItem(options: ItemOptions): ObjectRecord | undefined {
 export function rollItem(options: ItemOptions): ItemRoll | undefined {
   const { campaign, rng } = options;
   const wanted = options.kind && options.kind !== 'any' ? options.kind : undefined;
-  const pool = wanted
-    ? campaign.items.bases.filter((base) => base.kind === wanted)
-    : campaign.items.bases;
+  const pool = options.baseId
+    ? campaign.items.bases.filter((base) => base.id === options.baseId)
+    : wanted
+      ? campaign.items.bases.filter((base) => base.kind === wanted)
+      : campaign.items.bases;
   const base = rng.maybeWeighted(pool);
   if (!base) return undefined;
 

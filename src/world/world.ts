@@ -32,6 +32,7 @@ import {
   type Coord,
   type Direction,
   type EdgeRecord,
+  type Cube,
   type Location,
   type NpcRecord,
   type ObjectRecord,
@@ -46,6 +47,29 @@ export interface Exit {
   /** null when this is a gate: the area behind it has not been generated. */
   toRoomId: string | null;
   gateArchetype?: string;
+}
+
+/**
+ * Everything the world is, flat, ready to be written into a save.
+ *
+ * It is records only — no indexes, no derived values, no tables. Loading
+ * rebuilds the indexes and **regenerates nothing**: the world lives in the
+ * save, not in the tables, so a save made against an older campaign still
+ * opens onto the same rooms.
+ */
+export interface WorldSnapshot {
+  campaignId: string;
+  seed: number | string;
+  rngState: number;
+  areas: AreaRecord[];
+  rooms: RoomRecord[];
+  edges: EdgeRecord[];
+  objects: ObjectRecord[];
+  npcs: NpcRecord[];
+  flags: string[];
+  /** The lattice reservations, which include cubes no area has filled yet. */
+  cubes: [string, Cube][];
+  notes: string[];
 }
 
 export interface WorldOptions {
@@ -70,11 +94,13 @@ export class World {
   readonly notes: string[] = [];
 
   private readonly rng: Rng;
+  private readonly seed: number | string;
   private readonly byCoord = new Map<string, string>();
   private readonly byRoom = new Map<string, EdgeRecord[]>();
 
   private constructor(options: WorldOptions) {
     this.campaign = options.campaign;
+    this.seed = options.seed;
     this.rng = new Rng(options.seed);
     this.lattice = new WorldLattice(options.campaign.rules);
   }
@@ -83,6 +109,47 @@ export class World {
   static create(options: WorldOptions): World {
     const world = new World(options);
     world.buildHub();
+    return world;
+  }
+
+  /**
+   * Every record, for the save. Deep-copied on the way out, so a snapshot
+   * taken mid-turn cannot be mutated by the turn that follows it.
+   */
+  snapshot(): WorldSnapshot {
+    return structuredClone({
+      campaignId: this.campaign.id,
+      seed: this.seed,
+      rngState: this.rng.toState(),
+      areas: [...this.areas.values()],
+      rooms: [...this.rooms.values()],
+      edges: [...this.edges.values()],
+      objects: [...this.objects.values()],
+      npcs: [...this.npcs.values()],
+      flags: [...this.flags],
+      cubes: this.lattice.entries(),
+      notes: [...this.notes],
+    });
+  }
+
+  /**
+   * Rebuild a world from a save. Records go back exactly as they were and the
+   * indexes are rebuilt from them; nothing is rolled and nothing is
+   * regenerated. An ungenerated gate stays a gate, with its cube still
+   * reserved, and generates on the turn the player walks through it.
+   */
+  static restore(campaign: ResolvedCampaign, snapshot: WorldSnapshot): World {
+    const world = new World({ campaign, seed: snapshot.seed });
+    const copy = structuredClone(snapshot);
+    world.rng.setState(copy.rngState);
+    for (const [areaId, cube] of copy.cubes) world.lattice.reserve(areaId, cube);
+    for (const area of copy.areas) world.areas.set(area.id, area);
+    for (const room of copy.rooms) world.addRoom(room);
+    for (const edge of copy.edges) world.addEdge(edge);
+    for (const object of copy.objects) world.objects.set(object.id, object);
+    for (const npc of copy.npcs) world.npcs.set(npc.id, npc);
+    for (const flag of copy.flags) world.flags.add(flag);
+    world.notes.push(...copy.notes);
     return world;
   }
 
@@ -334,6 +401,13 @@ export class World {
       const room = this.rooms.get(gate.fromRoom);
       if (!room || !isDirection(gate.dir)) {
         this.notes.push(`hub: gate from "${gate.fromRoom}" ${gate.dir} goes nowhere`);
+        continue;
+      }
+      // Two ways out of one room in one direction means one of them can never
+      // be walked. Validation calls it an error; the engine refuses to build
+      // the unreachable one rather than shipping a gate nobody can use.
+      if (this.exitsOf(room.id).some((exit) => exit.dir === gate.dir)) {
+        this.notes.push(`hub: ${room.id} already has a way out going ${gate.dir}, so the ${gate.archetype} gate was dropped`);
         continue;
       }
       const { stub, longRoad } = reserveArea({

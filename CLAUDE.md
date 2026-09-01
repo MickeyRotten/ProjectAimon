@@ -2,8 +2,10 @@
 
 Project: **Aimon** *(Eamon, with the AI folded in)*
 
-Status: **design locked. Build order steps 1–3 are built** — campaign and table
-loading, the graph generator, and the placement roller. Step 4 is next.
+Status: **design locked. Build order steps 1–4 are built** — campaign and table
+loading, the graph generator, the placement roller, and now movement, the map,
+inventory and autosave. The game is walkable with placeholder text. Step 5,
+quests, is next.
 
 ---
 
@@ -150,6 +152,11 @@ during planning.
 **Step 4 is the honest checkpoint,** and it should arrive in a fortnight rather
 than a month. If walking a generated area with placeholder text is not
 interesting, no amount of generated prose will fix it.
+
+Step 4 is built. The turn loop, the parser, scope resolution, the player record,
+light burning down, and one autosave per turn all live in `src/game/`; the
+screen lives in `src/ui/`. Room text is the room's own structure — type, tags,
+contents, exits — until the narrator replaces it at step 7.
 
 
 ---
