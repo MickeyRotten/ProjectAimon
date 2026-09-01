@@ -30,14 +30,24 @@ export interface Screen {
   print(lines: readonly Line[]): void;
   refresh(game: Game): void;
   focus(): void;
+  /** Show the narrator's name and woven prose for a room, until the room changes. */
+  setRoomProse(roomId: string, name: string, prose: string): void;
+}
+
+export interface ScreenHooks {
+  onSettings?: () => void;
 }
 
 export function mountScreen(
   root: HTMLElement,
   onInput: (raw: string) => void | Promise<void>,
+  hooks: ScreenHooks = {},
 ): Screen {
   root.innerHTML = `
-    <div class="status" role="status"><span id="statline">…</span></div>
+    <div class="status" role="status">
+      <span id="statline">…</span>
+      <button class="gear" id="gear" aria-label="Settings" title="Settings">⚙</button>
+    </div>
     <div class="panel" id="panel">
       <pre class="map" id="mini" aria-label="Map"></pre>
       <div class="where">
@@ -64,6 +74,10 @@ export function mountScreen(
   const input = root.querySelector('#in') as HTMLInputElement;
   const history: string[] = [];
   let cursor = 0;
+  // The narrator's render for the room the player is in. Held so a refresh does
+  // not overwrite good prose with the structural placeholder every turn; it is
+  // cleared implicitly by moving, when the room id no longer matches.
+  let prose: { roomId: string; name: string; text: string } | undefined;
 
   const print = (lines: readonly Line[]): void => {
     for (const line of lines) {
@@ -92,8 +106,11 @@ export function mountScreen(
     ].join('   ');
 
     const view = viewRoom(game.world, game.room);
-    (root.querySelector('#rname') as HTMLElement).textContent = view.name;
-    (root.querySelector('#rdesc') as HTMLElement).textContent = view.desc;
+    // Narrator prose wins while it is for this room; otherwise the structural
+    // placeholder stands, which is also what shows before narration arrives.
+    const showProse = prose && prose.roomId === game.room.id && !view.dark;
+    (root.querySelector('#rname') as HTMLElement).textContent = showProse ? prose!.name : view.name;
+    (root.querySelector('#rdesc') as HTMLElement).textContent = showProse ? prose!.text : view.desc;
     (root.querySelector('#mini') as HTMLElement).textContent = renderPlayerMap(
       game.world,
       game.player.roomId,
@@ -129,6 +146,10 @@ export function mountScreen(
     if (!getSelection()?.toString()) input.focus();
   });
 
+  (root.querySelector('#gear') as HTMLElement).addEventListener('click', () => {
+    hooks.onSettings?.();
+  });
+
   for (const button of root.querySelectorAll('.mono button')) {
     button.addEventListener('click', () => {
       document.body.dataset['mono'] = (button as HTMLElement).dataset['m'] ?? 'cga';
@@ -139,5 +160,11 @@ export function mountScreen(
     });
   }
 
-  return { print, refresh, focus: () => input.focus() };
+  const setRoomProse = (roomId: string, name: string, text: string): void => {
+    prose = { roomId, name, text };
+    (root.querySelector('#rname') as HTMLElement).textContent = name;
+    (root.querySelector('#rdesc') as HTMLElement).textContent = text;
+  };
+
+  return { print, refresh, focus: () => input.focus(), setRoomProse };
 }

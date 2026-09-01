@@ -8,8 +8,12 @@ autosave, quests (six templates, distance-band placement, the Distant reservatio
 a predicate registry and a journal), and now combat: the two-track resolver, the
 Presence route with break-by-friendliness, the ability/gambit/primer/stance
 engine, crits and fumbles, skill growth, and the corpse run. The game is walkable,
-has work to do in it, and fights back, with placeholder text. Step 7, the
-Narrator, is next.
+has work to do in it, and fights back. Step 7, the Narrator, is now under way:
+**part one is built** — the OpenRouter client, on-device settings with the two
+model slots, and the room narrator (two-layer descriptions: batch-generated
+`baseDesc` plus the content-signature-cached woven render), degrading to
+placeholder text whenever there is no key. Part two — outcome narration, NPC
+voicing, and the Tier 2/3 input side — is next, over the same seam.
 
 ---
 
@@ -151,7 +155,8 @@ during planning.
 4. **Movement, map, inventory, autosave** — playable with placeholder text.
 5. **Quests** — templates, distance bands, objective placement.
 6. **Combat.** *(built)*
-7. **The Narrator** — prose over a world that already works.
+7. **The Narrator** — prose over a world that already works. *(part one built:
+   LLM plumbing, settings, room descriptions)*
 
 **Step 4 is the honest checkpoint,** and it should arrive in a fortnight rather
 than a month. If walking a generated area with placeholder text is not

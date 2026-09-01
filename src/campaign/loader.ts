@@ -161,6 +161,20 @@ export async function loadCampaign(options: LoadOptions = {}): Promise<LoadedCam
     globals.set(path, value);
   }
 
+  // Prompts layer like everything else, but whole-file: Markdown does not
+  // merge, so a campaign's prompt replaces base's of the same name outright.
+  const prompts: Record<string, string> = {};
+  for (const path of await base.listPrompts()) {
+    const text = await base.readPrompt(path);
+    if (text !== undefined) prompts[path] = text;
+  }
+  if (overlay) {
+    for (const path of await overlay.listPrompts()) {
+      const text = await overlay.readPrompt(path);
+      if (text !== undefined) prompts[path] = text;
+    }
+  }
+
   const strip = <T>(path: string): T => withoutNotes(files.get(path) as Json) as unknown as T;
 
   const campaign: ResolvedCampaign = {
@@ -179,6 +193,7 @@ export async function loadCampaign(options: LoadOptions = {}): Promise<LoadedCam
     placement: withoutNotes(files.get('content/placement.json') as Json) as unknown as PlacementTable,
     quests,
     verbs: withoutNotes(globals.get('verbs.json') as Json) as unknown as VerbTable,
+    prompts,
   };
 
   const report = validateCampaign(campaign, {

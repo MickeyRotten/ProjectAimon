@@ -24,8 +24,41 @@ body {
 .status {
   background: var(--grey); color: var(--black); font-weight: 700;
   flex: 0 0 auto; padding: 3px 10px; position: sticky; top: 0; z-index: 5;
-  white-space: pre-wrap;
+  white-space: pre-wrap; display: flex; align-items: center; gap: 8px;
 }
+.status #statline { flex: 1 1 auto; min-width: 0; }
+.gear {
+  flex: 0 0 auto; background: transparent; border: 0; color: var(--black);
+  font: inherit; font-size: 1.1em; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.gear:hover { color: var(--white); }
+
+.settings-overlay {
+  position: fixed; inset: 0; z-index: 20; display: flex;
+  align-items: center; justify-content: center; padding: 16px;
+  background: rgba(0, 0, 0, .7);
+}
+.settings-box {
+  width: 100%; max-width: 42ch; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--grey); padding: 16px; display: flex; flex-direction: column;
+  gap: 10px; font-size: .95em; max-height: 90vh; overflow-y: auto;
+}
+.settings-box h2 { margin: 0; color: var(--white); font-size: 1.1em; }
+.settings-note { margin: 0; color: var(--dim); font-size: .85em; }
+.settings-box label { display: flex; flex-direction: column; gap: 3px; color: var(--grey); }
+.settings-hint { color: var(--dim); font-size: .8em; font-weight: 400; }
+.settings-box input {
+  background: var(--bg); color: var(--white); border: 1px solid var(--dim);
+  font: inherit; padding: 5px 6px; outline: none;
+}
+.settings-box input:focus { border-color: var(--grey); }
+.settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.settings-actions button {
+  background: transparent; color: var(--grey); border: 1px solid var(--dim);
+  font: inherit; padding: 5px 12px; cursor: pointer;
+}
+.settings-actions button[data-act="save"] { color: var(--white); border-color: var(--grey); }
+.settings-actions button:hover { border-color: var(--white); }
 
 .panel {
   flex: 0 0 auto; display: flex; gap: 16px; align-items: flex-start;
