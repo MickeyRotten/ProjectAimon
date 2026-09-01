@@ -27,6 +27,7 @@ import type {
   MonsterTable,
   NpcTable,
   PlacementTable,
+  QuestTemplate,
   ResolvedCampaign,
   RulesTable,
   VerbTable,
@@ -137,6 +138,20 @@ export async function loadCampaign(options: LoadOptions = {}): Promise<LoadedCam
     areas.set(id, { ...area, id });
   }
 
+  // Quests are the union of both layers, exactly like areas: a campaign may add
+  // a quest type or retune one, and never has to restate the rest.
+  const questPaths = [...new Set([...basePaths, ...overlayPaths])]
+    .filter((path) => path.startsWith('quests/') && path.endsWith('.json'))
+    .sort();
+  const quests = new Map<string, QuestTemplate>();
+  for (const path of questPaths) {
+    const value = await resolveFile(path);
+    if (value === undefined) continue;
+    const template = withoutNotes(value) as unknown as QuestTemplate;
+    const type = template.type ?? path.slice('quests/'.length, -'.json'.length);
+    quests.set(type, { ...template, type });
+  }
+
   const globals = new Map<string, Json>();
   for (const path of GLOBAL_FILES) {
     const value = await readGlobal(path);
@@ -162,6 +177,7 @@ export async function loadCampaign(options: LoadOptions = {}): Promise<LoadedCam
     npcs: strip<NpcTable>('content/npcs.json'),
     abilities: strip<AbilityTable>('content/abilities.json'),
     placement: withoutNotes(files.get('content/placement.json') as Json) as unknown as PlacementTable,
+    quests,
     verbs: withoutNotes(globals.get('verbs.json') as Json) as unknown as VerbTable,
   };
 

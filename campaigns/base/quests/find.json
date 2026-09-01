@@ -1,0 +1,13 @@
+{
+  "_note": "Reach a place. Nothing is placed — the room already exists in the graph — and arriving completes it.",
+  "type": "find",
+  "bands": { "near": 25, "quiteNear": 45, "far": 25, "distant": 5 },
+  "targetTags": ["landmark|vantage|quiet|ruin|grave|water"],
+  "objective": {
+    "kind": "find",
+    "place": "none",
+    "completedBy": "atRoom"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold"]
+}

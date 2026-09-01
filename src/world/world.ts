@@ -16,18 +16,32 @@
  * null". Once filled in, the edge is an ordinary connection forever.
  */
 
-import type { ResolvedCampaign } from '../campaign/types';
+import type { QuestTemplate, ResolvedCampaign } from '../campaign/types';
+import { generateItem, rollGold } from '../content/items';
+import { generateMonster } from '../content/monsters';
 import { rollSex } from '../content/sex';
 import { deriveHp, deriveResolve, floorAttributes, rollAttributes } from '../content/stats';
 import { Rng } from '../engine/rng';
 import { ruleObject } from '../engine/rules';
+import { parseRequires, satisfies } from '../engine/tags';
 import { generateArea, mintAreaId, reserveArea } from './area';
 import { WorldLattice } from './lattice';
 import {
+  buildHint,
+  bandRange,
+  DISTANT_BAND,
+  investigateFlag,
+  rollBand,
+} from './quests';
+import {
   coordKey,
+  cubeCoords,
+  IN_PLAYER,
   inRoom,
   isDirection,
   opposite,
+  roomCoord,
+  roomOfLocation,
   type AreaRecord,
   type Coord,
   type Direction,
@@ -35,7 +49,9 @@ import {
   type Cube,
   type Location,
   type NpcRecord,
+  type ObjectiveRecord,
   type ObjectRecord,
+  type QuestRecord,
   type RoomRecord,
 } from './types';
 
@@ -66,6 +82,8 @@ export interface WorldSnapshot {
   edges: EdgeRecord[];
   objects: ObjectRecord[];
   npcs: NpcRecord[];
+  quests: QuestRecord[];
+  objectives: ObjectiveRecord[];
   flags: string[];
   /** The lattice reservations, which include cubes no area has filled yet. */
   cubes: [string, Cube][];
@@ -88,6 +106,10 @@ export class World {
   readonly objects = new Map<string, ObjectRecord>();
   /** Everyone who is not the player. `hostile` separates a wolf from a smith. */
   readonly npcs = new Map<string, NpcRecord>();
+  /** Generated quests, campaign-scoped like everything else. */
+  readonly quests = new Map<string, QuestRecord>();
+  /** Objectives, held separately so a quest can hold a list of ids. */
+  readonly objectives = new Map<string, ObjectiveRecord>();
   /** World flags. Spawn upgrades and conditional stats are the first readers. */
   readonly flags = new Set<string>();
   /** Everything generation logged, oldest first. Shown on the boot screen. */
@@ -126,6 +148,8 @@ export class World {
       edges: [...this.edges.values()],
       objects: [...this.objects.values()],
       npcs: [...this.npcs.values()],
+      quests: [...this.quests.values()],
+      objectives: [...this.objectives.values()],
       flags: [...this.flags],
       cubes: this.lattice.entries(),
       notes: [...this.notes],
@@ -148,6 +172,8 @@ export class World {
     for (const edge of copy.edges) world.addEdge(edge);
     for (const object of copy.objects) world.objects.set(object.id, object);
     for (const npc of copy.npcs) world.npcs.set(npc.id, npc);
+    for (const quest of copy.quests ?? []) world.quests.set(quest.id, quest);
+    for (const objective of copy.objectives ?? []) world.objectives.set(objective.id, objective);
     for (const flag of copy.flags) world.flags.add(flag);
     world.notes.push(...copy.notes);
     return world;
@@ -286,11 +312,332 @@ export class World {
     for (const newStub of result.stubs) this.areas.set(newStub.id, newStub);
     for (const object of result.objects) this.objects.set(object.id, object);
     for (const npc of result.npcs) this.npcs.set(npc.id, npc);
+    for (const quest of result.quests) this.quests.set(quest.id, quest);
     this.note(result.area.id, result.notes);
+
+    // A Distant objective reserved a coordinate inside this area before it
+    // existed. Now that it does, bind each such objective to the room that
+    // landed on its coordinate — and place whatever it was waiting to hold.
+    this.bindReservedObjectives(result.area, result.rooms);
 
     edge.roomB = result.area.entryRoomId;
     this.indexEdge(edge);
     return result.area;
+  }
+
+  // ── quests ──────────────────────────────────────────────────────────
+
+  /** Offered quests whose giver stands in this room. What TALK and the journal read. */
+  offeredQuestsInRoom(roomId: string): QuestRecord[] {
+    return [...this.quests.values()].filter((quest) => {
+      if (quest.state !== 'offered') return false;
+      const giver = this.npcs.get(quest.giverNpcId);
+      return giver ? roomOfLocation(giver.location) === roomId : false;
+    });
+  }
+
+  /** Every quest the player has taken on and not yet finished. */
+  activeQuests(): QuestRecord[] {
+    return [...this.quests.values()].filter((quest) => quest.state === 'active');
+  }
+
+  /** A quest's objectives, in order. v1 always holds exactly one. */
+  objectivesOf(quest: QuestRecord): ObjectiveRecord[] {
+    return quest.objectiveIds
+      .map((id) => this.objectives.get(id))
+      .filter((objective): objective is ObjectiveRecord => objective !== undefined);
+  }
+
+  /**
+   * Take on an offered quest: roll a band, place one objective into the graph
+   * that already exists, and move the quest to `active`. This is a generation
+   * step, so it writes world records — and it is reached only through the
+   * `acceptQuest` effect, at the turn loop's one write point.
+   */
+  acceptQuest(questId: string): { ok: boolean; hint?: string; reason?: string } {
+    const quest = this.quests.get(questId);
+    if (!quest) return { ok: false, reason: 'there is no such offer' };
+    if (quest.state !== 'offered') return { ok: false, reason: 'you have already taken that on' };
+    if (quest.prerequisiteQuestIds.some((id) => this.quests.get(id)?.state !== 'complete')) {
+      return { ok: false, reason: 'there is unfinished business before this' };
+    }
+    const giver = this.npcs.get(quest.giverNpcId);
+    const giverRoomId = giver ? roomOfLocation(giver.location) : undefined;
+    const giverRoom = giverRoomId ? this.rooms.get(giverRoomId) : undefined;
+    const template = this.campaign.quests.get(quest.type);
+    if (!giver || !giverRoom || !template) return { ok: false, reason: 'the offer has gone stale' };
+
+    const objectiveId = `${quest.id}:o0`;
+    const band = rollBand(this.rng, template.bands);
+    const objective =
+      band === DISTANT_BAND
+        ? this.placeDistantObjective(quest, template, giverRoom, objectiveId)
+        : this.placeWithinObjective(quest, template, giverRoom, band, objectiveId);
+
+    this.objectives.set(objective.id, objective);
+    quest.objectiveIds = [objective.id];
+    quest.state = 'active';
+    return { ok: true, hint: objective.hint };
+  }
+
+  /**
+   * Grant a completed quest's rewards. Returns the gold to add to the purse —
+   * the loop applies that at its write point — and puts any reward items
+   * straight into the player's hands, which is a world write and belongs here.
+   */
+  completeQuest(questId: string): { gold: number; items: ObjectRecord[] } {
+    const quest = this.quests.get(questId);
+    if (!quest || quest.state !== 'active') return { gold: 0, items: [] };
+    quest.state = 'complete';
+    for (const objective of this.objectivesOf(quest)) objective.done = true;
+
+    let gold = 0;
+    const items: ObjectRecord[] = [];
+    let seq = 0;
+    for (const reward of quest.rewardRoll) {
+      if (reward === 'gold') {
+        gold += rollGold(this.campaign, this.rng, quest.tier);
+      } else if (reward === 'item') {
+        const item = generateItem({
+          campaign: this.campaign,
+          rng: this.rng,
+          tier: quest.tier,
+          id: `${quest.id}:reward${seq++}`,
+          location: IN_PLAYER,
+        });
+        if (item) {
+          this.objects.set(item.id, item);
+          items.push(item);
+        }
+      }
+    }
+    return { gold, items };
+  }
+
+  /** A quest whose giver died is failed outright, per `QUESTS.orphanBehaviour`. */
+  failQuest(questId: string): void {
+    const quest = this.quests.get(questId);
+    if (quest && (quest.state === 'offered' || quest.state === 'active')) quest.state = 'failed';
+  }
+
+  // Place an objective at a hop-band distance, into the existing graph.
+  private placeWithinObjective(
+    quest: QuestRecord,
+    template: QuestTemplate,
+    giverRoom: RoomRecord,
+    band: string,
+    objectiveId: string,
+  ): ObjectiveRecord {
+    const requires = parseRequires(template.targetTags);
+    const hops = this.hopsFrom(giverRoom.id);
+    const reachable: { room: RoomRecord; hops: number }[] = [];
+    for (const [roomId, distance] of hops) {
+      if (distance < 1) continue; // the giver's own room is never the objective
+      const room = this.rooms.get(roomId);
+      if (!room || room.areaId === HUB_AREA_ID) continue;
+      reachable.push({ room, hops: distance });
+    }
+
+    const matching = reachable.filter((entry) => satisfies(entry.room.tags, requires));
+    const pool = matching.length > 0 ? matching : reachable;
+    const range = bandRange(this.campaign.rules, band);
+    const inBand = range ? pool.filter((entry) => entry.hops >= range[0] && entry.hops <= range[1]) : [];
+    // Widen by taking any matching reachable room when the rolled band is empty.
+    const chosen = this.rng.maybePick(inBand.length > 0 ? inBand : pool);
+    const target = chosen?.room ?? giverRoom;
+    // The band the hint quotes is the one the chosen room actually sits in, so
+    // it can never contradict the walk.
+    const actualBand = this.bandOf(chosen?.hops ?? 0) ?? band;
+
+    const objective = this.newObjective(quest, template, objectiveId, actualBand, target.id, null);
+    this.placeObjectiveTarget(objective, quest, template, target);
+    objective.hint = buildHint({
+      template,
+      fromCoord: roomCoord(giverRoom),
+      targetCoord: roomCoord(target),
+      targetTags: target.tags,
+      band: actualBand,
+    });
+    return objective;
+  }
+
+  // Reserve a coordinate inside an ungenerated neighbouring area, so the
+  // objective has a home before its area does. Falls back to a hop band when
+  // there is no ungenerated area left to reach into.
+  private placeDistantObjective(
+    quest: QuestRecord,
+    template: QuestTemplate,
+    giverRoom: RoomRecord,
+    objectiveId: string,
+  ): ObjectiveRecord {
+    const reservation = this.pickDistantReservation();
+    if (!reservation) {
+      return this.placeWithinObjective(quest, template, giverRoom, this.nonDistantBand(template), objectiveId);
+    }
+    reservation.stub.reservedCoords.push(reservation.coord);
+
+    const objective = this.newObjective(quest, template, objectiveId, DISTANT_BAND, '', reservation.coord);
+    // A parcel is carried from the moment it is handed over, wherever it is
+    // bound. Everything else the objective holds waits until its area exists.
+    if (template.objective.place === 'parcel') this.placeObjectiveTarget(objective, quest, template);
+    objective.hint = buildHint({
+      template,
+      fromCoord: roomCoord(giverRoom),
+      targetCoord: reservation.coord,
+      targetTags: null,
+      band: DISTANT_BAND,
+    });
+    return objective;
+  }
+
+  private newObjective(
+    quest: QuestRecord,
+    template: QuestTemplate,
+    id: string,
+    band: string,
+    targetRoomId: string,
+    targetCoord: Coord | null,
+  ): ObjectiveRecord {
+    const completedBy = template.objective.completedBy;
+    return {
+      campaignId: this.campaign.id,
+      id,
+      questId: quest.id,
+      kind: template.objective.kind,
+      targetId: '',
+      targetRoomId,
+      targetCoord,
+      band,
+      completedBy,
+      completedByArg: completedBy === 'flagSet' ? investigateFlag(quest.id) : '',
+      place: template.objective.place,
+      itemKind: template.objective.itemKind ?? '',
+      hint: '',
+      done: false,
+    };
+  }
+
+  /**
+   * Put whatever the objective holds at its target: an item or a creature in
+   * the target room, or a parcel straight into the player's hands. Idempotent —
+   * once the target exists it is never created twice, which is what lets a
+   * Distant objective defer creation to the turn its area generates.
+   */
+  private placeObjectiveTarget(
+    objective: ObjectiveRecord,
+    quest: QuestRecord,
+    template: QuestTemplate,
+    target?: RoomRecord,
+  ): void {
+    if (objective.targetId !== '') return;
+    const place = template.objective.place;
+
+    if (place === 'parcel') {
+      const parcel: ObjectRecord = {
+        campaignId: this.campaign.id,
+        id: `${quest.id}:parcel`,
+        name: 'sealed parcel',
+        nouns: ['parcel', 'package', 'bundle'],
+        adjectives: ['sealed', 'wrapped'],
+        location: IN_PLAYER,
+        desc: '',
+        tags: ['curio', 'sealed'],
+        baseId: 'parcel',
+        quality: 'plain',
+        affixes: [],
+        flags: { takeable: true },
+        condition: 100,
+        burnRemaining: 0,
+      };
+      this.objects.set(parcel.id, parcel);
+      objective.targetId = parcel.id;
+      return;
+    }
+
+    if (!target) return; // item and hostile need a room that exists
+    const tier = this.areaOfRoom(target.id)?.tier ?? quest.tier;
+
+    if (place === 'item') {
+      const item = generateItem({
+        campaign: this.campaign,
+        rng: this.rng,
+        tier,
+        kind: objective.itemKind || undefined,
+        id: `${quest.id}:item`,
+        location: inRoom(target.id),
+      });
+      if (item) {
+        this.objects.set(item.id, item);
+        objective.targetId = item.id;
+      }
+      return;
+    }
+
+    if (place === 'hostile') {
+      const areaDef = this.areaDefOfRoom(target.id);
+      const area = this.areaOfRoom(target.id);
+      if (!areaDef || !area) return;
+      const target_ = generateMonster({
+        campaign: this.campaign,
+        rng: this.rng,
+        areaDef,
+        archetype: area.archetype,
+        tier,
+        roomTags: target.tags,
+        location: inRoom(target.id),
+        nextId: () => `${quest.id}:target`,
+        flags: this.flags,
+      });
+      if (target_) {
+        this.npcs.set(target_.id, target_);
+        objective.targetId = target_.id;
+      }
+    }
+  }
+
+  // Bind any Distant objective whose reserved coordinate a new room landed on,
+  // then place what it was holding now that the room exists.
+  private bindReservedObjectives(area: AreaRecord, rooms: readonly RoomRecord[]): void {
+    for (const objective of this.objectives.values()) {
+      if (!objective.targetCoord || objective.targetRoomId !== '') continue;
+      const coord = objective.targetCoord;
+      const room = rooms.find((r) => r.x === coord.x && r.y === coord.y && r.z === coord.z);
+      if (!room || room.areaId !== area.id) continue;
+      objective.targetRoomId = room.id;
+      const quest = this.quests.get(objective.questId);
+      const template = quest ? this.campaign.quests.get(quest.type) : undefined;
+      if (quest && template) this.placeObjectiveTarget(objective, quest, template, room);
+    }
+  }
+
+  private pickDistantReservation(): { stub: AreaRecord; coord: Coord } | undefined {
+    const stubs = this.rng.shuffle([...this.areas.values()].filter((area) => !area.generated));
+    for (const stub of stubs) {
+      const taken = new Set(stub.reservedCoords.map(coordKey));
+      if (stub.entryCoord) taken.add(coordKey(stub.entryCoord));
+      const free = cubeCoords(stub.cube).filter((coord) => !taken.has(coordKey(coord)));
+      const coord = this.rng.maybePick(free);
+      if (coord) return { stub, coord };
+    }
+    return undefined;
+  }
+
+  private nonDistantBand(template: QuestTemplate): string {
+    const bands: Record<string, number> = {};
+    for (const [name, w] of Object.entries(template.bands ?? {})) {
+      if (name !== DISTANT_BAND) bands[name] = w;
+    }
+    return rollBand(this.rng, Object.keys(bands).length > 0 ? bands : { quiteNear: 1 });
+  }
+
+  private areaOfRoom(roomId: string): AreaRecord | undefined {
+    const room = this.rooms.get(roomId);
+    return room ? this.areas.get(room.areaId) : undefined;
+  }
+
+  private areaDefOfRoom(roomId: string) {
+    const area = this.areaOfRoom(roomId);
+    return area ? this.campaign.areas.get(area.archetype) : undefined;
   }
 
   // ── the Hub ───────────────────────────────────────────────────────

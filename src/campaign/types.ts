@@ -279,6 +279,37 @@ export interface AbilityTable {
   gambitsByRole: Record<string, GambitDef[]>;
 }
 
+// ── quests/*.json ───────────────────────────────────────────────────
+
+/**
+ * What a quest's single objective is, and how it is satisfied. `place` and
+ * `completedBy` are the two small closed sets the engine understands — the same
+ * kind of engine-level vocabulary as `hostile` and `npc` in placement. A new
+ * quest type is a new template plus, at most, a new predicate; never new
+ * engine code beyond that.
+ */
+export interface QuestObjectiveDef {
+  kind: string;
+  /** `item` · `hostile` · `parcel` · `none` — what is placed at the target. */
+  place: string;
+  /** `hasItem` · `npcDead` · `roomCleared` · `flagSet` · `atRoom`. */
+  completedBy: string;
+  /** Narrows a placed item, e.g. `treasure`. Read only when `place` is `item`. */
+  itemKind?: string | undefined;
+}
+
+export interface QuestTemplate {
+  type: string;
+  /** Distance band name -> weight. `distant` means another area entirely. */
+  bands: Record<string, number>;
+  /** Room tags the objective's room must satisfy, in `requires[]` syntax. */
+  targetTags: string[];
+  objective: QuestObjectiveDef;
+  hintFrom: string[];
+  /** Reward kinds granted on completion. A table roll, never hardcoded. */
+  rewards: string[];
+}
+
 // ── verbs.json — global, never campaign-scoped ──────────────────────
 
 export interface VerbDef {
@@ -322,6 +353,8 @@ export interface ResolvedCampaign {
   readonly npcs: NpcTable;
   readonly abilities: AbilityTable;
   readonly placement: PlacementTable;
+  /** Quest templates, keyed by type. An NPC rolls its work against these. */
+  readonly quests: ReadonlyMap<string, QuestTemplate>;
   /** Global, loaded from outside every campaign folder. */
   readonly verbs: VerbTable;
 }

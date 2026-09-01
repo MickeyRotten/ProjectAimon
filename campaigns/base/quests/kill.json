@@ -1,0 +1,13 @@
+{
+  "_note": "A named creature spawned fresh on accept (QUESTS.killTargetSpawn), waiting at the target room. Completed when it is dead — which needs combat, step 6. The objective is placed and tracked now; it simply cannot be resolved until there is a way to kill.",
+  "type": "kill",
+  "bands": { "near": 20, "quiteNear": 45, "far": 30, "distant": 5 },
+  "targetTags": ["wild|dark|ruin|grave|cell|concealment"],
+  "objective": {
+    "kind": "kill",
+    "place": "hostile",
+    "completedBy": "npcDead"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold", "item"]
+}

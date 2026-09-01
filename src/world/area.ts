@@ -51,6 +51,7 @@ import {
   type EdgeRecord,
   type NpcRecord,
   type ObjectRecord,
+  type QuestRecord,
   type RoomRecord,
 } from './types';
 
@@ -65,6 +66,8 @@ export interface GenerationResult {
   objects: ObjectRecord[];
   /** People and creatures alike — one table, `hostile` is a flag on the record. */
   npcs: NpcRecord[];
+  /** Offered quests, one per quest-giving NPC the placement roller made. */
+  quests: QuestRecord[];
   notes: string[];
 }
 
@@ -272,6 +275,7 @@ export function generateArea(options: GenerateOptions): GenerationResult {
     stubs: gates.stubs,
     objects: contents.objects,
     npcs: contents.npcs,
+    quests: contents.quests,
     notes,
   };
 }
