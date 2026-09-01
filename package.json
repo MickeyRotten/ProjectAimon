@@ -15,11 +15,14 @@
     "sample": "cd campaigns/base && node ../../tools/sample-generate.mjs"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
     "dexie": "^4.4.5"
   }
 }
