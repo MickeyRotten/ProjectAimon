@@ -59,4 +59,42 @@ describe('the OpenRouter client', () => {
     await expect(client.complete({ model: 'm', messages: [] })).rejects.toBeInstanceOf(Error);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
+
+  it('aborts a stalled connection instead of hanging forever', async () => {
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      });
+    });
+    const client = openRouterClient({
+      apiKey: 'k',
+      attempts: 1,
+      timeoutMs: 20,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: noSleep,
+    });
+    await expect(client.complete({ model: 'm', messages: [] })).rejects.toBeInstanceOf(Error);
+  });
+
+  it('retries a stall like any other transient failure', async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn((_url: string, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        });
+      }
+      return Promise.resolve(ok('recovered after a stall'));
+    });
+    const client = openRouterClient({
+      apiKey: 'k',
+      attempts: 2,
+      timeoutMs: 20,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      sleep: noSleep,
+    });
+    expect(await client.complete({ model: 'm', messages: [] })).toBe('recovered after a stall');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });

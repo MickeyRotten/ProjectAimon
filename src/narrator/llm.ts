@@ -56,6 +56,8 @@ export interface OpenRouterOptions {
   fetchImpl?: typeof fetch;
   /** Injectable for tests, so backoff is instant off the wire. */
   sleep?: (ms: number) => Promise<void>;
+  /** A stalled connection is aborted after this long and retried like any other failure. */
+  timeoutMs?: number;
 }
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -71,6 +73,7 @@ export function openRouterClient(options: OpenRouterOptions): LlmClient {
   const attempts = Math.max(1, options.attempts ?? 4);
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? wait;
+  const timeoutMs = options.timeoutMs ?? 15000;
 
   return {
     async complete(request) {
@@ -93,8 +96,10 @@ export function openRouterClient(options: OpenRouterOptions): LlmClient {
       let lastError: unknown;
       for (let attempt = 0; attempt < attempts; attempt++) {
         if (attempt > 0) await sleep(2 ** attempt * 1000);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const response = await fetchImpl(ENDPOINT, { method: 'POST', headers, body });
+          const response = await fetchImpl(ENDPOINT, { method: 'POST', headers, body, signal: controller.signal });
           if (!response.ok) {
             // A client error is terminal; a server error is worth another go.
             if (response.status >= 400 && response.status < 500) {
@@ -107,6 +112,8 @@ export function openRouterClient(options: OpenRouterOptions): LlmClient {
         } catch (error) {
           if (error instanceof LlmCallError && error.message.includes('OpenRouter 4')) throw error;
           lastError = error;
+        } finally {
+          clearTimeout(timer);
         }
       }
       throw lastError instanceof Error ? lastError : new LlmCallError(String(lastError));
