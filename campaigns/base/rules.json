@@ -490,12 +490,14 @@
       "repackWithMoreSlack",
       "dropNonBridgeEdge",
       "growCubeAndRetry",
+      "releaseReservedCoords",
       "logAndAccept"
     ],
     "mayDropBridgeEdge": false,
     "repackSlackStep": 0.3,
     "maxRepacks": 2,
-    "_bridgeNote": "An edge is a bridge if removing it raises the component count. Check before dropping, always."
+    "_bridgeNote": "An edge is a bridge if removing it raises the component count. Check before dropping, always.",
+    "_releaseNote": "A coordinate promised to a Distant objective is given up before the map is: an undrawable connection is a wrong exit the player can see, while a released promise is a quest objective the quest system re-places. Reported either way."
   },
   "VENDORS": {
     "sellPriceMultiplier": 0.4,
@@ -572,6 +574,50 @@
       "maxSlideAttempts": 60,
       "onExhausted": "placeAtNearestFreeCubeAndLogLongRoad",
       "entryRoomRule": "The entry room MUST occupy the slot immediately adjacent to the incoming gate coordinate, so a one-hop crossing is one lattice step."
+    },
+    "shapes": {
+      "_note": "Shape parameters. The four shapes themselves are engine capabilities; how branchy or how dense each one runs is a number, and numbers live here.",
+      "sprawl": {
+        "branchWindow": 3
+      },
+      "loop": {
+        "ringFraction": 0.6,
+        "spurWindow": 2,
+        "_ringNote": "The ring is rounded up to an even length. A lattice is bipartite, so an odd ring is a loop the map could never close."
+      },
+      "hub": {
+        "arms": [
+          3,
+          4
+        ]
+      },
+      "warren": {
+        "backWindow": 4,
+        "extraEdges": 0.3,
+        "_chordNote": "Extra edges only ever join rooms an odd number of steps apart, for the same parity reason."
+      }
+    },
+    "gates": {
+      "_note": "Ways out of a generated area. A gate's cube is reserved the moment the gate is made, before the area behind it exists — that is what lets a Distant quest name a coordinate nobody has walked to yet.",
+      "perArea": [
+        1,
+        3
+      ],
+      "minHopsFromEntry": 2,
+      "_hopNote": "A gate in the entry room's face would let the player skip the area entirely.",
+      "roomRequires": [
+        "!safe"
+      ],
+      "maxPerRoom": 1
+    },
+    "roomTypeFit": {
+      "_note": "A room type carrying one of these tags only fits where the graph agrees: dead ends at leaves, junctions where three ways meet. Every other type rolls on weight alone, and if nothing fits the table is rolled unfiltered — a room always gets a type.",
+      "dead-end": {
+        "maxDegree": 1
+      },
+      "junction": {
+        "minDegree": 3
+      }
     },
     "roomCoords": "absolute world coordinates, not cube-relative",
     "roomCode": "x.y.z — human-readable, unique, and directly usable as a debug and quest handle",
