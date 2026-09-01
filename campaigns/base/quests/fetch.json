@@ -1,0 +1,14 @@
+{
+  "_note": "Retrieve a thing from somewhere. An item is placed at the target room on accept; having it in hand completes the quest. Turn-in at the giver arrives with dialogue at step 7.",
+  "type": "fetch",
+  "bands": { "near": 25, "quiteNear": 45, "far": 25, "distant": 5 },
+  "targetTags": ["storage|grave|ruin|indoor|landmark"],
+  "objective": {
+    "kind": "item",
+    "place": "item",
+    "completedBy": "hasItem",
+    "itemKind": "treasure"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold", "item"]
+}

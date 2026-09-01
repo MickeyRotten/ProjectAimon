@@ -20,6 +20,7 @@
 
 import { ruleAt } from '../engine/rules';
 import { parseRequires, TagVocabulary } from '../engine/tags';
+import { PLACE_KINDS, PREDICATE_KINDS, REWARD_KINDS } from '../world/quests';
 import { SHAPES, SHAPE_RULES, isShape } from '../world/shapes';
 import { directionBetween, isDirection, opposite } from '../world/types';
 import type { Json, JsonObject, MergeIssue } from './merge';
@@ -510,6 +511,56 @@ export function validateCampaign(
   for (const token of ['{role}', '{traitA}', '{traitB}', '{want}']) {
     if (!template.includes(token)) {
       error('content/npcs.json.personaTemplate', `missing ${token}`);
+    }
+  }
+
+  // ── quests ────────────────────────────────────────────────────────
+  // A role naming a quest type with no template rolls nothing, in silence —
+  // exactly the kind of quiet miss the tag check exists to catch.
+  const questTypes = new Set(campaign.quests.keys());
+  for (const [i, role] of (campaign.npcs.roles ?? []).entries()) {
+    for (const type of role.quests ?? []) {
+      if (!questTypes.has(type)) {
+        warn(
+          `content/npcs.json.roles[${i}].quests`,
+          `"${type}" has no template in quests/, so this role offers it never`,
+        );
+      }
+    }
+  }
+
+  const bandNames = new Set(Object.keys(readObject(campaign.rules, ['DISTANCE_BANDS'])));
+  for (const [type, quest] of campaign.quests) {
+    const at = `quests/${type}.json`;
+    checkRequires(`${at}.targetTags`, quest.targetTags, 'room');
+    for (const band of Object.keys(quest.bands ?? {})) {
+      if (band.startsWith('_')) continue;
+      // `distant` is the one band that is not a hop range: it means another
+      // area, and reserves a coordinate rather than reading DISTANCE_BANDS.
+      if (band !== 'distant' && !bandNames.has(band)) {
+        error(`${at}.bands.${band}`, `no distance band "${band}" in rules.json, and it is not "distant"`);
+      }
+    }
+    if (Object.values(quest.bands ?? {}).every((w) => (w ?? 0) <= 0)) {
+      error(`${at}.bands`, 'every band has zero weight, so no objective can ever be placed');
+    }
+    const objective = quest.objective ?? ({} as typeof quest.objective);
+    if (!PLACE_KINDS.has(objective.place)) {
+      error(`${at}.objective.place`, `"${objective.place}" is not one of ${[...PLACE_KINDS].join(', ')}`);
+    }
+    if (!PREDICATE_KINDS.has(objective.completedBy)) {
+      error(
+        `${at}.objective.completedBy`,
+        `"${objective.completedBy}" is not one of ${[...PREDICATE_KINDS].join(', ')}`,
+      );
+    }
+    if (objective.itemKind && objective.itemKind !== 'any') {
+      checkTag(`${at}.objective.itemKind`, objective.itemKind, 'object');
+    }
+    for (const reward of quest.rewards ?? []) {
+      if (!REWARD_KINDS.has(reward)) {
+        error(`${at}.rewards`, `"${reward}" is not one of ${[...REWARD_KINDS].join(', ')}`);
+      }
     }
   }
 

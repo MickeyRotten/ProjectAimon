@@ -41,6 +41,7 @@ import {
   type NpcRecord,
   type ObjectFlags,
   type ObjectRecord,
+  type QuestRecord,
   type RoomRecord,
 } from './types';
 
@@ -59,6 +60,8 @@ export interface PlacementOptions {
 export interface PlacementResult {
   objects: ObjectRecord[];
   npcs: NpcRecord[];
+  /** Offered quests, one per quest-giving NPC. Objectives wait for accept. */
+  quests: QuestRecord[];
   notes: string[];
 }
 
@@ -77,14 +80,17 @@ export function placeContents(options: PlacementOptions): PlacementResult {
   const { campaign, rng, area, rooms } = options;
   const objects: ObjectRecord[] = [];
   const npcs: NpcRecord[] = [];
+  const quests: QuestRecord[] = [];
   const notes: string[] = [];
 
-  if (rooms.length === 0) return { objects, npcs, notes };
+  if (rooms.length === 0) return { objects, npcs, quests, notes };
 
   let objectSeq = 0;
   let npcSeq = 0;
+  let questSeq = 0;
   const nextObjectId = (): string => `${area.id}:o${String(objectSeq++).padStart(2, '0')}`;
   const nextNpcId = (): string => `${area.id}:n${String(npcSeq++).padStart(2, '0')}`;
+  const nextQuestId = (): string => `${area.id}:q${String(questSeq++).padStart(2, '0')}`;
 
   const hops = hopsWithin(options);
   const guarantees = (campaign.placement.guarantees ?? {}) as unknown as JsonObject;
@@ -104,9 +110,11 @@ export function placeContents(options: PlacementOptions): PlacementResult {
     ...options,
     objects,
     npcs,
+    quests,
     notes,
     nextObjectId,
     nextNpcId,
+    nextQuestId,
     hops,
     hostileRooms,
     hostileCounts,
@@ -195,7 +203,7 @@ export function placeContents(options: PlacementOptions): PlacementResult {
   // Only shortfalls are logged. `notes` is a problem list the boot screen shows
   // in warning colour, so a routine summary in it would train the eye to skip
   // the line that matters.
-  return { objects, npcs, notes };
+  return { objects, npcs, quests, notes };
 }
 
 // ── one placement ───────────────────────────────────────────────────
@@ -203,9 +211,11 @@ export function placeContents(options: PlacementOptions): PlacementResult {
 interface RollContext extends PlacementOptions {
   objects: ObjectRecord[];
   npcs: NpcRecord[];
+  quests: QuestRecord[];
   notes: string[];
   nextObjectId: () => string;
   nextNpcId: () => string;
+  nextQuestId: () => string;
   hops: Map<string, number>;
   hostileRooms: Set<string>;
   /** How many encounters each room carries, capped by `maxHostilesPerRoom`. */
@@ -262,6 +272,25 @@ function place(
     if (!person) return;
     context.npcs.push(person.record);
     context.npcRooms.add(room.id);
+
+    // The NPC's role decided a quest type; the objective itself is not placed
+    // until the player accepts, so a Distant quest reserves a coordinate only
+    // for work someone actually took on. `offered` is all that exists now.
+    const type = person.questType;
+    const template = type ? context.campaign.quests.get(type) : undefined;
+    if (type && template) {
+      context.quests.push({
+        campaignId: campaign.id,
+        id: context.nextQuestId(),
+        type,
+        giverNpcId: person.record.id,
+        state: 'offered',
+        objectiveIds: [],
+        prerequisiteQuestIds: [],
+        rewardRoll: [...(template.rewards ?? [])],
+        tier: context.area.tier,
+      });
+    }
     return;
   }
 

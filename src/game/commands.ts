@@ -85,13 +85,11 @@ const NOT_YET: Record<string, string> = {
   use: 'Abilities land with combat, at build step 6.',
   eat: 'Consumables land with combat, at build step 6.',
   drink: 'Consumables land with combat, at build step 6.',
-  talk: 'The narrator voices people at build step 7.',
   ask: 'The narrator voices people at build step 7.',
   tell: 'The narrator voices people at build step 7.',
   say: 'The narrator voices people at build step 7.',
   give: 'The narrator voices people at build step 7.',
   show: 'The narrator voices people at build step 7.',
-  quests: 'Quests land at build step 5.',
   buy: 'The shop opens once there is a reason to spend.',
   sell: 'The shop opens once there is a reason to spend.',
   list: 'The shop opens once there is a reason to spend.',
@@ -137,6 +135,12 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       return wearRemove(ctx, command);
     case 'wield':
       return wield(ctx, command);
+    case 'talk':
+      return talk(ctx, command);
+    case 'search':
+      return search(ctx);
+    case 'quests':
+      return questsJournal(ctx);
     case 'inventory':
       return inventory(ctx);
     case 'stats':
@@ -524,6 +528,117 @@ function wield(ctx: CommandContext, command: Command): Reply {
     free: false,
   };
 }
+
+// ── quests ──────────────────────────────────────────────────────────
+
+/**
+ * Talk to someone. Until the narrator voices people at step 7, the only thing
+ * a conversation resolves is quest work: an NPC with an offer hands it over,
+ * one whose work is unfinished says so, and everyone else waits for the
+ * narrator. The numbers — which band, which room — are the engine's, placed by
+ * the `acceptQuest` effect at the write point; the lead is read out after.
+ */
+function talk(ctx: CommandContext, command: Command): Reply {
+  const found = resolve(ctx, command.object);
+  if ('reply' in found) return found.reply;
+  const npc = found.entry.npc;
+  if (!npc) return blocked(`There is no talking to the ${found.entry.name}.`, 'WRONG_VERB');
+
+  const offered = ctx.world.offeredQuestsInRoom(ctx.room.id).find((quest) => quest.giverNpcId === npc.id);
+  if (offered) {
+    return {
+      lines: [
+        line(`${npc.name}:`, 'speak'),
+        line(`"There's work, if you'll take it — ${questBlurb(offered.type)}."`, 'speak'),
+        line('You take it on.', 'ok'),
+      ],
+      effects: [
+        { kind: 'acceptQuest', questId: offered.id },
+        { kind: 'pronoun', ref: 'it', id: npc.id },
+      ],
+      free: false,
+    };
+  }
+
+  const active = ctx.world.activeQuests().find((quest) => quest.giverNpcId === npc.id);
+  if (active) {
+    return {
+      lines: [line(`${npc.name} has nothing more for you until the ${active.type} is done.`, 'speak')],
+      effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
+      free: false,
+    };
+  }
+  return {
+    lines: [line('The narrator voices people at build step 7. For now, they only offer work.', 'rule')],
+    effects: [],
+    free: true,
+  };
+}
+
+/**
+ * Search the room. Its one job at this step is the `investigate` objective: if
+ * an active quest wants this room looked over, the search sets its flag and the
+ * world half settles it. Everywhere else it turns up nothing a look would not.
+ */
+function search(ctx: CommandContext): Reply {
+  for (const quest of ctx.world.activeQuests()) {
+    for (const objective of ctx.world.objectivesOf(quest)) {
+      if (
+        objective.completedBy === 'flagSet' &&
+        objective.targetRoomId === ctx.room.id &&
+        !objective.done &&
+        !ctx.world.flags.has(objective.completedByArg)
+      ) {
+        return {
+          lines: [line('You search the place over, and find what you were sent to find.', 'ok')],
+          effects: [{ kind: 'worldFlag', id: objective.completedByArg, value: true }],
+          free: false,
+        };
+      }
+    }
+  }
+  return say('You search, and turn up nothing a look would not.');
+}
+
+/** The journal: work in hand, and work on offer in this room. */
+function questsJournal(ctx: CommandContext): Reply {
+  const active = ctx.world.activeQuests();
+  const offeredHere = ctx.world.offeredQuestsInRoom(ctx.room.id);
+  if (active.length === 0 && offeredHere.length === 0) {
+    return free([line('No work in hand, and none on offer here.', 'rule')]);
+  }
+
+  const lines: Line[] = [];
+  if (active.length > 0) {
+    lines.push(line('Work in hand:', 'ok'));
+    for (const quest of active) {
+      const objective = ctx.world.objectivesOf(quest)[0];
+      const state = !objective ? 'no lead yet' : objective.done ? 'done — go be paid' : `it lies ${objective.hint}`;
+      lines.push(line(`  ${questLabel(quest.type)} — ${state}`));
+    }
+  }
+  if (offeredHere.length > 0) {
+    lines.push(line('On offer here:', 'ok'));
+    for (const quest of offeredHere) {
+      const giver = ctx.world.npcs.get(quest.giverNpcId);
+      lines.push(line(`  ${questLabel(quest.type)} — talk to ${giver?.name ?? 'someone here'} to take it on`, 'rule'));
+    }
+  }
+  return free(lines);
+}
+
+const questLabel = (type: string): string => (type ? type[0]?.toUpperCase() + type.slice(1) : 'Work');
+
+/** A placeholder line for the offer, until the narrator writes the real one. */
+const questBlurb = (type: string): string =>
+  ({
+    fetch: 'something of mine needs bringing back',
+    kill: 'a thing out there needs killing',
+    deliver: 'this needs carrying somewhere for me',
+    find: 'a place needs eyes on it',
+    clear: 'somewhere needs emptying of what holds it',
+    investigate: 'something needs looking into',
+  })[type] ?? 'there is work to be done';
 
 // ── the sheet, the pack, the help ───────────────────────────────────
 

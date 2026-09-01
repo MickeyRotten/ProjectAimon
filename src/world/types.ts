@@ -203,6 +203,64 @@ export interface EdgeRecord {
 
 export const roomCoord = (room: RoomRecord): Coord => ({ x: room.x, y: room.y, z: room.z });
 
+// ── quests ──────────────────────────────────────────────────────────
+
+/**
+ * A quest's life, as an enum rather than a boolean, so chains and failure and
+ * abandonment are a state rather than a schema change later. v1 only ever moves
+ * `offered -> active -> complete`, with `failed` reached when a giver dies.
+ */
+export type QuestState = 'offered' | 'active' | 'complete' | 'failed' | 'abandoned';
+
+/**
+ * One generated quest, campaign-scoped like everything else. It holds a list of
+ * objective ids, never the objectives themselves — v1 always makes exactly one,
+ * but the seam for more costs nothing now and a lot to retrofit.
+ */
+export interface QuestRecord {
+  campaignId: string;
+  id: string;
+  type: string;
+  giverNpcId: string;
+  state: QuestState;
+  objectiveIds: string[];
+  /** Always empty in v1. A chain later is a populated array, not a new schema. */
+  prerequisiteQuestIds: string[];
+  /** Reward kinds rolled from the template, granted once on completion. */
+  rewardRoll: string[];
+  /** The giver's area tier, so a reward and a spawned target scale to it. */
+  tier: number;
+}
+
+/**
+ * An objective is its own record, never a field on the quest. `targetCoord` is
+ * what makes a `Distant` objective work: a coordinate is reserved inside an area
+ * that does not exist yet, and once that area generates `targetRoomId` is filled
+ * in from it. Everything downstream reads the id.
+ */
+export interface ObjectiveRecord {
+  campaignId: string;
+  id: string;
+  questId: string;
+  kind: string;
+  /** The object or npc the predicate watches, when it needs one. Empty otherwise. */
+  targetId: string;
+  /** Empty until the target room is known — which, for `Distant`, is at area-gen. */
+  targetRoomId: string;
+  /** Set only for a `Distant` objective, before its room exists. */
+  targetCoord: Coord | null;
+  band: string;
+  /** The predicate that satisfies it, from the closed registry. */
+  completedBy: string;
+  /** A payload the predicate needs, e.g. the flag name for `flagSet`. */
+  completedByArg: string;
+  /** What the objective places at the target once its area exists, if anything. */
+  place: string;
+  itemKind: string;
+  hint: string;
+  done: boolean;
+}
+
 // ── the things that sit in the world ────────────────────────────────
 
 /**

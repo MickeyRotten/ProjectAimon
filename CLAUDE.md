@@ -2,10 +2,12 @@
 
 Project: **Aimon** *(Eamon, with the AI folded in)*
 
-Status: **design locked. Build order steps 1–4 are built** — campaign and table
-loading, the graph generator, the placement roller, and now movement, the map,
-inventory and autosave. The game is walkable with placeholder text. Step 5,
-quests, is next.
+Status: **design locked. Build order steps 1–5 are built** — campaign and table
+loading, the graph generator, the placement roller, movement/map/inventory/
+autosave, and now quests: six templates, distance-band placement into the live
+graph, the Distant band reserving a coordinate before its area exists, a
+predicate registry, and a journal. The game is walkable and has work to do in it,
+with placeholder text. Step 6, combat, is next.
 
 ---
 
@@ -157,6 +159,17 @@ Step 4 is built. The turn loop, the parser, scope resolution, the player record,
 light burning down, and one autosave per turn all live in `src/game/`; the
 screen lives in `src/ui/`. Room text is the room's own structure — type, tags,
 contents, exits — until the narrator replaces it at step 7.
+
+Step 5 is built. Quest templates live in `campaigns/base/quests/`; the records,
+the band roll, the hint prose and the completion predicate registry live in
+`src/world/quests.ts`; placement and the two write points live in `World`
+(`acceptQuest`, `completeQuest`, and binding a Distant objective to its room the
+turn its area generates) and in the turn loop (`talk` to accept, `search` to
+resolve an investigation, the journal, and completion checked every world half).
+An NPC that rolls a quest carries an `offered` quest; accepting places one
+objective into the graph that already exists, so it is always reachable. Kill and
+clear objectives place their targets now but can only be finished once combat
+lands at step 6.
 
 
 ---

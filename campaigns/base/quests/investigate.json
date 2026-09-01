@@ -1,0 +1,13 @@
+{
+  "_note": "Go to a place and look. Nothing is placed; SEARCH at the target room sets the quest's flag, and the flag completes it. This is the seam that gives the SEARCH verb something to do before combat.",
+  "type": "investigate",
+  "bands": { "near": 25, "quiteNear": 45, "far": 25, "distant": 5 },
+  "targetTags": ["landmark|shrine|ruin|grave|concealment|quiet|corrupt|vantage"],
+  "objective": {
+    "kind": "investigate",
+    "place": "none",
+    "completedBy": "flagSet"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold", "item"]
+}

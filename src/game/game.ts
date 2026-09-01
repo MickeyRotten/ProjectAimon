@@ -19,8 +19,9 @@ import type { ResolvedCampaign } from '../campaign/types';
 import { parse, type Command } from '../engine/parser';
 import { Rng } from '../engine/rng';
 import { ruleNumber, ruleString } from '../engine/rules';
+import { objectiveComplete, type QuestCheckContext } from '../world/quests';
 import type { ObjectRecord, RoomRecord } from '../world/types';
-import { IN_PLAYER, inRoom } from '../world/types';
+import { IN_PLAYER, inObject, inRoom } from '../world/types';
 import { World, type WorldSnapshot } from '../world/world';
 import {
   carriedWeight,
@@ -185,6 +186,14 @@ export class Game {
     const before = this.player.roomId;
     // ── step 7: the player half's one write point ────────────────────
     this.apply(reply.effects);
+    // Taking on a quest places its objective at apply time, so the lead it
+    // leaves can only be read out once the write has happened.
+    for (const effect of reply.effects) {
+      if (effect.kind !== 'acceptQuest') continue;
+      const quest = this.world.quests.get(effect.questId);
+      const objective = quest ? this.world.objectivesOf(quest)[0] : undefined;
+      if (objective) lines.push(line(`It lies ${objective.hint}`, 'rule'));
+    }
     // ── steps 8-12: the world half, which runs whatever the player did
     lines.push(...this.worldHalf());
 
@@ -310,6 +319,19 @@ export class Game {
         case 'extraTurns':
           this.owedTurns += effect.turns;
           break;
+        case 'acceptQuest':
+          // Placement rolls and writes world records, so it lives behind an
+          // effect and happens here, at the write point — never in a handler.
+          this.world.acceptQuest(effect.questId);
+          break;
+        case 'completeQuest': {
+          const { gold } = this.world.completeQuest(effect.questId);
+          this.player.purse = Math.max(0, this.player.purse + gold);
+          break;
+        }
+        case 'failQuest':
+          this.world.failQuest(effect.questId);
+          break;
       }
     }
   }
@@ -351,10 +373,61 @@ export class Game {
     // Movers — pursuers, wanderers, rivals — arrive with combat.
     // The event deck arrives with quests. Both belong in this half, here.
 
+    // Quests settle in the world half: an objective the player just satisfied
+    // becomes a completed quest and a paid reward, and a giver who has died
+    // takes their unfinished work down with them.
+    const quests = this.questEffects();
+    effects.push(...quests.effects);
+    lines.push(...quests.lines);
+
     // ── step 12: the world half's one write point ────────────────────
     this.apply(effects);
     lines.push(...this.lightFailure());
     return lines;
+  }
+
+  /**
+   * Evaluate every active quest against the world as it now stands. Pure — it
+   * only reads — and returns the effects the write point will apply, so the two
+   * write points stay the only places state changes.
+   */
+  private questEffects(): { lines: Line[]; effects: Effect[] } {
+    const lines: Line[] = [];
+    const effects: Effect[] = [];
+    const ctx: QuestCheckContext = {
+      playerRoomId: this.player.roomId,
+      carriedIds: this.carriedIds(),
+      npcs: this.world.npcs,
+      flags: this.world.flags,
+    };
+    for (const quest of this.world.activeQuests()) {
+      const giver = this.world.npcs.get(quest.giverNpcId);
+      if (!giver || giver.location === null) {
+        effects.push({ kind: 'failQuest', questId: quest.id });
+        lines.push(line(`With the one who asked now gone, the ${quest.type} will go unpaid.`, 'warn'));
+        continue;
+      }
+      const objectives = this.world.objectivesOf(quest);
+      if (objectives.length > 0 && objectives.every((objective) => objectiveComplete(ctx, objective))) {
+        effects.push({ kind: 'completeQuest', questId: quest.id });
+        lines.push(line(`Quest done: the ${quest.type}. Your reward is in hand.`, 'ok'));
+      }
+    }
+    return { lines, effects };
+  }
+
+  /** Every object the player carries, pockets and the containers in them alike. */
+  private carriedIds(): Set<string> {
+    const seen = new Set<string>();
+    const walk = (location: string): void => {
+      for (const object of this.world.contentsOf(location).objects) {
+        if (seen.has(object.id)) continue;
+        seen.add(object.id);
+        walk(inObject(object.id) as string);
+      }
+    };
+    walk(IN_PLAYER as string);
+    return seen;
   }
 
   /**
