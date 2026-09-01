@@ -7,10 +7,11 @@
  *  2. Roll a size and a graph shape.
  *  3. Build the room graph — connections first, then slots.
  *  4. Give every room a type, which gives it its tags.
+ *  5. Roll contents per room against `placement.json`, filtered by tags.
  *
- * Step 5, rolling contents against `placement.json`, is the placement roller
- * and is not here. Structure and contents are separate passes on purpose: the
- * map exists immediately and permanently, and only prose is lazy.
+ * Structure and contents stay separate passes on purpose: step 5 reads the
+ * finished graph and writes nothing back into it. The map exists immediately
+ * and permanently, and only prose is lazy.
  *
  * Nothing in this file decides a number. Sizes, shapes, tier curve, gate
  * counts and fit rules are all read from the tables, because the tables are
@@ -22,7 +23,9 @@ import type { AreaDef, ResolvedCampaign, RoomTypeDef } from '../campaign/types';
 import type { Rng } from '../engine/rng';
 import { ruleArray, ruleNumber, ruleObject, ruleRange, ruleWeightedPairs } from '../engine/rules';
 import { matches } from '../engine/tags';
+import type { NpcRecord, ObjectRecord } from '../content/records';
 import { layoutArea, roomyEntry, weaveChords } from './layout';
+import { placeContents } from './placement';
 import {
   buildGraph,
   chordFraction,
@@ -54,6 +57,9 @@ export interface GenerationResult {
   rooms: RoomRecord[];
   /** Ordinary edges plus the gates out. A gate has `roomB: null`. */
   edges: EdgeRecord[];
+  /** Everything rolled into the rooms. Each one points at where it lies. */
+  objects: ObjectRecord[];
+  npcs: NpcRecord[];
   /** One stub per gate: cube reserved, nothing generated inside it yet. */
   stubs: AreaRecord[];
   notes: string[];
@@ -66,6 +72,8 @@ export interface GenerateOptions {
   lattice: WorldLattice;
   /** The stub made when the gate into this area was created. */
   stub: AreaRecord;
+  /** World flags, for spawn upgrades and conditional stats. */
+  flags?: ReadonlySet<string> | undefined;
 }
 
 /**
@@ -235,11 +243,36 @@ export function generateArea(options: GenerateOptions): GenerationResult {
     notes.push(`${layout.looseEdges.length} connection(s) dropped as undrawable`);
   }
 
+  // Contents are rolled before the gates, so a locked door can only ever land
+  // on a connection inside this area — a gate is a way out and never a lock.
+  const contents = placeContents({
+    campaign,
+    rng,
+    area,
+    areaDef,
+    rooms,
+    edges,
+    flags: options.flags,
+  });
+  for (const { edgeId, objectId } of contents.doors) {
+    const edge = edges.find((candidate) => candidate.id === edgeId);
+    if (edge) edge.doorId = objectId;
+  }
+  notes.push(...contents.notes);
+
   const gates = rollGates({ campaign, rng, lattice, area, rooms, edges, graph: kept, areaDef });
   edges.push(...gates.edges);
   notes.push(...gates.notes);
 
-  return { area, rooms, edges, stubs: gates.stubs, notes };
+  return {
+    area,
+    rooms,
+    edges,
+    objects: contents.objects,
+    npcs: contents.npcs,
+    stubs: gates.stubs,
+    notes,
+  };
 }
 
 // ── the pieces ──────────────────────────────────────────────────────

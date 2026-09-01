@@ -18,7 +18,8 @@ npm run sample     # the reference generator, against the real tables
 ```
 
 The boot screen builds a world from the real tables, walks three areas out of
-the Hub, and draws each one. `?seed=anything` gives a different world.
+the Hub, draws each one, and lists what the placement roller put in every room.
+`?seed=anything` gives a different world.
 
 ## Layout
 
@@ -29,6 +30,7 @@ docs/              the design
 src/engine/        rng, tags, rules — the pieces every system rolls through
 src/campaign/      loading, layering, validation
 src/world/         the lattice, graph shapes, the layout walk, area generation
+src/content/       items, monsters, NPCs — the tables rolled into records
 tools/             the reference generator
 ```
 
@@ -38,7 +40,7 @@ Per CLAUDE.md, and step 4 is the honest checkpoint.
 
 1. **Campaign loader, table loader, tag system** ← done
 2. **Graph generator** ← done
-3. Placement roller
+3. **Placement roller** ← done
 4. Movement, map, inventory, autosave — playable with placeholder text
 5. Quests
 6. Combat

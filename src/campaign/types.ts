@@ -134,6 +134,16 @@ export interface PlacementRule extends TagFiltered {
   chance: number;
   lootRolls?: [number, number] | undefined;
   keyBand?: string | undefined;
+  /** Which maker the engine runs: `item`, `container`, `door`, `gold`, `hostile`, `npc`. */
+  makes?: string | undefined;
+  /** The item kind it draws from, for the makers that draw one. */
+  kind?: string | undefined;
+  /** Pin one base id, the way the corpse rule pins `corpse`. */
+  base?: string | undefined;
+  /** The item kind a locked door's key is drawn from. */
+  keyKind?: string | undefined;
+  /** Pin the quality, for things a quality roll would read as nonsense on. */
+  quality?: string | undefined;
 }
 
 export interface PlacementGuarantees {
@@ -142,6 +152,8 @@ export interface PlacementGuarantees {
   minNpcs: number;
   lightSourceIfDarkArea: boolean;
   maxHostilesPerRoom: number;
+  /** Roughly what share of rooms should hold nothing mechanical at all. */
+  emptyRoomFraction?: number | undefined;
 }
 
 export interface PlacementTable {
@@ -164,6 +176,9 @@ export interface ItemBaseDef extends Weighted {
   kind: string;
   nouns: string[];
   adjectives: string[];
+  /** What it sells for, for kinds the combat tables in `rules.json` do not price. */
+  price?: number | undefined;
+  weight?: number | undefined;
 }
 
 export interface AffixDef extends Weighted, TagFiltered {
@@ -177,6 +192,8 @@ export interface ItemTable {
   bases: ItemBaseDef[];
   affixes: { prefix: AffixDef[]; suffix: AffixDef[] };
   lootTiers: Record<string, JsonObject>;
+  /** kind -> the object flags it carries. The engine sets nothing else. */
+  kindFlags: Record<string, Record<string, boolean>>;
 }
 
 // ── content/monsters.json ───────────────────────────────────────────
@@ -188,6 +205,7 @@ export interface MonsterBaseDef extends Weighted, TagFiltered {
   tags: string[];
   areas: string[];
   sex?: SexWeights | undefined;
+  attacks?: number | undefined;
 }
 
 export interface MonsterRoleDef extends Weighted {
@@ -240,6 +258,8 @@ export interface NpcRoleDef extends Weighted, TagFiltered {
 
 export interface NamedWeight extends Weighted {
   id: string;
+  /** A trait may carry a creature tag — `flirtatious` is `lustful`. */
+  tags?: string[] | undefined;
 }
 
 export interface NpcTable {

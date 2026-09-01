@@ -205,7 +205,7 @@
     },
     "proud": {
       "pressureMult": {
-        "taunt": 2.0,
+        "taunt": 2,
         "seduce": 0.5
       }
     },
@@ -380,7 +380,7 @@
     "retreatTarget": "nearestLitRoom|areaEntrance",
     "retreatCostTurns": 3,
     "retreatPenalty": {
-      "dropsCarriedGold": 0.0,
+      "dropsCarriedGold": 0,
       "libido": 0,
       "hp": 0
     },
@@ -429,7 +429,7 @@
     "trainer": {
       "location": "hub",
       "baseCost": 400,
-      "costGrowth": 2.0,
+      "costGrowth": 2,
       "maxPerAttributePerCampaign": 1
     },
     "hardCeiling": 24
@@ -439,7 +439,8 @@
       "enabled": true,
       "costPerPoint": 3,
       "conditionLossPerFumble": 5,
-      "_note": "Acts on objects.condition, which starts at 100 and drops by conditionLossPerFumble. At 0 the item is broken and unusable until mended."
+      "_note": "Acts on objects.condition, which starts at 100 and drops by conditionLossPerFumble. At 0 the item is broken and unusable until mended.",
+      "conditionMax": 100
     },
     "consumables": {
       "enabled": true
@@ -449,7 +450,10 @@
       "skillPointCost": 120
     },
     "bribes": {
-      "enabled": true
+      "enabled": true,
+      "baseThreshold": 40,
+      "perTier": 35,
+      "_note": "What it costs to buy a creature off. TAXONOMY.venal halves it."
     },
     "hireCompanion": {
       "enabled": true,
@@ -656,5 +660,16 @@
       "price",
       "weight"
     ]
+  },
+  "DERIVED": {
+    "_note": "The derived-value table from gameplay-rules.md, as numbers the engine can read. Change these here and every creature already in a save keeps its stored values while everything generated afterwards uses the new ones.",
+    "hpPerToughness": 2,
+    "resolvePerWillpower": 2,
+    "threatBase": 10,
+    "attacksPerRound": 1
+  },
+  "MONSTER_ROLL": {
+    "_note": "Generation knobs for creatures. Stats are never authored per monster: they come from statCurve[tier] with this jitter either side, then role, elite and taxonomy modifiers.",
+    "statJitter": 3
   }
 }

@@ -1,11 +1,12 @@
 /**
  * Boot.
  *
- * Step 1 was the loader; this is step 2, the graph generator. There is still
- * nothing to play — movement, the map and inventory arrive at step 4 — so the
- * screen shows exactly what the generator can honestly show: a world built
- * from the real tables, a few areas walked out from the Hub, and the map of
- * each one drawn from its rooms and edges.
+ * Step 1 was the loader, step 2 the graph generator, and this is step 3: the
+ * placement roller. There is still nothing to play — movement, the map and
+ * inventory arrive at step 4 — so the screen shows exactly what the generator
+ * can honestly show: a world built from the real tables, a few areas walked
+ * out from the Hub, the map of each drawn from its rooms and edges, and what
+ * the roller put in every room.
  *
  * The seed is fixed, so this page is the same world every reload. Reload with
  * `?seed=whatever` to see a different one.
@@ -76,11 +77,13 @@ async function boot(): Promise<void> {
       `  npc roles   ${campaign.npcs.roles.length}`,
       `  abilities   ${campaign.abilities.table.length}`,
       `  verbs       ${campaign.verbs.verbs.length}`,
+      `  placement   ${Object.keys(campaign.placement).filter((key) => !key.startsWith('_') && key !== 'guarantees').length} rules`,
       `  tags        ${report.vocabularySize}`,
       '',
       `<span class="dim">${escape(formatReport(report))}</span>`,
       '',
       `world seed <span class="ok">${escape(seed)}</span> — ${world.rooms.size} rooms, ${world.edges.size} edges, ${walked.length} areas walked, ${stubs.length} cubes reserved behind gates`,
+      `${world.objects.size} objects and ${world.npcs.size} creatures rolled into them, each holding one pointer at where it lies`,
       '',
       `<span class="dim">${escape(renderAreaMap(world, 'hub', { here: campaign.manifest.hub.entryRoomId }))}</span>`,
       ...areaBlocks,
@@ -89,7 +92,7 @@ async function boot(): Promise<void> {
         ? `<span class="warn">${escape(world.notes.join('\n'))}</span>`
         : '<span class="dim">generation logged nothing: no repacks, no dropped edges, no long roads.</span>',
       '',
-      '<span class="dim">Next: the placement roller. Still nothing to play.</span>',
+      '<span class="dim">Next: movement, the map and inventory — the honest checkpoint. Still nothing to play.</span>',
     ].join('\n');
   } catch (error) {
     el.innerHTML = `<h1 class="err">boot failed</h1>${escape(String(error))}`;

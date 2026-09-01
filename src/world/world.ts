@@ -6,8 +6,9 @@
  * and nothing else. In particular:
  *
  *  - A room never stores its exits. `exitsOf` is a query over `edges`.
- *  - A room never stores its contents. That query belongs to whatever holds
- *    `location`, and there is no `contents` field here to tempt anyone.
+ *  - A room never stores its contents. Objects and NPCs hold a `location`
+ *    pointer and `contentsOf` is the query over it. There is no `contents`
+ *    field on a room and there must never be one.
  *  - Distance is `hopsFrom`, counted along edges. Never coordinates.
  *
  * Generation happens in exactly one place — `enterGate` — because "walking
@@ -16,8 +17,16 @@
  */
 
 import type { ResolvedCampaign } from '../campaign/types';
+import { hubNpc } from '../content/npcs';
+import {
+  inRoom,
+  parseLocation,
+  type LocationRef,
+  type NpcRecord,
+  type ObjectRecord,
+} from '../content/records';
 import { Rng } from '../engine/rng';
-import { ruleObject } from '../engine/rules';
+import { bandOf } from '../engine/rules';
 import { generateArea, mintAreaId, reserveArea } from './area';
 import { WorldLattice } from './lattice';
 import {
@@ -53,12 +62,16 @@ export class World {
   readonly areas = new Map<string, AreaRecord>();
   readonly rooms = new Map<string, RoomRecord>();
   readonly edges = new Map<string, EdgeRecord>();
+  readonly objects = new Map<string, ObjectRecord>();
+  readonly npcs = new Map<string, NpcRecord>();
   /** Everything generation logged, oldest first. Shown on the boot screen. */
   readonly notes: string[] = [];
 
   private readonly rng: Rng;
   private readonly byCoord = new Map<string, string>();
   private readonly byRoom = new Map<string, EdgeRecord[]>();
+  /** `location` -> the ids pointing at it. Rebuilt by `relocate`, never stale. */
+  private readonly byLocation = new Map<string, Set<string>>();
 
   private constructor(options: WorldOptions) {
     this.campaign = options.campaign;
@@ -85,6 +98,44 @@ export class World {
   roomAt(coord: Coord): RoomRecord | undefined {
     const id = this.byCoord.get(coordKey(coord));
     return id ? this.rooms.get(id) : undefined;
+  }
+
+  /**
+   * Everything whose `location` points at this one — objects and NPCs alike.
+   * This is the only contents query there is, and it works the same for a
+   * room, a chest, a shopkeeper's stock and the player's pockets.
+   */
+  contentsOf(location: LocationRef): { objects: ObjectRecord[]; npcs: NpcRecord[] } {
+    const ids = location ? (this.byLocation.get(location) ?? new Set<string>()) : new Set<string>();
+    const objects: ObjectRecord[] = [];
+    const npcs: NpcRecord[] = [];
+    for (const id of ids) {
+      const object = this.objects.get(id);
+      if (object) {
+        objects.push(object);
+        continue;
+      }
+      const npc = this.npcs.get(id);
+      if (npc) npcs.push(npc);
+    }
+    return { objects, npcs };
+  }
+
+  /** What lies in a room, which is `contentsOf` with the pointer spelled out. */
+  inRoom(roomId: string): { objects: ObjectRecord[]; npcs: NpcRecord[] } {
+    return this.contentsOf(inRoom(roomId));
+  }
+
+  /**
+   * Move something. One field is written and the index follows, which is why
+   * nothing outside this class should ever assign `location` directly.
+   */
+  relocate(id: string, location: LocationRef): void {
+    const thing = this.objects.get(id) ?? this.npcs.get(id);
+    if (!thing) throw new Error(`nothing with id "${id}" to move`);
+    if (thing.location) this.byLocation.get(thing.location)?.delete(id);
+    thing.location = location;
+    this.indexLocation(id, location);
   }
 
   edgesOf(roomId: string): EdgeRecord[] {
@@ -124,13 +175,7 @@ export class World {
 
   /** Which band a hop count falls in — `near`, `quiteNear`, `far`. */
   bandOf(hops: number): string | undefined {
-    const bands = ruleObject(this.campaign.rules, 'DISTANCE_BANDS');
-    for (const [name, range] of Object.entries(bands)) {
-      if (name.startsWith('_') || !Array.isArray(range)) continue;
-      const [lo, hi] = range as number[];
-      if (typeof lo === 'number' && typeof hi === 'number' && hops >= lo && hops <= hi) return name;
-    }
-    return undefined;
+    return bandOf(this.campaign.rules, hops);
   }
 
   /**
@@ -163,6 +208,8 @@ export class World {
     this.areas.set(result.area.id, result.area);
     for (const room of result.rooms) this.addRoom(room);
     for (const newEdge of result.edges) this.addEdge(newEdge);
+    for (const object of result.objects) this.addObject(object);
+    for (const npc of result.npcs) this.addNpc(npc);
     for (const newStub of result.stubs) this.areas.set(newStub.id, newStub);
     this.note(result.area.id, result.notes);
 
@@ -226,6 +273,16 @@ export class World {
       });
     }
 
+    // The Hub's people are hand-authored, but they are ordinary records with
+    // ordinary numbers: the quartermaster you decide to rob has real stats.
+    for (const def of hub.npcs ?? []) {
+      const person = hubNpc(this.campaign, this.rng, def);
+      if (!this.rooms.has(parseLocation(person.location)?.id ?? '')) {
+        this.notes.push(`hub: ${person.id} points at "${person.location}", which is no room here`);
+      }
+      this.addNpc(person);
+    }
+
     for (const gate of hub.gates) {
       const room = this.rooms.get(gate.fromRoom);
       if (!room || !isDirection(gate.dir)) {
@@ -271,6 +328,23 @@ export class World {
     }
     this.rooms.set(room.id, room);
     this.byCoord.set(key, room.id);
+  }
+
+  private addObject(object: ObjectRecord): void {
+    this.objects.set(object.id, object);
+    this.indexLocation(object.id, object.location);
+  }
+
+  private addNpc(npc: NpcRecord): void {
+    this.npcs.set(npc.id, npc);
+    this.indexLocation(npc.id, npc.location);
+  }
+
+  private indexLocation(id: string, location: LocationRef): void {
+    if (!location) return;
+    const holding = this.byLocation.get(location) ?? new Set<string>();
+    holding.add(id);
+    this.byLocation.set(location, holding);
   }
 
   private addEdge(edge: EdgeRecord): void {

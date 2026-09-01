@@ -18,12 +18,14 @@
  * *tags* are errors, because they cannot degrade — they simply stop working.
  */
 
+import { OBJECT_FLAGS } from '../content/records';
 import { ruleAt } from '../engine/rules';
 import { parseRequires, TagVocabulary } from '../engine/tags';
+import { MAKERS } from '../world/placement';
 import { SHAPES, SHAPE_RULES, isShape } from '../world/shapes';
 import { directionBetween, isDirection } from '../world/types';
 import type { Json, JsonObject, MergeIssue } from './merge';
-import type { CompositionDef, Cube, ResolvedCampaign } from './types';
+import type { CompositionDef, Cube, PlacementRule, ResolvedCampaign } from './types';
 
 export type IssueLevel = 'error' | 'warning';
 
@@ -328,16 +330,62 @@ export function validateCampaign(
 
   // ── placement ─────────────────────────────────────────────────────
 
+  const itemKinds = new Set((campaign.items.bases ?? []).map((base) => base.kind));
+  const baseIds = new Set((campaign.items.bases ?? []).map((base) => base.id));
+  const qualityIds = new Set((campaign.items.qualities ?? []).map((quality) => quality.id));
+  const bandNames = new Set(
+    Object.keys((ruleAt(campaign.rules, 'DISTANCE_BANDS') ?? {}) as JsonObject).filter(
+      (name) => !name.startsWith('_'),
+    ),
+  );
+
   for (const [key, rule] of Object.entries(campaign.placement ?? {})) {
     if (key.startsWith('_') || key === 'guarantees') continue;
     const at = `content/placement.json.${key}`;
-    const value = rule as { chance?: unknown; requires?: unknown };
+    const value = rule as PlacementRule & { chance?: unknown; requires?: unknown };
     if (typeof value.chance !== 'number') {
       error(`${at}.chance`, 'expected a number');
     } else if (value.chance < 0 || value.chance > 1) {
       error(`${at}.chance`, `${value.chance} is outside 0..1`);
     }
     checkRequires(`${at}.requires`, value.requires, 'room');
+
+    // A rule the engine has no maker for is a rule that silently never fires,
+    // which is the same failure mode as a mistyped tag.
+    if (!value.makes) {
+      error(`${at}.makes`, `missing — name one of ${MAKERS.join(', ')}`);
+    } else if (!(MAKERS as readonly string[]).includes(value.makes)) {
+      error(`${at}.makes`, `"${value.makes}" is not a maker the engine builds (${MAKERS.join(', ')})`);
+    }
+    for (const [field, kind] of [
+      ['kind', value.kind],
+      ['keyKind', value.keyKind],
+    ] as const) {
+      if (kind !== undefined && !itemKinds.has(kind)) {
+        error(`${at}.${field}`, `no item base has kind "${kind}"`);
+      }
+    }
+    if (value.base !== undefined && !baseIds.has(value.base)) {
+      error(`${at}.base`, `no item base "${value.base}"`);
+    }
+    if (value.quality !== undefined && !qualityIds.has(value.quality)) {
+      error(`${at}.quality`, `no quality "${value.quality}"`);
+    }
+    if (value.keyBand !== undefined && !bandNames.has(value.keyBand)) {
+      error(`${at}.keyBand`, `"${value.keyBand}" is not a band in rules.json DISTANCE_BANDS`);
+    }
+  }
+
+  const guarantees = (campaign.placement?.guarantees ?? {}) as unknown as JsonObject;
+  for (const [key, value] of Object.entries(guarantees)) {
+    if (key.startsWith('_')) continue;
+    if (typeof value !== 'number' && typeof value !== 'boolean') {
+      error(`content/placement.json.guarantees.${key}`, 'expected a number or true/false');
+    }
+  }
+  const fraction = guarantees['emptyRoomFraction'];
+  if (typeof fraction === 'number' && (fraction < 0 || fraction > 1)) {
+    error('content/placement.json.guarantees.emptyRoomFraction', `${fraction} is outside 0..1`);
   }
 
   // ── items ─────────────────────────────────────────────────────────
@@ -355,6 +403,49 @@ export function validateCampaign(
     if (!base.nouns?.length) error(`content/items.json.bases[${i}].nouns`, 'at least one noun');
     if (!base.adjectives?.length) {
       error(`content/items.json.bases[${i}].adjectives`, 'at least one adjective');
+    }
+    // Price is derived, so it has to come from somewhere: the combat tables in
+    // rules.json for gear, the base itself for everything else.
+    const priced =
+      ruleAt(campaign.rules, `WEAPON_TABLE.${base.id}.price`) !== undefined ||
+      ruleAt(campaign.rules, `ARMOUR_TABLE.${base.id}.price`) !== undefined ||
+      ruleAt(campaign.rules, 'FAST_TRAVEL.itemId') === base.id ||
+      typeof base.price === 'number';
+    if (!priced) {
+      warn(`content/items.json.bases[${i}].price`, `"${base.id}" has no price anywhere, so it is worth nothing`);
+    }
+    if (base.kind === 'light' && ruleAt(campaign.rules, `DEPLETION_RATES.${base.id}`) === undefined) {
+      warn(
+        `rules.json.DEPLETION_RATES.${base.id}`,
+        `"${base.id}" is a light with no depletion rate, so it burns forever`,
+      );
+    }
+  }
+
+  for (const [kind, flags] of Object.entries(campaign.items.kindFlags ?? {})) {
+    if (kind.startsWith('_')) continue;
+    const at = `content/items.json.kindFlags.${kind}`;
+    if (!kinds.has(kind)) warn(at, `no item base has kind "${kind}", so these flags never apply`);
+    if (!flags || typeof flags !== 'object' || Array.isArray(flags)) {
+      error(at, 'expected an object of flags');
+      continue;
+    }
+    for (const flag of Object.keys(flags)) {
+      if (flag.startsWith('_')) continue;
+      if (!OBJECT_FLAGS.includes(flag)) {
+        error(
+          `${at}.${flag}`,
+          'is not an object flag the engine has — behaviour comes from the closed flag list, not from new fields',
+        );
+      }
+    }
+  }
+  for (const kind of kinds) {
+    if (!(campaign.items.kindFlags ?? {})[kind]) {
+      warn(
+        `content/items.json.kindFlags.${kind}`,
+        `kind "${kind}" declares no flags, so nothing generated from it can be picked up or used`,
+      );
     }
   }
 

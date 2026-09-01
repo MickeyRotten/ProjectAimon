@@ -82,8 +82,12 @@ function genArea(id, depth = 0) {
 }
 
 // ── ITEM ────────────────────────────────────────────────────────────
+// Loose loot rolls only among kinds the table calls takeable — a chest, a
+// door and a sinkhole are objects too, and none of them is loot.
+const takeable = new Set(Object.entries(items.kindFlags)
+  .filter(([k, f]) => !k.startsWith('_') && f.takeable).map(([k]) => k));
 function genItem(tier = 1, kindFilter = null) {
-  const pool = kindFilter ? items.bases.filter(b => b.kind === kindFilter) : items.bases;
+  const pool = items.bases.filter(b => kindFilter ? b.kind === kindFilter : takeable.has(b.kind));
   const base = pick(pool);
   const q = pick(items.qualities);
   const kindTags = [base.kind, ...q.tags];
@@ -101,8 +105,9 @@ function genItem(tier = 1, kindFilter = null) {
   const adj = base.adjectives[ri(0, base.adjectives.length - 1)];
   const noun = base.nouns[ri(0, base.nouns.length - 1)];
   const name = [pre?.name, q.id === 'plain' ? adj : q.id, noun, suf?.name].filter(Boolean).join(' ');
+  // Price is derived: the combat tables price gear, the base prices the rest.
   const stat = rules.WEAPON_TABLE[base.id] ?? rules.ARMOUR_TABLE[base.id] ?? {};
-  const price = Math.round(((stat.price ?? 10) * q.priceMult * (mods.priceMult ?? 1)) || 1);
+  const price = Math.round((stat.price ?? base.price ?? 0) * q.priceMult * (mods.priceMult ?? 1));
   return { name, kind: base.kind, price, mods: Object.keys(mods).length ? mods : undefined };
 }
 

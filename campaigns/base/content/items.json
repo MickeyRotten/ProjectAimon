@@ -14,8 +14,8 @@
     {
       "id": "plain",
       "w": 45,
-      "mult": 1.0,
-      "priceMult": 1.0,
+      "mult": 1,
+      "priceMult": 1,
       "affixes": 0,
       "tags": [
         "plain"
@@ -25,7 +25,7 @@
       "id": "fine",
       "w": 20,
       "mult": 1.2,
-      "priceMult": 3.0,
+      "priceMult": 3,
       "affixes": 1,
       "tags": [
         "fine"
@@ -35,7 +35,7 @@
       "id": "masterwork",
       "w": 5,
       "mult": 1.4,
-      "priceMult": 9.0,
+      "priceMult": 9,
       "affixes": 2,
       "tags": [
         "masterwork"
@@ -170,7 +170,8 @@
         "pitch",
         "guttering"
       ],
-      "burn": 60
+      "price": 3,
+      "weight": 1
     },
     {
       "id": "lantern",
@@ -184,7 +185,8 @@
         "hooded",
         "tin"
       ],
-      "burn": 220
+      "price": 30,
+      "weight": 3
     },
     {
       "id": "rope",
@@ -197,7 +199,9 @@
       "adjectives": [
         "hemp",
         "tarred"
-      ]
+      ],
+      "price": 6,
+      "weight": 5
     },
     {
       "id": "crowbar",
@@ -210,7 +214,9 @@
       "adjectives": [
         "iron",
         "bent"
-      ]
+      ],
+      "price": 10,
+      "weight": 4
     },
     {
       "id": "lockpick",
@@ -223,7 +229,9 @@
       "adjectives": [
         "thin",
         "bone-handled"
-      ]
+      ],
+      "price": 25,
+      "weight": 1
     },
     {
       "id": "key",
@@ -236,7 +244,9 @@
         "brass",
         "iron",
         "toothed"
-      ]
+      ],
+      "price": 2,
+      "weight": 1
     },
     {
       "id": "salve",
@@ -250,7 +260,9 @@
         "green",
         "cloying"
       ],
-      "heals": "hp"
+      "heals": "hp",
+      "price": 18,
+      "weight": 1
     },
     {
       "id": "draught",
@@ -264,7 +276,9 @@
         "bitter",
         "clouded"
       ],
-      "heals": "resolve"
+      "heals": "resolve",
+      "price": 22,
+      "weight": 1
     },
     {
       "id": "cordial",
@@ -278,7 +292,9 @@
         "rose",
         "warm"
       ],
-      "libido": 8
+      "libido": 8,
+      "price": 30,
+      "weight": 1
     },
     {
       "id": "coinpurse",
@@ -291,7 +307,9 @@
       "adjectives": [
         "cut",
         "fat"
-      ]
+      ],
+      "price": 5,
+      "weight": 1
     },
     {
       "id": "curio",
@@ -307,7 +325,9 @@
         "worn",
         "strange",
         "tarnished"
-      ]
+      ],
+      "price": 15,
+      "weight": 1
     },
     {
       "id": "waystone_token",
@@ -322,6 +342,187 @@
         "humming"
       ],
       "returnsToHub": true
+    },
+    {
+      "id": "chest",
+      "kind": "container",
+      "w": 10,
+      "nouns": [
+        "chest",
+        "coffer"
+      ],
+      "adjectives": [
+        "banded",
+        "oak"
+      ],
+      "price": 12,
+      "weight": 20
+    },
+    {
+      "id": "crate",
+      "kind": "container",
+      "w": 9,
+      "nouns": [
+        "crate",
+        "case"
+      ],
+      "adjectives": [
+        "nailed",
+        "splintered"
+      ],
+      "price": 6,
+      "weight": 15
+    },
+    {
+      "id": "barrel",
+      "kind": "container",
+      "w": 8,
+      "nouns": [
+        "barrel",
+        "cask"
+      ],
+      "adjectives": [
+        "swollen",
+        "stave-bound"
+      ],
+      "price": 6,
+      "weight": 25
+    },
+    {
+      "id": "sack",
+      "kind": "container",
+      "w": 7,
+      "nouns": [
+        "sack",
+        "bundle"
+      ],
+      "adjectives": [
+        "sagging",
+        "hessian"
+      ],
+      "price": 2,
+      "weight": 3
+    },
+    {
+      "id": "corpse",
+      "kind": "container",
+      "w": 0,
+      "nouns": [
+        "corpse",
+        "remains",
+        "body"
+      ],
+      "adjectives": [
+        "stripped",
+        "curled"
+      ],
+      "price": 0,
+      "weight": 0,
+      "_note": "Pinned by the corpse placement rule, never rolled: w 0."
+    },
+    {
+      "id": "door",
+      "kind": "door",
+      "w": 10,
+      "nouns": [
+        "door"
+      ],
+      "adjectives": [
+        "barred",
+        "banded"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "hatch",
+      "kind": "door",
+      "w": 6,
+      "nouns": [
+        "hatch",
+        "trapdoor"
+      ],
+      "adjectives": [
+        "heavy",
+        "iron-ringed"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "grate",
+      "kind": "door",
+      "w": 5,
+      "nouns": [
+        "grate",
+        "grille"
+      ],
+      "adjectives": [
+        "rusted",
+        "barred"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "sinkhole",
+      "kind": "feature",
+      "w": 10,
+      "nouns": [
+        "sinkhole",
+        "pit"
+      ],
+      "adjectives": [
+        "gaping",
+        "mud-slick"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "brambles",
+      "kind": "feature",
+      "w": 9,
+      "nouns": [
+        "brambles",
+        "thorns"
+      ],
+      "adjectives": [
+        "dense",
+        "black"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "rubble",
+      "kind": "feature",
+      "w": 9,
+      "nouns": [
+        "rubble",
+        "spill"
+      ],
+      "adjectives": [
+        "loose",
+        "shifting"
+      ],
+      "price": 0,
+      "weight": 0
+    },
+    {
+      "id": "standing_water",
+      "kind": "feature",
+      "w": 7,
+      "nouns": [
+        "water",
+        "pool"
+      ],
+      "adjectives": [
+        "black",
+        "still"
+      ],
+      "price": 0,
+      "weight": 0
     }
   ],
   "affixes": {
@@ -418,7 +619,7 @@
         ],
         "mods": {
           "presence": 6,
-          "priceMult": 2.0
+          "priceMult": 2
         }
       },
       {
@@ -440,7 +641,7 @@
           "weapon|armour|curio"
         ],
         "mods": {
-          "priceMult": 3.0,
+          "priceMult": 3,
           "composure": 4
         }
       }
@@ -589,7 +790,6 @@
     ]
   },
   "lootTiers": {
-    "_note": "Rolled per placement. Higher area tier shifts the quality roll upward.",
     "1": {
       "qualityBias": 0,
       "goldRange": [
@@ -610,6 +810,69 @@
         30,
         160
       ]
+    },
+    "4": {
+      "qualityBias": 26,
+      "goldRange": [
+        60,
+        300
+      ]
+    },
+    "5": {
+      "qualityBias": 34,
+      "goldRange": [
+        110,
+        520
+      ]
+    },
+    "_note": "Rolled per placement. Higher area tier shifts the quality roll upward.",
+    "_biasNote": "qualityBias is added to the quality roll, which is a d100 over a table whose weights sum to 100. Bias 18 shifts every result 18 points up the table."
+  },
+  "kindFlags": {
+    "_note": "Which object flags a kind carries. Flag names are the closed list in the data model; the engine sets nothing a kind does not declare.",
+    "weapon": {
+      "takeable": true,
+      "weapon": true
+    },
+    "armour": {
+      "takeable": true,
+      "armour": true,
+      "wearable": true
+    },
+    "shield": {
+      "takeable": true,
+      "armour": true,
+      "wearable": true
+    },
+    "light": {
+      "takeable": true,
+      "lightSource": true
+    },
+    "tool": {
+      "takeable": true
+    },
+    "key": {
+      "takeable": true
+    },
+    "consumable": {
+      "takeable": true,
+      "edible": true
+    },
+    "treasure": {
+      "takeable": true
+    },
+    "curio": {
+      "takeable": true
+    },
+    "container": {
+      "container": true,
+      "open": true
+    },
+    "door": {
+      "scenery": true
+    },
+    "feature": {
+      "scenery": true
     }
   }
 }

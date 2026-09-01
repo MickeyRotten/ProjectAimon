@@ -95,13 +95,18 @@ means changing a number.**
 ```jsonc
 // content/placement.json — what appears in a room, and how often
 {
-  "container": { "chance": 0.30, "requires": ["indoor"] },
-  "hostile":   { "chance": 0.20, "requires": ["dark|wild"] },
-  "npc":       { "chance": 0.25, "requires": ["dwelling|path"] },
-  "loot":      { "chance": 0.15 },
-  "curiosity": { "chance": 0.20, "requires": ["landmark"] }
+  "container": { "chance": 0.30, "requires": ["indoor"],
+                 "makes": "container", "kind": "container", "lootRolls": [1, 2] },
+  "hostile":   { "chance": 0.20, "requires": ["dark|wild"], "makes": "hostile" },
+  "npc":       { "chance": 0.25, "requires": ["dwelling|path"], "makes": "npc" },
+  "loot":      { "chance": 0.15, "makes": "item" },
+  "curiosity": { "chance": 0.20, "requires": ["landmark"],
+                 "makes": "item", "kind": "curio" }
 }
 ```
+
+`makes` names the **maker** the engine runs and `kind` says what it draws from
+`items.json`. See *Placement and guarantees* below.
 
 Other tables: `campaign.json` (identity, the hand-authored Hub, starter kit,
 character creation), `data/verbs.json` (the parser's whole vocabulary — **global,
@@ -705,8 +710,8 @@ the back door.
 filter. Then `guarantees` tops up:
 
 ```
-minHostiles: 3    minLootRooms: 2    minNpcs: 1
-lightSourceIfDarkArea: true          maxHostilesPerRoom: 1
+minHostiles: 3    minLootRooms: 2    minNpcs: 1     emptyRoomFraction: 0.33
+lightSourceIfDarkArea: false         maxHostilesPerRoom: 1
 ```
 
 **The guarantees are not optional.** A ten-room area rolled barren on the
@@ -714,9 +719,55 @@ reference generator's first farmland run — zero hostiles, zero NPCs, one loot
 room. Small areas fall below expectation often enough that the top-up pass is
 load-bearing, not a safety net.
 
-Empty rooms are still wanted, though: the doc's slack rule asks for roughly a
-third of rooms with nothing mechanical in them, because that is where atmosphere
-lives.
+Empty rooms are still wanted, though: the slack rule asks for roughly a third of
+rooms with nothing mechanical in them, because that is where atmosphere lives.
+So the top-ups fill rooms that already hold something *first*, and only eat into
+the slack when a guarantee cannot be met any other way — which it says out loud
+when it happens. Measured over 240 generated areas: 40% of rooms empty, and one
+area in 240 short of a guarantee, with a note saying no room in it accepted an
+NPC.
+
+### The six makers
+
+Each rule names the maker the engine runs. That is the whole extension surface,
+and it is deliberately small:
+
+| `makes` | What it builds |
+|---|---|
+| `item` | One object, from `kind` (or any takeable kind) |
+| `container` | A container, plus `lootRolls` items whose `location` points **at the container** |
+| `door` | A locked door on a spare connection, and its key on the near side |
+| `gold` | Loose coin, sized by the area's `lootTiers` row |
+| `hostile` | A composition, filled base by base |
+| `npc` | A person: role, two traits, one want |
+
+**A new kind of thing is a table change; only a new behaviour is an engine
+change.** A rule naming a maker the engine does not have is an error at load,
+not silence at generation.
+
+Which flags an object carries comes from `items.json` `kindFlags`, against the
+closed flag list in the data model — so a kind that declares `takeable` is loot
+and a kind that declares `scenery` is furniture, and the engine sets nothing a
+kind did not declare.
+
+### Difficulty inside an area, and the deepest room
+
+Rooms further from the entrance lean one tier harder, reusing `DISTANCE_BANDS`
+over hops from the entry room, and **the deepest room is guaranteed an elite** —
+if the dice put no encounter there, the top-up pass does, and forces the elite
+roll. Exploration has a gradient rather than a flat field.
+
+### Locks land on connections the area can spare
+
+A locked door only goes on a connection whose loss still leaves every room
+reachable from the entrance, and its key is placed on the near side of it, in
+the `keyBand` band where one is available. Nothing is ever gated, so nothing
+needs proving solvable.
+
+The consequence is worth knowing: in a `sprawl`, which is a tree, *every* edge
+is load-bearing, so locked doors appear in `loop`, `hub` and `warren` areas and
+essentially never in a sprawl. That is the right trade — a lock that gates
+progression is the failure mode the design cut lock-and-key chains to avoid.
 
 ### Tag validation
 

@@ -95,8 +95,17 @@ id, name, nouns[], adjectives[], location, desc, tags[]
 baseId, quality, affixes[]          ← what it was generated from
 flags: takeable, scenery, container, open, locked, lockedById,
        lightSource, lit, wearable, worn, edible, weapon, armour, untradable
-condition (0-100), burnRemaining
+condition (0-100), burnRemaining, gold
 ```
+
+**Which flags an object gets comes from `items.json` `kindFlags`**, keyed by
+kind, against the closed list above. A kind declaring `takeable` is loot; a kind
+declaring `scenery` is furniture. The engine sets no flag a kind did not
+declare, so a new sort of thing is a table entry rather than a branch.
+
+`gold` is loose coin, and zero for everything that is not money — a purse on the
+floor is an object like any other, and picking it up is the same one-field write
+as picking up a sword.
 
 **Combat values are derived, never stored.** `damage`, `penetration`,
 `reduction`, `penalty` and `price` all compute from `baseId` + `quality` +
@@ -112,9 +121,10 @@ without it the gold sink had nothing to act on.
 
 **`npcs`** — `campaignId, id, name, aliases[], location, persona, tags[],
 stats{brawn, agility, toughness, charisma, willpower, wits}, hp, resolve,
-armourReduction, penetration, weaponDamage, attacksPerRound, threat,
-friendliness, bribeThreshold, disposition, standing, sensed, isVendor,
-priceModifier, imageBlob`
+armourReduction, penetration, weaponDamage, damageBonus, attacksPerRound,
+threat, friendliness, bribeThreshold, disposition, standing, sensed, isVendor,
+priceModifier, services[], hostile, sex, imageBlob,
+baseId, role, elite, tier`
 `location` uses **the same pointer as objects** — `"room:r_barn"`, `"player"`
 for an active companion, `null` when out of play. NPCs were previously given a
 `roomId`, which was an inconsistency: two position systems means two places to
@@ -127,6 +137,16 @@ transcript and any matcher keeps saying the old one, so matchers read name
 `imageBlob` is **upload-only**; nothing generates it.
 Monsters skip weapon-skill and armour-expertise maths entirely — they store
 final values.
+**`resolve` is null where nothing is home**: `mindless`, `undead` and
+`construct` have no Resolve track at all, so a Presence attack has nothing to
+target and the sheet prints `res —`.
+`baseId`, `role`, `elite` and `tier` are provenance, exactly as an object
+carries `baseId` and `quality` — gambits are looked up from `role` and never
+stored on the creature.
+`hostile` says which way it will read the player, and `services[]` is what a Hub
+vendor does: buy, sell, repair, train, hire, deposit.
+`name` is empty on a generated person until the Narrator names them, the same
+way a room's name is.
 
 **`quests`** — `id, type, giverNpcId, state, objectiveIds[],
 prerequisiteQuestIds[], rewardRoll`

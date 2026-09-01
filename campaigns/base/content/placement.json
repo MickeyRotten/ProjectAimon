@@ -8,51 +8,67 @@
     "lootRolls": [
       1,
       2
-    ]
+    ],
+    "makes": "container",
+    "kind": "container"
   },
   "loot": {
     "chance": 0.16,
     "requires": [
       "!path"
-    ]
+    ],
+    "makes": "item"
   },
   "hostile": {
     "chance": 0.22,
     "requires": [
       "!hearth",
       "!shrine"
-    ]
+    ],
+    "makes": "hostile"
   },
   "npc": {
     "chance": 0.2,
     "requires": [
       "dwelling|market|path|cell|hearth"
-    ]
+    ],
+    "makes": "npc"
   },
   "curiosity": {
     "chance": 0.18,
     "requires": [
       "landmark|shrine|ruin|vantage"
-    ]
+    ],
+    "makes": "item",
+    "kind": "curio"
   },
   "lightSource": {
     "chance": 0.12,
     "requires": [
       "dwelling|storage|workspace"
-    ]
+    ],
+    "makes": "item",
+    "kind": "light"
   },
   "lockedDoor": {
     "chance": 0.14,
     "requires": [
       "indoor|underground"
     ],
-    "keyBand": "near"
+    "keyBand": "near",
+    "makes": "door",
+    "kind": "door",
+    "keyKind": "key",
+    "quality": "plain"
   },
   "hazard": {
     "chance": 0.1,
     "requires": [
       "hazard|flooded"
-    ]
+    ],
+    "makes": "item",
+    "kind": "feature",
+    "quality": "plain"
   },
   "corpse": {
     "chance": 0.09,
@@ -62,13 +78,18 @@
     "lootRolls": [
       1,
       1
-    ]
+    ],
+    "makes": "container",
+    "kind": "container",
+    "base": "corpse"
   },
   "goldPile": {
     "chance": 0.1,
     "requires": [
       "!path"
-    ]
+    ],
+    "makes": "gold",
+    "kind": "treasure"
   },
   "guarantees": {
     "_note": "Applied after rolling, so an area is never barren or unlit.",
@@ -77,6 +98,9 @@
     "minNpcs": 1,
     "lightSourceIfDarkArea": false,
     "maxHostilesPerRoom": 1,
-    "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering."
-  }
+    "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering.",
+    "emptyRoomFraction": 0.33,
+    "_slackNote": "Roughly a third of rooms are meant to hold nothing mechanical — that is where atmosphere lives. Top-ups fill non-empty rooms first and only eat into the slack when they must."
+  },
+  "_makesNote": "makes names the maker the engine runs: item, container, door, gold, hostile, npc. kind and base say what it draws from content/items.json. A new KIND of thing is a table change; only a new BEHAVIOUR is an engine change."
 }

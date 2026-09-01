@@ -90,7 +90,29 @@ export function levelsOf(world: World, areaId: string): number[] {
   return [...new Set(world.roomsOf(areaId).map((room) => room.z))].sort((a, b) => a - b);
 }
 
-/** One line per room: code, type, tags and exits. The debugging view. */
+/**
+ * What is lying in a room, read the only way it can be read: as a query over
+ * everything whose `location` points at it. Contents of a container are shown
+ * against the container, because that is where they are.
+ */
+export function describeContents(world: World, roomId: string): string {
+  const { objects, npcs } = world.inRoom(roomId);
+  const parts = [
+    ...npcs.map((npc) => {
+      const label = npc.name || npc.persona.split('.')[0] || npc.baseId;
+      return `${npc.hostile ? '!' : '@'}${label}`;
+    }),
+    ...objects.map((object) => {
+      const inside = world.contentsOf(`obj:${object.id}`).objects.length;
+      const gold = object.gold > 0 ? ` ${object.gold}g` : '';
+      const locked = object.flags.locked ? ' (locked)' : '';
+      return `${object.name}${gold}${locked}${inside > 0 ? ` [${inside}]` : ''}`;
+    }),
+  ];
+  return parts.join(', ');
+}
+
+/** One line per room: code, type, tags, exits and what is in it. */
 export function describeArea(world: World, areaId: string): string {
   const area = world.areas.get(areaId);
   if (!area) return `no area ${areaId}`;
@@ -104,7 +126,8 @@ export function describeArea(world: World, areaId: string): string {
         .map((exit) => (exit.toRoomId ? exit.dir : `${exit.dir}»${exit.gateArchetype}`))
         .join(' ');
       const code = `${roomCoord(room).x}.${roomCoord(room).y}.${roomCoord(room).z}`;
-      return `  ${room.id.split(':').pop()?.padEnd(4)} ${code.padEnd(12)} ${String(hops.get(room.id) ?? '-').padStart(2)}h  ${room.type.padEnd(11)} ${exits.padEnd(14)} ${room.tags.join(' ')}`;
+      const contents = describeContents(world, room.id);
+      return `  ${room.id.split(':').pop()?.padEnd(4)} ${code.padEnd(12)} ${String(hops.get(room.id) ?? '-').padStart(2)}h  ${room.type.padEnd(11)} ${exits.padEnd(14)} ${room.tags.join(' ').padEnd(34)} ${contents}`;
     })
     .join('\n');
 }

@@ -97,7 +97,8 @@
       "treasure",
       "curio",
       "container",
-      "door"
+      "door",
+      "feature"
     ],
     "quality": [
       "crude",

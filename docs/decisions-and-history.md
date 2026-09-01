@@ -129,6 +129,53 @@ undrawable connection at all.
 
 ---
 
+## What building the placement roller settled
+
+Five things, all of them found by generating 240 areas and reading them.
+
+**A placement rule names a maker, not a special case.** The first version
+branched on the rule's key — `if (key === 'hostile')` — which meant every new
+sort of content was engine code, and a mistyped key was silence. Each rule now
+carries `makes`, one of six makers, plus the `kind` and `base` it draws from.
+Adding *a new kind of thing* is a table entry; only *a new behaviour* is a
+change to the engine, and a rule naming a maker that does not exist is an error
+at load.
+
+**Object flags belong to the item kind, in the table.** A chest is a container
+and a sinkhole is scenery because `kindFlags` says so, against the closed flag
+list in the data model. Without that, loose loot rolled doors and sinkholes the
+moment container and feature bases were added to the table, because "what can be
+picked up" lived in the generator's head rather than in the tables.
+
+**Guarantees beat slack, and say so.** The top-up pass fills rooms that already
+hold something before it touches an empty one, which keeps roughly a third of
+every area mechanically empty — 40% measured across 3,128 rooms. When a
+guarantee cannot be met without eating into that, it eats into it and logs a
+note. One area in 240 finished short of a guarantee, with a note naming the
+reason: no room in it accepted an NPC at all.
+
+**A lock can only go where the area can spare the connection.** The door is
+placed on an edge whose loss still leaves every room reachable from the
+entrance, and the key goes on the near side of it. The consequence is that a
+`sprawl` — a tree — has no sparable edge at all, so locked doors appear in
+loops, hubs and warrens and effectively never in a sprawl. That is the right
+way round: a lock that gates progression is exactly what cutting lock-and-key
+chains was meant to prevent.
+
+**Compositions and group size are both needed, and they compose.** The
+composition decides how many slots an encounter has; the base's own tags then
+clamp that count — a `pack` of something `hulking` is one creature, a `lone`
+roll of something `frail` is still two or three. Using either table alone
+produced encounters that read wrong in one direction or the other.
+
+**A leftover, recorded so it is not rediscovered:** `content/items.json` carried
+`burn` on the torch and the lantern while `rules.json` carried `DEPLETION_RATES`
+for the same two, with the same numbers. Two copies of one truth. The base copy
+is gone and validation now warns when a `light` base has no depletion rate.
+
+
+---
+
 ## Port manifest — harvesting Project Loom
 
 This is a **new repository**, not a fork. Files are copied in one at a time, on

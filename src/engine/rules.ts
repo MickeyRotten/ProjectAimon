@@ -134,3 +134,20 @@ export function ruleLookup(rules: JsonObject, path: string, key: string, fallbac
   }
   return value;
 }
+
+/**
+ * Which distance band a hop count falls in — `near`, `quiteNear`, `far`.
+ *
+ * The bands are the project's one distance metric and they are counted **along
+ * edges, never euclidean**. Quests, room difficulty, wandering spawns and
+ * rumours all read this, so it lives here rather than being written twice.
+ */
+export function bandOf(rules: JsonObject, hops: number): string | undefined {
+  const bands = ruleObject(rules, 'DISTANCE_BANDS');
+  for (const [name, range] of Object.entries(bands)) {
+    if (name.startsWith('_') || !Array.isArray(range)) continue;
+    const [lo, hi] = range as number[];
+    if (typeof lo === 'number' && typeof hi === 'number' && hops >= lo && hops <= hi) return name;
+  }
+  return undefined;
+}
