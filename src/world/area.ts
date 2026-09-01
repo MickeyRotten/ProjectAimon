@@ -8,9 +8,11 @@
  *  3. Build the room graph — connections first, then slots.
  *  4. Give every room a type, which gives it its tags.
  *
- * Step 5, rolling contents against `placement.json`, is the placement roller
- * and is not here. Structure and contents are separate passes on purpose: the
- * map exists immediately and permanently, and only prose is lazy.
+ *  5. Roll contents against `placement.json` — the placement roller, which
+ *     lives in its own file and is handed a finished graph.
+ *
+ * Structure and contents are separate passes on purpose: the map exists
+ * immediately and permanently, and only prose is lazy.
  *
  * Nothing in this file decides a number. Sizes, shapes, tier curve, gate
  * counts and fit rules are all read from the tables, because the tables are
@@ -23,6 +25,7 @@ import type { Rng } from '../engine/rng';
 import { ruleArray, ruleNumber, ruleObject, ruleRange, ruleWeightedPairs } from '../engine/rules';
 import { matches } from '../engine/tags';
 import { layoutArea, roomyEntry, weaveChords } from './layout';
+import { placeContents } from './placement';
 import {
   buildGraph,
   chordFraction,
@@ -46,6 +49,8 @@ import {
   type Coord,
   type Direction,
   type EdgeRecord,
+  type NpcRecord,
+  type ObjectRecord,
   type RoomRecord,
 } from './types';
 
@@ -56,6 +61,10 @@ export interface GenerationResult {
   edges: EdgeRecord[];
   /** One stub per gate: cube reserved, nothing generated inside it yet. */
   stubs: AreaRecord[];
+  /** Everything the placement roller put in the area, contents of containers included. */
+  objects: ObjectRecord[];
+  /** People and creatures alike — one table, `hostile` is a flag on the record. */
+  npcs: NpcRecord[];
   notes: string[];
 }
 
@@ -66,6 +75,8 @@ export interface GenerateOptions {
   lattice: WorldLattice;
   /** The stub made when the gate into this area was created. */
   stub: AreaRecord;
+  /** World flags, which spawn upgrades and conditional stats read. */
+  flags?: ReadonlySet<string> | undefined;
 }
 
 /**
@@ -239,7 +250,30 @@ export function generateArea(options: GenerateOptions): GenerationResult {
   edges.push(...gates.edges);
   notes.push(...gates.notes);
 
-  return { area, rooms, edges, stubs: gates.stubs, notes };
+  // Contents last, on a graph that is finished: the roller needs hop distance
+  // for the tier bonus and for a key's distance band, and neither exists until
+  // every edge is drawn. Its own stream, so tuning a placement chance cannot
+  // shift the shape of the map that was already rolled.
+  const contents = placeContents({
+    campaign,
+    rng: rng.fork(`${area.id}:contents`),
+    area,
+    areaDef,
+    rooms,
+    edges,
+    ...(options.flags ? { flags: options.flags } : {}),
+  });
+  notes.push(...contents.notes);
+
+  return {
+    area,
+    rooms,
+    edges,
+    stubs: gates.stubs,
+    objects: contents.objects,
+    npcs: contents.npcs,
+    notes,
+  };
 }
 
 // ── the pieces ──────────────────────────────────────────────────────

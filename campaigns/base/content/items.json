@@ -170,7 +170,9 @@
         "pitch",
         "guttering"
       ],
-      "burn": 60
+      "burn": 60,
+      "price": 2,
+      "weight": 2
     },
     {
       "id": "lantern",
@@ -184,7 +186,9 @@
         "hooded",
         "tin"
       ],
-      "burn": 220
+      "burn": 220,
+      "price": 18,
+      "weight": 4
     },
     {
       "id": "rope",
@@ -197,7 +201,9 @@
       "adjectives": [
         "hemp",
         "tarred"
-      ]
+      ],
+      "price": 6,
+      "weight": 5
     },
     {
       "id": "crowbar",
@@ -210,7 +216,9 @@
       "adjectives": [
         "iron",
         "bent"
-      ]
+      ],
+      "price": 12,
+      "weight": 6
     },
     {
       "id": "lockpick",
@@ -223,7 +231,9 @@
       "adjectives": [
         "thin",
         "bone-handled"
-      ]
+      ],
+      "price": 25,
+      "weight": 1
     },
     {
       "id": "key",
@@ -236,7 +246,9 @@
         "brass",
         "iron",
         "toothed"
-      ]
+      ],
+      "price": 1,
+      "weight": 1
     },
     {
       "id": "salve",
@@ -250,7 +262,9 @@
         "green",
         "cloying"
       ],
-      "heals": "hp"
+      "heals": "hp",
+      "price": 20,
+      "weight": 1
     },
     {
       "id": "draught",
@@ -264,7 +278,9 @@
         "bitter",
         "clouded"
       ],
-      "heals": "resolve"
+      "heals": "resolve",
+      "price": 25,
+      "weight": 1
     },
     {
       "id": "cordial",
@@ -278,7 +294,9 @@
         "rose",
         "warm"
       ],
-      "libido": 8
+      "libido": 8,
+      "price": 30,
+      "weight": 1
     },
     {
       "id": "coinpurse",
@@ -291,7 +309,9 @@
       "adjectives": [
         "cut",
         "fat"
-      ]
+      ],
+      "price": 1,
+      "weight": 1
     },
     {
       "id": "curio",
@@ -307,7 +327,9 @@
         "worn",
         "strange",
         "tarnished"
-      ]
+      ],
+      "price": 15,
+      "weight": 1
     },
     {
       "id": "waystone_token",
@@ -321,7 +343,9 @@
         "chipped",
         "humming"
       ],
-      "returnsToHub": true
+      "returnsToHub": true,
+      "priceFrom": "FAST_TRAVEL.price",
+      "weight": 1
     }
   ],
   "affixes": {
@@ -611,5 +635,6 @@
         160
       ]
     }
-  }
+  },
+  "_priceNote": "Weapons and armour take price and weight from WEAPON_TABLE and ARMOUR_TABLE in rules.json, keyed by base id — those are rules and live in one place. Everything else carries its own here. `priceFrom` reads a dotted path out of rules.json, so a price that IS a rule is never restated."
 }

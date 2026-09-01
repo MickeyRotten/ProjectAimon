@@ -2,7 +2,8 @@
 
 Project: **Aimon** *(Eamon, with the AI folded in)*
 
-Status: **design locked, no code written yet.**
+Status: **design locked. Build order steps 1–3 are built** — campaign and table
+loading, the graph generator, and the placement roller. Step 4 is next.
 
 ---
 
