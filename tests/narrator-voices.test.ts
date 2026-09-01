@@ -59,21 +59,32 @@ describe('VoiceNarrator.speak — never touches state', () => {
   it('returns the reply text as-is when the model answers cleanly', async () => {
     const client = new ScriptedClient(['"Fair prices, if you have coin."']);
     const narrator = new VoiceNarrator({ campaign, client, settings });
-    const reply = await narrator.speak(marda, 'i say hi to marda', '');
+    const reply = await narrator.speak(marda, 'i say hi to marda', '', []);
     expect(reply).toBe('Fair prices, if you have coin.');
   });
 
   it('falls back to a truthful in-character line when the model throws', async () => {
     const client = new ScriptedClient([new Error('down')]);
     const narrator = new VoiceNarrator({ campaign, client, settings });
-    const reply = await narrator.speak(marda, 'i ask marda about the ruins', 'the ruins');
+    const reply = await narrator.speak(marda, 'i ask marda about the ruins', 'the ruins', []);
     expect(reply).toContain('Marda');
   });
 
   it('falls back when the model returns nothing', async () => {
     const client = new ScriptedClient(['']);
     const narrator = new VoiceNarrator({ campaign, client, settings });
-    const reply = await narrator.speak(marda, 'talk to marda', '');
+    const reply = await narrator.speak(marda, 'talk to marda', '', []);
     expect(reply.length).toBeGreaterThan(0);
+  });
+
+  it('folds recent transcript history into the prompt, so the model sees its own prior line', async () => {
+    const client = new ScriptedClient(['"Selling mostly, if you have coin."']);
+    const narrator = new VoiceNarrator({ campaign, client, settings });
+    const history = [
+      { turn: 1, input: 'talk to marda', output: 'Marda turns to hear you out.\n"Buying or selling?"' },
+    ];
+    await narrator.speak(marda, 'what are you selling?', '', history);
+    const sent = client.calls[0]?.messages.map((m) => m.content).join('\n') ?? '';
+    expect(sent).toContain('Buying or selling?');
   });
 });

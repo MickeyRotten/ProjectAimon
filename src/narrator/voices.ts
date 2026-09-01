@@ -10,10 +10,11 @@
  */
 
 import type { ResolvedCampaign } from '../campaign/types';
+import type { TranscriptEntry } from '../game/game';
 import type { NpcRecord } from '../world/types';
 import type { LlmClient } from './llm';
 import type { NarratorSettings } from './settings';
-import { clean, fill } from './text';
+import { clean, fill, formatHistory } from './text';
 
 export class VoiceNarrator {
   private readonly campaign: ResolvedCampaign;
@@ -27,11 +28,13 @@ export class VoiceNarrator {
   }
 
   /**
-   * What the NPC says back to `raw`, about `topic` if there was one. Always
-   * degrades to a short, truthful, in-character line rather than throwing or
-   * leaving the player without a reply.
+   * What the NPC says back to `raw`, about `topic` if there was one. `history`
+   * is the game's turn transcript, so the model can see the last few turns —
+   * including its own prior line for this NPC — rather than judging `raw` in
+   * isolation. Always degrades to a short, truthful, in-character line rather
+   * than throwing or leaving the player without a reply.
    */
-  async speak(npc: NpcRecord, raw: string, topic: string): Promise<string> {
+  async speak(npc: NpcRecord, raw: string, topic: string, history: readonly TranscriptEntry[]): Promise<string> {
     const template = this.campaign.prompts['prompts/npc-voice.md'];
     if (!template) return this.fallback(npc);
 
@@ -39,6 +42,7 @@ export class VoiceNarrator {
       name: npc.name,
       persona: npc.persona || `${npc.role || 'someone'} out of ${npc.baseId}.`,
       disposition: describeDisposition(npc.disposition),
+      history: formatHistory(history),
       input: raw,
       topic_line: topic ? `The topic: ${topic}` : '',
     });

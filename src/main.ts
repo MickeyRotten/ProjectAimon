@@ -200,8 +200,10 @@ async function boot(): Promise<void> {
     const npc = game.world.npcs.get(target.npcId);
     if (!npc) return;
     const roomId = game.room.id;
+    const turn = game.turn; // finish() already wrote this turn's stub entry
     try {
-      const reply = await voices.speak(npc, raw, target.topic);
+      const reply = await voices.speak(npc, raw, target.topic, game.transcript);
+      game.appendVoiceLine(turn, reply);
       if (game.room.id !== roomId) return; // moved while we waited
       screen.print([line(`"${reply}"`, 'speak')]);
     } catch {

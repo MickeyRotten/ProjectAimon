@@ -91,6 +91,24 @@ describe('the turn loop', () => {
   });
 });
 
+describe('Game.appendVoiceLine — the narration edge filling in a reply after the fact', () => {
+  it('appends onto the transcript entry for the given turn', () => {
+    const game = start();
+    game.submit('wait');
+    game.appendVoiceLine(game.turn, 'Buying or selling?');
+    const entry = game.transcript[game.transcript.length - 1];
+    expect(entry?.output).toContain('Buying or selling?');
+  });
+
+  it('is a no-op when no transcript entry matches the turn', () => {
+    const game = start();
+    game.submit('wait');
+    const before = JSON.stringify(game.transcript);
+    game.appendVoiceLine(999, 'unreachable');
+    expect(JSON.stringify(game.transcript)).toBe(before);
+  });
+});
+
 describe('the hub as authored', () => {
   it('leaves every gate walkable — no two ways out share a direction', () => {
     const game = start();

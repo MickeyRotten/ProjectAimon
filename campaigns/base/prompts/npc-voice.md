@@ -5,6 +5,9 @@ around it — nothing the engine has not told you is true.
 Speaker: {{name}} — {{persona}}
 Disposition toward the player: {{disposition}}
 
+Recent turns:
+{{history}}
+
 The player's line: "{{input}}"
 {{topic_line}}
 

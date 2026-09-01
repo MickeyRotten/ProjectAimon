@@ -821,6 +821,24 @@ export class Game {
     return { lines, turn: this.turn, spent, ...extra };
   }
 
+  /**
+   * Fills in an NPC's spoken reply once the async voice call resolves, into
+   * the transcript entry `finish()` already wrote with the generic stub line.
+   * Called only from main.ts's narration edge, after the mechanical turn is
+   * already done and saved — transcript is narration-only context (read by
+   * no game logic, only by the next narrator prompt), never state the engine
+   * reads, so this is not a third write point in the rule 1 sense.
+   */
+  appendVoiceLine(turn: number, text: string): void {
+    for (let i = this.transcript.length - 1; i >= 0; i -= 1) {
+      const entry = this.transcript[i];
+      if (entry && entry.turn === turn) {
+        entry.output = `${entry.output}\n"${text}"`;
+        return;
+      }
+    }
+  }
+
   /** The status line's numbers, in one place so the UI derives nothing. */
   status(): Record<string, string> {
     const ctx = this.context();

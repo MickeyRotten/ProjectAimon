@@ -17,7 +17,7 @@ import type { ResolvedCampaign } from '../campaign/types';
 import type { TranscriptEntry } from '../game/game';
 import type { LlmClient } from './llm';
 import type { NarratorSettings } from './settings';
-import { clean, fill } from './text';
+import { clean, fill, formatHistory } from './text';
 
 export interface OutcomeInput {
   areaName: string;
@@ -31,9 +31,6 @@ export interface OutcomeInput {
   /** Already decided by the engine; the fallback needs it when the model can't be reached. */
   outcome: 'success' | 'failure';
 }
-
-/** How many recent turns of transcript the packet's history tier carries. */
-const HISTORY_WINDOW = 6;
 
 export class OutcomeNarrator {
   private readonly campaign: ResolvedCampaign;
@@ -56,15 +53,10 @@ export class OutcomeNarrator {
     const template = this.campaign.prompts['prompts/outcome.md'];
     if (!template) return this.fallback(input);
 
-    const history = input.history
-      .slice(-HISTORY_WINDOW)
-      .map((entry) => `> ${entry.input}\n${entry.output}`)
-      .join('\n\n');
-
     const user = fill(template, {
       standing: `${input.areaName} — ${input.areaTone}`.trim(),
       turn_context: '',
-      history: history || '(nothing yet)',
+      history: formatHistory(input.history),
       state: `${input.roomName}\n${input.roomDesc}`,
       facts: input.facts.join(' '),
       input: input.raw,
