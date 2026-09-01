@@ -70,10 +70,10 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
  * 4xx is not — a bad key or a bad model will not fix itself on a second try.
  */
 export function openRouterClient(options: OpenRouterOptions): LlmClient {
-  const attempts = Math.max(1, options.attempts ?? 4);
+  const attempts = Math.max(1, options.attempts ?? 2);
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? wait;
-  const timeoutMs = options.timeoutMs ?? 15000;
+  const timeoutMs = options.timeoutMs ?? 10000;
 
   return {
     async complete(request) {

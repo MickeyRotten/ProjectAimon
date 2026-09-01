@@ -101,9 +101,14 @@ async function boot(): Promise<void> {
     outcome = new OutcomeNarrator(deps);
   }
 
-  // Counts LLM calls in flight for the current turn. Several can overlap (a
-  // Tier 2/3 translation, then voicing and room prose fired together), so this
-  // is a count, not a flag: the busy indicator only toggles on the 0<->1 edge.
+  // Locks input only while the just-typed command is still being resolved —
+  // the Tier 2/3 translation that decides what the command *was*. Voicing,
+  // outcome prose and room prose are cosmetic follow-ups printed after the
+  // mechanical turn already finished and is on screen; they run alongside
+  // whatever the player types next rather than blocking it. (A network stall
+  // during one of those used to freeze the whole input box for up to a
+  // minute — narrateHere already tolerates the player moving on before its
+  // prose arrives, so there is no correctness reason to lock for it.)
   let pendingLlmCalls = 0;
   function track<T>(work: Promise<T>): Promise<T> {
     pendingLlmCalls += 1;
@@ -124,7 +129,7 @@ async function boot(): Promise<void> {
       settings = saveSettings(next);
       makeNarrators();
       screen.print([line(narrator ? 'Narrator on.' : 'Narrator off — no API key set.', 'rule')]);
-      void track(narrateHere());
+      void narrateHere();
     },
   );
 
@@ -135,7 +140,7 @@ async function boot(): Promise<void> {
   screen.print(game.describeHere(true));
   screen.refresh(game);
   screen.focus();
-  void track(narrateHere());
+  void narrateHere();
 
   async function handle(raw: string): Promise<void> {
     // Storage is asynchronous and the turn loop is not, so saving is answered
@@ -160,9 +165,9 @@ async function boot(): Promise<void> {
     // Steps 13-14: prose over the world the turn already resolved. Neither
     // changes state the engine reads, so both run after the mechanical turn
     // is done and saved, never inside it.
-    if (result.voice) void track(narrateVoice(raw, result.voice));
-    else if (result.tier2) void track(narrateOutcome(raw, result.lines));
-    void track(narrateHere());
+    if (result.voice) void narrateVoice(raw, result.voice);
+    else if (result.tier2) void narrateOutcome(raw, result.lines);
+    void narrateHere();
   }
 
   /** Step 3: on a Tier 1 miss, try the translator, then Tier 2, then Tier 3. */
