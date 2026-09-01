@@ -21,7 +21,7 @@
 import { ruleAt } from '../engine/rules';
 import { parseRequires, TagVocabulary } from '../engine/tags';
 import { SHAPES, SHAPE_RULES, isShape } from '../world/shapes';
-import { directionBetween, isDirection } from '../world/types';
+import { directionBetween, isDirection, opposite } from '../world/types';
 import type { Json, JsonObject, MergeIssue } from './merge';
 import type { CompositionDef, Cube, ResolvedCampaign } from './types';
 
@@ -203,9 +203,29 @@ export function validateCampaign(
       }
     }
 
+    // Which directions each hub room has already spent. An edge is walkable
+    // from both ends, so it spends a direction at both ends.
+    const usedDirections = new Map<string, Set<string>>();
+    const spend = (roomId: string, dir: string, path: string): void => {
+      const used = usedDirections.get(roomId) ?? new Set<string>();
+      if (used.has(dir)) {
+        error(path, `"${roomId}" already has a way out going ${dir} — one of them is unwalkable`);
+      }
+      used.add(dir);
+      usedDirections.set(roomId, used);
+    };
+    for (const [i, edge] of (hub.edges ?? []).entries()) {
+      const [from, dir, to] = edge;
+      if (!isDirection(dir)) continue;
+      spend(from, dir, `campaign.json.hub.edges[${i}]`);
+      spend(to, opposite(dir), `campaign.json.hub.edges[${i}]`);
+    }
+
     for (const [i, gate] of (hub.gates ?? []).entries()) {
       if (!isDirection(gate.dir)) {
         error(`campaign.json.hub.gates[${i}].dir`, `"${gate.dir}" is not a direction`);
+      } else {
+        spend(gate.fromRoom, gate.dir, `campaign.json.hub.gates[${i}].dir`);
       }
       if (!hubRoomIds.has(gate.fromRoom)) {
         error(`campaign.json.hub.gates[${i}].fromRoom`, `"${gate.fromRoom}" is not a hub room`);

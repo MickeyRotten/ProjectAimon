@@ -174,6 +174,56 @@ cannot satisfy a minimum at all, the shortfall is logged rather than forced.
 
 ---
 
+## What building the turn loop settled
+
+Seven things, found by walking the world rather than by reasoning about it.
+
+**Effects, not writes.** Rule 1 says state is written at step 7 and step 12 and
+nowhere else. A command handler that mutates a record breaks it silently and
+nothing catches the breach, so handlers now return an `Effect[]` and the turn
+loop applies it. The rule stopped being a thing to remember and became a thing
+the type system enforces.
+
+**The world half owns the forced retreat.** Light running out is the world
+acting on the player, not the player acting, so it applies at step 12 — the same
+write point as the clock and the burn. Its target is the nearest room by **hops**
+that is not dark, falling back to the area entrance, exactly as `LIGHT` states.
+Nothing about it is decided in code: the target rule, the three-turn cost and
+the penalty block are all read.
+
+**Two ways out of one room in one direction is a data bug, and the base campaign
+had one.** `hub_gate` had an authored edge north to the Strongroom *and* the
+town gate pointed north, so the town could never be walked to — the gate was
+generated, allocated a cube, and stood there unreachable. Validation now errors
+on a hub room spending the same direction twice, the engine drops the second one
+with a note rather than shipping it, and the town gate moved to `s`.
+
+**One glyph, one meaning.** The debug map marked a room holding a gate with `▣`
+and the player's map wanted `▣` for "you are here". Gates are `▨` now. The map
+still draws only rooms that have been walked, because there is no glyph for
+"seen but not entered" and there must not be one — it would spoil what is ahead.
+
+**`look at X` is `examine X`.** It is what people type, and refusing it teaches
+the player the parser is stupid. The verb table is untouched: this is one line
+in the grammar matcher, not a new verb.
+
+**A save is the whole world, and loading rebuilds indexes rather than rolling
+anything.** `World.snapshot` and `World.restore` are records in and records out.
+An ungenerated gate comes back as a gate with its cube still reserved, so an
+area that was never entered still generates at the moment it is walked into, and
+one that was entered comes back exactly as it stood. Storage is Dexie behind a
+four-method interface, imported lazily, so the turn loop is testable with no
+browser in the room.
+
+**Placeholder text is the deliverable, not a shortcut.** A room with no
+narrator prints its own structure — type, area, tags, contents, exits. That is
+the checkpoint working as intended: the question this step exists to answer is
+whether the world under the prose is worth walking.
+
+---
+
+---
+
 ## Port manifest — harvesting Project Loom
 
 This is a **new repository**, not a fork. Files are copied in one at a time, on

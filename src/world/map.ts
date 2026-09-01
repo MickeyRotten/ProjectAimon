@@ -29,28 +29,76 @@ export interface MapOptions {
   here?: string | undefined;
   /** Rooms with an edge running up or down are marked. */
   markStairs?: boolean | undefined;
+  /**
+   * Draw only these rooms. The player's map passes the rooms they have walked,
+   * so the map can never spoil what is ahead: there is no glyph for "seen but
+   * not entered", because there is no such state.
+   */
+  only?: ReadonlySet<string> | undefined;
+  /** Half-width of the window around `here`, in rooms. Omit for the whole level. */
+  radius?: number | undefined;
 }
 
-const HERE = '@';
+const HERE = '▣';
 const ROOM = '□';
 const EMPTY = ' ';
+
+/**
+ * The player's own map: only the rooms they have walked, windowed around them
+ * when a radius is given. Everything else is the same renderer, because there
+ * is only one map.
+ */
+export function renderPlayerMap(
+  world: World,
+  roomId: string,
+  options: { radius?: number | undefined } = {},
+): string {
+  const room = world.rooms.get(roomId);
+  if (!room) return '';
+  const walked = new Set(
+    world
+      .roomsOf(room.areaId)
+      .filter((candidate) => candidate.visited)
+      .map((candidate) => candidate.id),
+  );
+  walked.add(room.id);
+  return renderAreaMap(world, room.areaId, {
+    here: room.id,
+    only: walked,
+    z: room.z,
+    ...(options.radius !== undefined ? { radius: options.radius } : {}),
+  });
+}
 
 export function renderAreaMap(world: World, areaId: string, options: MapOptions = {}): string {
   const area = world.areas.get(areaId);
   const rooms = world.roomsOf(areaId);
   if (!area || rooms.length === 0) return '';
 
+  const here = options.here ? world.rooms.get(options.here) : undefined;
   const entry = area.entryRoomId ? world.rooms.get(area.entryRoomId) : undefined;
-  const z = options.z ?? entry?.z ?? (rooms[0] as RoomRecord).z;
-  const level = rooms.filter((room) => room.z === z);
+  const z = options.z ?? here?.z ?? entry?.z ?? (rooms[0] as RoomRecord).z;
+  const level = rooms
+    .filter((room) => room.z === z)
+    .filter((room) => !options.only || options.only.has(room.id));
   if (level.length === 0) return '';
 
-  const x0 = Math.min(...level.map((room) => room.x));
-  const x1 = Math.max(...level.map((room) => room.x));
-  const y0 = Math.min(...level.map((room) => room.y));
-  const y1 = Math.max(...level.map((room) => room.y));
+  let x0 = Math.min(...level.map((room) => room.x));
+  let x1 = Math.max(...level.map((room) => room.x));
+  let y0 = Math.min(...level.map((room) => room.y));
+  let y1 = Math.max(...level.map((room) => room.y));
 
-  const at = (x: number, y: number) => level.find((room) => room.x === x && room.y === y);
+  // A window around the player: the mini-map beside the room description,
+  // which is local orientation rather than a survey.
+  if (options.radius !== undefined && here) {
+    x0 = Math.max(x0, here.x - options.radius);
+    x1 = Math.min(x1, here.x + options.radius);
+    y0 = Math.max(y0, here.y - options.radius);
+    y1 = Math.min(y1, here.y + options.radius);
+  }
+
+  const at = (x: number, y: number) =>
+    level.find((room) => room.x === x && room.y === y && room.x >= x0 && room.x <= x1);
   const joined = (a: RoomRecord | undefined, b: RoomRecord | undefined) =>
     Boolean(a && b && world.exitsOf(a.id).some((exit) => exit.toRoomId === b.id));
 
@@ -80,8 +128,10 @@ function glyphFor(world: World, room: RoomRecord | undefined, options: MapOption
       .some((exit) => (exit.dir === 'u' || exit.dir === 'd') && exit.toRoomId);
     if (stairs) return '⇕';
   }
+  // A gate is a way out of the area, and must not wear the glyph that means
+  // "you are here" — one player, one ▣.
   const gate = world.exitsOf(room.id).some((exit) => exit.toRoomId === null);
-  if (gate) return '▣';
+  if (gate) return '▨';
   return room.glyph || ROOM;
 }
 

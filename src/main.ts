@@ -1,132 +1,111 @@
 /**
  * Boot.
  *
- * Step 1 was the loader, step 2 the graph generator; this is step 3, the
- * placement roller. There is still nothing to play — movement, the map and
- * inventory arrive at step 4 — so the screen shows exactly what the generator
- * can honestly show: a world built from the real tables, a few areas walked
- * out from the Hub, the map of each one drawn from its rooms and edges, and
- * now what is standing in those rooms.
+ * Steps 1 to 3 built the tables, the graph and the placement roller, and the
+ * page showed a debug dump because there was nothing to play. This is step 4,
+ * the honest checkpoint: a character, a world, movement across the room graph,
+ * a map of what has been walked, an inventory that is a query over one field,
+ * and an autosave written once per turn at the end of the world half.
  *
- * The seed is fixed, so this page is the same world every reload. Reload with
- * `?seed=whatever` to see a different one.
+ * The text is placeholder on purpose. The narrator is step 7, and the question
+ * this step exists to answer is whether walking a generated area is worth
+ * doing before any prose exists at all.
  */
 
-import './boot.css';
+import './app.css';
 import { loadCampaign } from './campaign/loader';
 import { formatReport } from './campaign/validate';
-import { itemValues } from './content/items';
-import { describeArea, levelsOf, renderAreaMap } from './world/map';
-import { World } from './world/world';
-import type { ObjectRecord, RoomRecord } from './world/types';
-
-const el = document.getElementById('boot') as HTMLElement;
-
-const escape = (text: string) =>
-  text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c] as string);
-
-/** Walk through gates, entry-first, until `wanted` areas have been generated. */
-function explore(world: World, wanted: number): void {
-  for (let i = 0; i < wanted; i++) {
-    const gate = [...world.edges.values()].find((edge) => edge.roomB === null);
-    if (!gate) return;
-    world.enterGate(gate.id);
-  }
-}
+import { line, type Line } from './game/commands';
+import { Game } from './game/game';
+import {
+  AUTOSAVE_ID,
+  browserSaveStore,
+  openSave,
+  parseSaveCommand,
+  recordOf,
+  snapshotId,
+  type SaveStore,
+} from './game/save';
+import { mountScreen, type Screen } from './ui/screen';
 
 async function boot(): Promise<void> {
-  try {
-    const { campaign, report } = await loadCampaign({ tolerateErrors: true });
-    const status =
-      report.errors.length > 0
-        ? `<span class="err">${report.errors.length} error(s)</span>`
-        : report.warnings.length > 0
-          ? `<span class="warn">${report.warnings.length} warning(s)</span>`
-          : '<span class="ok">clean</span>';
+  const root = document.getElementById('app') as HTMLElement;
+  const { campaign, report } = await loadCampaign({ tolerateErrors: true });
+  const store: SaveStore = browserSaveStore();
+  const params = new URLSearchParams(location.search);
 
-    const seed = new URLSearchParams(location.search).get('seed') ?? 'saltmere-0001';
-    const world = World.create({ campaign, seed });
-    explore(world, 3);
+  let game: Game;
+  const banner: Line[] = [
+    line(`Aimon — ${campaign.manifest.name} v${campaign.manifest.version}`, 'ok'),
+  ];
+  if (report.errors.length > 0) {
+    banner.push(line(formatReport(report), 'warn'));
+  }
 
-    const walked = [...world.areas.values()].filter((area) => area.generated && area.id !== 'hub');
-    const stubs = [...world.areas.values()].filter((area) => !area.generated);
-
-    /** What is in a room, read the only way anything reads it: by pointer. */
-    const contentsOf = (room: RoomRecord): string => {
-      const label = (object: ObjectRecord): string => {
-        const held = world.contentsOfObject(object.id);
-        const inside = held.length > 0 ? ` {${held.map((entry) => entry.name).join(', ')}}` : '';
-        const worth = object.gold !== undefined ? ` ${object.gold}g` : '';
-        const price =
-          object.flags.takeable && object.gold === undefined
-            ? ` ${itemValues(campaign, object)['price']}g`
-            : '';
-        return `${object.name}${worth}${price}${inside}`;
-      };
-      const loose = world.objectsIn(room.id).map(label);
-      const people = world
-        .npcsIn(room.id)
-        .map((npc) => `${npc.hostile ? '!' : '@'}${npc.name}`);
-      return [...loose, ...people].join(' · ');
-    };
-
-    const areaBlocks = walked.flatMap((area) => {
-      const rooms = world.roomsOf(area.id);
-      const maps = levelsOf(world, area.id).map((z) => {
-        const level = renderAreaMap(world, area.id, { z, here: area.entryRoomId ?? undefined });
-        const label = levelsOf(world, area.id).length > 1 ? `  <span class="dim">z ${z}</span>\n` : '';
-        return `${label}${escape(level)}`;
-      });
-      const filled = rooms
-        .map((room) => ({ room, line: contentsOf(room) }))
-        .filter((entry) => entry.line.length > 0)
-        .map(
-          (entry) =>
-            `  ${escape((entry.room.id.split(':').pop() as string).padEnd(4))}${escape(entry.room.type.padEnd(12))}${escape(entry.line)}`,
-        );
-
-      return [
-        '',
-        `<span class="ok">${escape(area.name)}</span> <span class="dim">${escape(area.archetype)} · ${escape(area.shape)} · depth ${area.depth} · tier ${area.tier} · ${rooms.length} rooms · ${escape(area.themeTokens.join(' + '))}</span>`,
-        '',
-        ...maps,
-        '',
-        `<span class="dim">${escape(describeArea(world, area.id))}</span>`,
-        '',
-        ...filled,
-      ];
+  // The autosave is the active slot, so returning to the tab returns to the
+  // game. `?new=1` starts a fresh one, `?seed=` names the world.
+  const existing = params.has('new') ? undefined : await store.get(AUTOSAVE_ID(campaign.id));
+  if (existing) {
+    const opened = openSave(campaign, existing);
+    game = opened.game;
+    for (const note of opened.notes) banner.push(line(note, 'warn'));
+    banner.push(line(`Resumed at turn ${game.turn}.`, 'rule'));
+  } else {
+    const seed = params.get('seed') ?? `saltmere-${Date.now().toString(36)}`;
+    game = Game.begin({
+      campaign,
+      seed,
+      name: params.get('name') ?? 'Adventurer',
+      ...(params.get('archetype') ? { archetype: params.get('archetype') as string } : {}),
     });
+    banner.push(line(`New world, seed ${seed}.`, 'rule'));
+    banner.push(line('HELP lists the verbs. Move with n s e w u d.', 'rule'));
+  }
 
-    el.innerHTML = [
-      `<h1>Aimon — ${escape(campaign.manifest.name)} v${escape(campaign.manifest.version)}</h1>`,
-      `tables loaded, validation ${status}`,
-      '',
-      `  areas       ${campaign.areas.size}  <span class="dim">${escape([...campaign.areas.keys()].join(' '))}</span>`,
-      `  hub rooms   ${campaign.manifest.hub.rooms.length}`,
-      `  item bases  ${campaign.items.bases.length} x ${campaign.items.qualities.length} qualities`,
-      `  monsters    ${campaign.monsters.bases.length} bases, ${campaign.monsters.roles.length} roles`,
-      `  npc roles   ${campaign.npcs.roles.length}`,
-      `  abilities   ${campaign.abilities.table.length}`,
-      `  verbs       ${campaign.verbs.verbs.length}`,
-      `  tags        ${report.vocabularySize}`,
-      '',
-      `<span class="dim">${escape(formatReport(report))}</span>`,
-      '',
-      `world seed <span class="ok">${escape(seed)}</span> — ${world.rooms.size} rooms, ${world.edges.size} edges, ${walked.length} areas walked, ${stubs.length} cubes reserved behind gates`,
-      `${world.objects.size} objects and ${world.npcs.size} people placed, ${[...world.npcs.values()].filter((npc) => npc.hostile).length} of them hostile`,
-      '',
-      `<span class="dim">${escape(renderAreaMap(world, 'hub', { here: campaign.manifest.hub.entryRoomId }))}</span>`,
-      ...areaBlocks,
-      '',
-      world.notes.length > 0
-        ? `<span class="warn">${escape(world.notes.join('\n'))}</span>`
-        : '<span class="dim">generation logged nothing: no repacks, no dropped edges, no long roads.</span>',
-      '',
-      '<span class="dim">Next: movement, the map and inventory — the honest checkpoint. Still nothing to play.</span>',
-    ].join('\n');
-  } catch (error) {
-    el.innerHTML = `<h1 class="err">boot failed</h1>${escape(String(error))}`;
+  const screen: Screen = mountScreen(root, (raw) => handle(raw));
+  screen.print(banner);
+  screen.print(game.describeHere(true));
+  screen.refresh(game);
+  screen.focus();
+
+  async function handle(raw: string): Promise<void> {
+    // Storage is asynchronous and the turn loop is not, so saving is answered
+    // here, at the edge, rather than from inside a command handler.
+    const saveCommand = parseSaveCommand(raw, campaign.verbs);
+    if (saveCommand) {
+      screen.print([line(raw, 'echo'), ...(await runSave(saveCommand.verb, saveCommand.label))]);
+      screen.refresh(game);
+      return;
+    }
+
+    const result = game.submit(raw);
+    screen.print(result.lines);
+    screen.refresh(game);
+    // Step 15: persist. One write point, once per turn that was actually spent.
+    if (result.spent) await store.put(recordOf(game, 'auto', 'autosave'));
+  }
+
+  async function runSave(verb: 'save' | 'load', label: string): Promise<Line[]> {
+    if (verb === 'save') {
+      if (!label) return [line('SAVE <name> — name the snapshot.', 'rule')];
+      await store.put(recordOf(game, 'snapshot', label));
+      return [line(`Saved as "${label}".`, 'ok')];
+    }
+    const record = label
+      ? await store.get(snapshotId(label))
+      : await store.get(AUTOSAVE_ID(campaign.id));
+    if (!record) return [line(`No save called "${label || 'autosave'}".`, 'warn')];
+    const opened = openSave(campaign, record);
+    game = opened.game;
+    return [
+      ...opened.notes.map((note) => line(note, 'warn')),
+      line(`Loaded "${record.label}" at turn ${game.turn}.`, 'ok'),
+      ...game.describeHere(true),
+    ];
   }
 }
 
-void boot();
+void boot().catch((error: unknown) => {
+  const root = document.getElementById('app') as HTMLElement;
+  root.innerHTML = `<pre class="err">boot failed\n${String(error)}</pre>`;
+});

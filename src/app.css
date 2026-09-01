@@ -1,0 +1,84 @@
+/* The whole screen. Terminal aesthetic: one column, monospace, no chrome.
+   Three monitor palettes, because the player picks the era they want. */
+:root {
+  --black: #000; --grey: #aaa; --white: #fff;
+  --cyan: #55ffff; --amber: #ffaa00; --red: #ff5555; --green: #55ff55; --dim: #555;
+  --bg: var(--black); --fg: var(--grey);
+}
+body[data-mono="amber"] { --grey: #ffb000; --white: #ffd88a; --cyan: #ffb000;
+  --green: #ffb000; --red: #ff8a3d; --amber: #ffd88a; --dim: #7a5200; }
+body[data-mono="green"] { --grey: #33ff66; --white: #b6ffcc; --cyan: #33ff66;
+  --green: #33ff66; --red: #ff8a8a; --amber: #b6ffcc; --dim: #146b2c; }
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace;
+  font-size: 15px; line-height: 1.45; letter-spacing: .01em;
+  display: flex; flex-direction: column;
+  -webkit-font-smoothing: none;
+}
+#app { display: flex; flex-direction: column; height: 100%; }
+
+.status {
+  background: var(--grey); color: var(--black); font-weight: 700;
+  flex: 0 0 auto; padding: 3px 10px; position: sticky; top: 0; z-index: 5;
+  white-space: pre-wrap;
+}
+
+.panel {
+  flex: 0 0 auto; display: flex; gap: 16px; align-items: flex-start;
+  width: 100%; max-width: 80ch; margin: 0 auto;
+  padding: 10px 10px 9px; border-bottom: 1px solid var(--dim);
+}
+.panel .where { min-width: 0; }
+.panel .rname { color: var(--white); font-weight: 700; margin: 0 0 .2em; }
+.panel .rdesc { color: var(--grey); margin: 0; font-size: .92em; }
+.map { margin: 0; color: var(--grey); line-height: 1.1; font-size: 1.05em; }
+
+.log {
+  flex: 1 1 auto; overflow-y: auto;
+  padding: 12px 10px calc(14px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 80ch; margin: 0 auto;
+  scrollbar-width: thin; scrollbar-color: var(--dim) transparent;
+}
+.log::-webkit-scrollbar { width: 8px; }
+.log::-webkit-scrollbar-thumb { background: var(--dim); }
+.b { margin: 0 0 .95em; }
+.b.pre { white-space: pre; overflow-x: auto; }
+.echo { color: var(--white); font-weight: 700; }
+.echo::before { content: "> "; color: var(--dim); }
+.roll { color: var(--cyan); }
+.ok { color: var(--green); }
+.warnline { color: var(--amber); }
+.err { color: var(--red); }
+.speak { color: var(--white); }
+.rule { color: var(--dim); }
+
+#promptline { display: flex; align-items: baseline; gap: .5ch; margin: 0; }
+#promptline .caret { color: var(--dim); font-weight: 700; }
+input {
+  flex: 1; background: transparent; border: 0; outline: none; font: inherit;
+  color: var(--white); font-weight: 700; padding: 0; min-width: 0;
+}
+.cursor { color: var(--white); animation: blink 1.06s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+
+.mono {
+  position: fixed; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex; gap: 4px; z-index: 6; opacity: .5;
+}
+.mono:hover { opacity: 1; }
+.mono button { width: 20px; height: 20px; border: 1px solid var(--dim); cursor: pointer; font-size: 0; }
+.mono button[aria-pressed="true"] { border-color: var(--white); border-width: 2px; }
+.mono .m1 { background: #aaaaaa; } .mono .m2 { background: #ffb000; } .mono .m3 { background: #33ff66; }
+
+@media (max-width: 560px) {
+  body { font-size: 14px; }
+  .status { font-size: .85em; }
+  .panel { gap: 12px; padding: 9px 8px 8px; }
+  .log { padding: 11px 8px calc(14px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 900px) { body { font-size: 16px; } }

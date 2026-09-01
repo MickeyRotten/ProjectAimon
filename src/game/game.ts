@@ -1,0 +1,444 @@
+/**
+ * The turn loop.
+ *
+ * Player half — parse, resolve scope, check preconditions, roll if the action
+ * can fail interestingly, then **apply player state change**. World half —
+ * advance the clock, burn light, move what moves, evaluate the event deck,
+ * then **apply world state change**.
+ *
+ * Those two applies are the only places state is ever written. Handlers return
+ * effects and this file applies them; nothing else in the codebase may touch a
+ * record. That is rule one, and it is enforced here rather than remembered.
+ *
+ * At this build step the world half advances the clock and burns light. Movers
+ * and the event deck are named in the loop below and do nothing yet — they
+ * arrive with combat and quests, and the slot they arrive into already exists.
+ */
+
+import type { ResolvedCampaign } from '../campaign/types';
+import { parse, type Command } from '../engine/parser';
+import { Rng } from '../engine/rng';
+import { ruleNumber, ruleString } from '../engine/rules';
+import type { ObjectRecord, RoomRecord } from '../world/types';
+import { IN_PLAYER, inRoom } from '../world/types';
+import { World, type WorldSnapshot } from '../world/world';
+import {
+  carriedWeight,
+  execute,
+  line,
+  lightWarnAt,
+  roomLines,
+  roomOf,
+  type CommandContext,
+  type Line,
+  type Pending,
+} from './commands';
+import type { Effect } from './effects';
+import { createPlayer, playerMaxHp, type PlayerRecord } from './player';
+import { anyLight, isDark, scopeOf, type ScopeEntry } from './scope';
+
+export interface TranscriptEntry {
+  turn: number;
+  input: string;
+  output: string;
+}
+
+export interface GameSnapshot {
+  /** Bumped only when the shape changes in a way a loader must know about. */
+  version: 1;
+  campaignId: string;
+  campaignVersion: string;
+  turn: number;
+  player: PlayerRecord;
+  world: WorldSnapshot;
+  transcript: TranscriptEntry[];
+}
+
+export interface BeginOptions {
+  campaign: ResolvedCampaign;
+  seed: number | string;
+  name: string;
+  archetype?: string | undefined;
+}
+
+export interface TurnResult {
+  lines: Line[];
+  turn: number;
+  /** True when the world half ran — i.e. the input cost a turn. */
+  spent: boolean;
+}
+
+export class Game {
+  readonly campaign: ResolvedCampaign;
+  readonly world: World;
+  player: PlayerRecord;
+  turn = 0;
+  readonly transcript: TranscriptEntry[] = [];
+
+  private pending: { question: Pending; command: Command } | undefined;
+  private lastCommand: Command | undefined;
+  private forced: ScopeEntry | undefined;
+  /** Turns the world half owes, from a forced retreat. */
+  private owedTurns = 0;
+
+  private constructor(campaign: ResolvedCampaign, world: World, player: PlayerRecord) {
+    this.campaign = campaign;
+    this.world = world;
+    this.player = player;
+  }
+
+  /** A new game: build the world, roll a character, hand them the kit. */
+  static begin(options: BeginOptions): Game {
+    const world = World.create({ campaign: options.campaign, seed: options.seed });
+    const rng = new Rng(`${options.seed}:character`);
+    const start = options.campaign.manifest.hub.entryRoomId;
+    const created = createPlayer({
+      campaign: options.campaign,
+      rng,
+      name: options.name,
+      archetype: options.archetype,
+      roomId: start,
+    });
+    for (const item of created.kit) world.objects.set(item.id, item);
+    const game = new Game(options.campaign, world, created.player);
+    const room = world.rooms.get(start);
+    if (room) room.visited = true;
+    return game;
+  }
+
+  /** Everything worth saving, deep-copied. */
+  snapshot(): GameSnapshot {
+    return {
+      version: 1,
+      campaignId: this.campaign.id,
+      campaignVersion: this.campaign.manifest.version,
+      turn: this.turn,
+      player: structuredClone(this.player),
+      world: this.world.snapshot(),
+      transcript: structuredClone(this.transcript),
+    };
+  }
+
+  /**
+   * Load a save. The world comes back out of the payload exactly as it was
+   * written; nothing is regenerated, because regenerating on load is the one
+   * operation that would destroy the world the player has been walking around
+   * in.
+   */
+  static restore(campaign: ResolvedCampaign, snapshot: GameSnapshot): Game {
+    const world = World.restore(campaign, snapshot.world);
+    const game = new Game(campaign, world, structuredClone(snapshot.player));
+    game.turn = snapshot.turn;
+    game.transcript.push(...structuredClone(snapshot.transcript));
+    return game;
+  }
+
+  get room(): RoomRecord {
+    return roomOf(this.world, this.player);
+  }
+
+  get dark(): boolean {
+    return isDark(this.world, this.room);
+  }
+
+  context(): CommandContext {
+    const room = this.room;
+    const dark = isDark(this.world, room);
+    return {
+      campaign: this.campaign,
+      world: this.world,
+      player: this.player,
+      room,
+      dark,
+      scope: scopeOf({ world: this.world, room, dark, playerName: this.player.name }),
+      turn: this.turn,
+    };
+  }
+
+  /** The room description as the player would see it now. */
+  describeHere(full: boolean): Line[] {
+    return roomLines(this.context(), full);
+  }
+
+  /**
+   * One player input, all the way through the loop.
+   *
+   * 1 submit · 2 parse · 3 (translator, step 7) · 4 scope · 5 preconditions ·
+   * 6 roll · 7 apply player state · 8-12 the world half · 13-16 narration,
+   * which at this step is the lines already assembled.
+   */
+  submit(raw: string): TurnResult {
+    const lines: Line[] = [line(raw, 'echo')];
+    const command = this.commandFor(raw, lines);
+    if (!command) return this.finish(raw, lines, false);
+
+    const ctx = this.context();
+    const reply = execute(this.forced ? { ...ctx, forced: this.forced } : ctx, command);
+    this.forced = undefined;
+    lines.push(...reply.lines);
+
+    this.pending = reply.question ? { question: reply.question, command } : undefined;
+    if (!reply.question && reply.failure === undefined) this.lastCommand = command;
+
+    if (reply.free) return this.finish(raw, lines, false);
+
+    const before = this.player.roomId;
+    // ── step 7: the player half's one write point ────────────────────
+    this.apply(reply.effects);
+    // ── steps 8-12: the world half, which runs whatever the player did
+    lines.push(...this.worldHalf());
+
+    if (this.player.roomId !== before) {
+      const room = this.room;
+      const first = !room.visited;
+      // ── the second write point covers the visit mark as well ───────
+      this.apply([{ kind: 'visit', roomId: room.id }]);
+      lines.push(...this.describeHere(first || !this.player.brief));
+    }
+    return this.finish(raw, lines, true);
+  }
+
+  // ── parsing, disambiguation, AGAIN ────────────────────────────────
+
+  private commandFor(raw: string, lines: Line[]): Command | undefined {
+    // A pending "which one?" gets first refusal on the next input, and is
+    // dropped rather than argued with when the answer does not answer it.
+    if (this.pending) {
+      const answer = this.answerPending(raw);
+      this.pending = undefined;
+      if (answer) return answer;
+    }
+
+    const parsed = parse(raw, this.campaign.verbs);
+    if (!parsed.ok) {
+      // Tier 2 classification and the Tier 3 flavour reply are the narrator's,
+      // and the narrator arrives at build step 7. Until then the engine says
+      // what it actually knows.
+      lines.push(line(parsed.failure.message, 'rule'));
+      return undefined;
+    }
+    if (parsed.command.verb === 'again') {
+      if (!this.lastCommand) {
+        lines.push(line('Nothing to repeat.', 'rule'));
+        return undefined;
+      }
+      return this.lastCommand;
+    }
+    return parsed.command;
+  }
+
+  /** Match an answer against the candidates the question offered. */
+  private answerPending(raw: string): Command | undefined {
+    const pending = this.pending;
+    if (!pending) return undefined;
+    const ctx = this.context();
+    const candidates = ctx.scope.filter((entry) => pending.question.candidateIds.includes(entry.id));
+    const words = raw.toLowerCase().split(/\s+/).filter((word) => word.length > 0);
+    const match = candidates.find((entry) =>
+      words.every((word) =>
+        [...entry.nouns, ...entry.adjectives, ...entry.name.toLowerCase().split(/\s+/)]
+          .map((candidate) => candidate.toLowerCase())
+          .includes(word),
+      ),
+    );
+    if (!match || words.length === 0) return undefined;
+    this.forced = match;
+    return pending.command;
+  }
+
+  // ── the two write points ──────────────────────────────────────────
+
+  private apply(effects: readonly Effect[]): void {
+    for (const effect of effects) {
+      switch (effect.kind) {
+        case 'movePlayer':
+          this.player.roomId = effect.roomId;
+          break;
+        case 'enterGate': {
+          // Generation happens here and nowhere else: an area is generated
+          // once, on the turn someone walks into it, and never again.
+          const area = this.world.enterGate(effect.edgeId);
+          if (area.entryRoomId) this.player.roomId = area.entryRoomId;
+          break;
+        }
+        case 'moveObject':
+          this.world.moveTo(effect.id, effect.location);
+          break;
+        case 'setObjectFlag': {
+          const object = this.world.objects.get(effect.id);
+          if (object) (object.flags as Record<string, unknown>)[effect.flag] = effect.value;
+          break;
+        }
+        case 'setBurn': {
+          const object = this.world.objects.get(effect.id);
+          if (object) object.burnRemaining = Math.max(0, effect.turns);
+          break;
+        }
+        case 'wield':
+          this.player.weaponWielded = effect.id;
+          break;
+        case 'wear':
+          this.player.armourWorn = effect.id;
+          break;
+        case 'purse':
+          this.player.purse = Math.max(0, this.player.purse + effect.delta);
+          break;
+        case 'hp':
+          this.player.hp += effect.delta;
+          break;
+        case 'resolve':
+          this.player.resolve += effect.delta;
+          break;
+        case 'libido':
+          this.player.libido += effect.delta;
+          break;
+        case 'visit': {
+          const room = this.world.rooms.get(effect.roomId);
+          if (room) room.visited = true;
+          break;
+        }
+        case 'brief':
+          this.player.brief = effect.value;
+          break;
+        case 'pronoun':
+          this.player.pronounRefs[effect.ref] = effect.id;
+          break;
+        case 'worldFlag':
+          if (effect.value) this.world.flags.add(effect.id);
+          else this.world.flags.delete(effect.id);
+          break;
+        case 'extraTurns':
+          this.owedTurns += effect.turns;
+          break;
+      }
+    }
+  }
+
+  /**
+   * Steps 8-12. Runs every turn, whatever the player did.
+   *
+   * Light is the only depletion in the world at this step, and it is the one
+   * that makes exploration a budget: a torch is sixty turns of somewhere to be.
+   */
+  private worldHalf(): Line[] {
+    const lines: Line[] = [];
+    const ticks = 1 + this.owedTurns;
+    this.owedTurns = 0;
+    this.turn += ticks;
+
+    const effects: Effect[] = [];
+    const warnAt = lightWarnAt(this.campaign);
+
+    // Lights burn where the player can see them burn: carried, or in the room
+    // they are standing in. A torch left lit three rooms back is not the
+    // world's problem until something is there to watch it.
+    const burning = [
+      ...this.world.contentsOf(IN_PLAYER).objects,
+      ...this.world.objectsIn(this.player.roomId),
+    ].filter((object) => object.flags.lit && object.burnRemaining > 0);
+
+    for (const object of burning) {
+      const left = Math.max(0, object.burnRemaining - ticks);
+      effects.push({ kind: 'setBurn', id: object.id, turns: left });
+      if (left === 0) {
+        effects.push({ kind: 'setObjectFlag', id: object.id, flag: 'lit', value: false });
+        lines.push(line(`The ${object.name} gutters out.`, 'warn'));
+      } else if (left <= warnAt && object.burnRemaining > warnAt) {
+        lines.push(line(`Your ${object.name} is guttering. ${left} turns of light left.`, 'warn'));
+      }
+    }
+
+    // Movers — pursuers, wanderers, rivals — arrive with combat.
+    // The event deck arrives with quests. Both belong in this half, here.
+
+    // ── step 12: the world half's one write point ────────────────────
+    this.apply(effects);
+    lines.push(...this.lightFailure());
+    return lines;
+  }
+
+  /**
+   * Running out of light is not a softlock, it is a forced retreat. The rules
+   * name the target and the cost; nothing about it is decided here.
+   */
+  private lightFailure(): Line[] {
+    const room = this.room;
+    if (!room.tags.includes('dark') || anyLight(this.world, room.id)) return [];
+    if (ruleString(this.campaign.rules, 'LIGHT.onExhausted') !== 'retreatToLit') return [];
+
+    const target = this.retreatTarget(room);
+    if (!target || target.id === room.id) {
+      return [line('The dark closes in, and there is nowhere lit to fall back to.', 'warn')];
+    }
+
+    const cost = ruleNumber(this.campaign.rules, 'LIGHT.retreatCostTurns');
+    const goldShare = ruleNumber(this.campaign.rules, 'LIGHT.retreatPenalty.dropsCarriedGold');
+    const effects: Effect[] = [
+      { kind: 'movePlayer', roomId: target.id },
+      { kind: 'visit', roomId: target.id },
+      { kind: 'extraTurns', turns: cost },
+      { kind: 'hp', delta: -ruleNumber(this.campaign.rules, 'LIGHT.retreatPenalty.hp') },
+      { kind: 'libido', delta: ruleNumber(this.campaign.rules, 'LIGHT.retreatPenalty.libido') },
+    ];
+    const dropped = Math.floor(this.player.purse * goldShare);
+    if (dropped > 0) effects.push({ kind: 'purse', delta: -dropped });
+
+    // Still the world half's write point: the retreat is the world acting on
+    // the player, not the player acting.
+    this.apply(effects);
+    const lines = [
+      line('You back out of the dark the way you came in, hands on stone.', 'warn'),
+      line(`${cost} turns spent getting clear.`, 'rule'),
+    ];
+    if (dropped > 0) lines.push(line(`${dropped} gold lost in the scramble.`, 'warn'));
+    lines.push(...this.describeHere(true));
+    return lines;
+  }
+
+  /** The nearest lit room by hops, or the area's entrance. Never coordinates. */
+  private retreatTarget(from: RoomRecord): RoomRecord | undefined {
+    const hops = [...this.world.hopsFrom(from.id).entries()].sort((a, b) => a[1] - b[1]);
+    for (const [roomId] of hops) {
+      const room = this.world.rooms.get(roomId);
+      if (room && room.id !== from.id && !room.tags.includes('dark')) return room;
+    }
+    const area = this.world.areas.get(from.areaId);
+    return area?.entryRoomId ? this.world.rooms.get(area.entryRoomId) : undefined;
+  }
+
+  // ── bookkeeping ───────────────────────────────────────────────────
+
+  private finish(raw: string, lines: Line[], spent: boolean): TurnResult {
+    this.transcript.push({
+      turn: this.turn,
+      input: raw,
+      output: lines
+        .filter((entry) => entry.kind !== 'echo')
+        .map((entry) => entry.text)
+        .join('\n'),
+    });
+    return { lines, turn: this.turn, spent };
+  }
+
+  /** The status line's numbers, in one place so the UI derives nothing. */
+  status(): Record<string, string> {
+    const ctx = this.context();
+    const light = anyLight(this.world, this.player.roomId);
+    return {
+      name: this.player.name,
+      hp: `${this.player.hp}/${playerMaxHp(this.campaign, this.player)}`,
+      turn: String(this.turn),
+      load: String(carriedWeight(ctx)),
+      light: light ? `${light.burnRemaining}` : '—',
+      where: this.room.id,
+      gold: String(this.player.purse),
+    };
+  }
+}
+
+/** Objects the player is carrying. Used by the UI and by the tests alike. */
+export const carriedObjects = (game: Game): ObjectRecord[] =>
+  game.world.contentsOf(IN_PLAYER).objects;
+
+export const objectsHere = (game: Game): ObjectRecord[] =>
+  game.world.contentsOf(inRoom(game.player.roomId)).objects;

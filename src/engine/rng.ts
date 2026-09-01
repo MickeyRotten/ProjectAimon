@@ -54,6 +54,11 @@ export class Rng {
     return this.state;
   }
 
+  /** Put a saved state back, mid-stream. The counterpart of `toState`. */
+  setState(state: number): void {
+    this.state = state >>> 0;
+  }
+
   /**
    * A derived generator, independent of this one and reproducible from the
    * same label. Use it to give each area its own stream, so generating area B

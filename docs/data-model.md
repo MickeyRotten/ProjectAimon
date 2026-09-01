@@ -150,11 +150,15 @@ inside an area that has not been generated yet. **Once that area generates,
 `targetRoomId` is filled in from the coordinate index and `targetCoord` becomes a
 record of how it was chosen.** Everything downstream reads the id.
 
-**`player`** — `roomId, hp, resolve, libido, purse, banked,
-stats{brawn, agility, toughness, charisma, willpower, wits},
+**`player`** — `campaignId, name, archetype, roomId, hp, resolve, libido,
+purse, banked, stats{brawn, agility, toughness, charisma, willpower, wits},
 weaponSkills{axe, bow, club, spear, sword},
 approachSkills{intimidate, taunt, seduce}, armourExpertise, armourWorn,
-pronounRefs{it, him, her, them}`
+weaponWielded, pronounRefs{it, him, her, them}, brief`
+`armourWorn` and `weaponWielded` are object ids, so gear is a pointer like
+everything else. `archetype` chooses the starting kit and nothing else —
+attributes are 3d8 straight, and weighting them by archetype would be a rule
+living in the engine rather than in a table. `brief` is the description mode.
 Max HP, max Resolve, carry capacity and every combat value are **derived** from
 stats per the gameplay rules, never stored — so they can never drift. `libido`
 is stored, because the world moves it.
