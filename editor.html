@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aimon — Data Editor (dev tool)</title>
+    <link rel="stylesheet" href="/src/editor/editor.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1>Aimon Data Editor</h1>
+      <span class="hint">dev tool — served by <code>npm run dev</code> only; writes directly to repo files</span>
+      <span id="fs-status" class="fs-status"></span>
+      <button id="pick-dir" type="button">Choose repo folder…</button>
+    </header>
+
+    <nav id="tabs" class="tabs"></nav>
+    <nav id="subtabs" class="subtabs"></nav>
+
+    <main id="editor" class="editor">
+      <div class="placeholder">Pick a tab.</div>
+    </main>
+
+    <footer class="bar status">
+      <span id="status"></span>
+      <span class="spacer"></span>
+      <button id="reload" type="button" disabled>Reload file</button>
+      <button id="save" type="button" disabled>Save (Ctrl+S)</button>
+    </footer>
+
+    <script type="module" src="/src/editor/editor.ts"></script>
+  </body>
+</html>
