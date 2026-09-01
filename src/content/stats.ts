@@ -11,7 +11,7 @@
  * armour-expertise maths entirely — so this module is where they get them.
  */
 
-import type { JsonObject } from '../campaign/merge';
+import type { Json, JsonObject } from '../campaign/merge';
 import type { Rng } from '../engine/rng';
 import { RuleError, ruleArray, ruleNumber, ruleString } from '../engine/rules';
 import type { Attributes } from '../world/types';
@@ -104,6 +104,12 @@ export const deriveCarry = (rules: JsonObject, brawn: number): number =>
 export const deriveEvasion = (rules: JsonObject, agility: number): number =>
   Math.round(agility * ruleNumber(rules, 'DERIVED.evasionPerAgility'));
 
+export const deriveAccuracy = (rules: JsonObject, agility: number): number =>
+  Math.round(agility * ruleNumber(rules, 'DERIVED.accuracyPerAgility'));
+
+export const deriveCrit = (rules: JsonObject, wits: number): number =>
+  Math.max(0, Math.round(wits * ruleNumber(rules, 'DERIVED.critPerWits')));
+
 export const derivePresence = (rules: JsonObject, charisma: number): number =>
   Math.round(charisma * ruleNumber(rules, 'DERIVED.presencePerCharisma'));
 
@@ -120,6 +126,31 @@ export function deriveBonus(rules: JsonObject, path: string, stats: Attributes):
   const div = ruleNumber(rules, `${path}.div`);
   if (!isAttribute(from)) throw new RuleError(`${path}.from`, `"${from}" is not an attribute`);
   return Math.floor((stats[from] - offset) / div);
+}
+
+/** The Libido band a value falls in — its name and its Allure/Composure swing. */
+export interface LibidoBand {
+  name: string;
+  allure: number;
+  composure: number;
+}
+
+export function libidoBand(rules: JsonObject, libido: number): LibidoBand {
+  const bands = ruleArray(rules, 'LIBIDO_BANDS');
+  for (const entry of bands) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const band = entry as Record<string, Json>;
+    const range = band['range'];
+    if (!Array.isArray(range) || typeof range[0] !== 'number' || typeof range[1] !== 'number') continue;
+    if (libido >= range[0] && libido <= range[1]) {
+      return {
+        name: typeof band['name'] === 'string' ? band['name'] : '',
+        allure: typeof band['allure'] === 'number' ? band['allure'] : 0,
+        composure: typeof band['composure'] === 'number' ? band['composure'] : 0,
+      };
+    }
+  }
+  return { name: '', allure: 0, composure: 0 };
 }
 
 export const deriveDamageBonus = (rules: JsonObject, stats: Attributes): number =>

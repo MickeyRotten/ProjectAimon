@@ -80,11 +80,8 @@ const blocked = (text: string, failure: FailureCode = 'PRECONDITION'): Reply => 
 
 /** Build steps that have not landed. Naming the step is more use than a shrug. */
 const NOT_YET: Record<string, string> = {
-  attack: 'Combat lands at build step 6.',
-  flee: 'Combat lands at build step 6.',
-  use: 'Abilities land with combat, at build step 6.',
-  eat: 'Consumables land with combat, at build step 6.',
-  drink: 'Consumables land with combat, at build step 6.',
+  eat: 'Consumables land after combat.',
+  drink: 'Consumables land after combat.',
   ask: 'The narrator voices people at build step 7.',
   tell: 'The narrator voices people at build step 7.',
   say: 'The narrator voices people at build step 7.',
@@ -137,6 +134,12 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       return wield(ctx, command);
     case 'talk':
       return talk(ctx, command);
+    case 'attack':
+      return attackOutOfCombat(ctx);
+    case 'flee':
+      return say('Nothing is chasing you.');
+    case 'use':
+      return useOutOfCombat(ctx, command);
     case 'search':
       return search(ctx);
     case 'quests':
@@ -527,6 +530,34 @@ function wield(ctx: CommandContext, command: Command): Reply {
     effects: [{ kind: 'wield', id: object.id }],
     free: false,
   };
+}
+
+// ── combat, out of a fight ──────────────────────────────────────────
+
+/**
+ * Swinging when nothing is fighting back. If a hostile is standing here a fight
+ * begins on the world half; otherwise there is only air to hit. The fight
+ * itself is resolved in `combat.ts`, reached from the turn loop, not here.
+ */
+function attackOutOfCombat(ctx: CommandContext): Reply {
+  const hostiles = ctx.world.npcsIn(ctx.room.id).filter((npc) => npc.hostile && !npc.defeated);
+  if (hostiles.length > 0) return say('You set yourself for the fight.', 'warn');
+  return blocked('Nothing here to fight.');
+}
+
+/**
+ * USE outside a fight. A combat ability needs a fight to spend it in; anything
+ * else falls through to the plainer verbs (LIGHT a torch, and so on).
+ */
+function useOutOfCombat(ctx: CommandContext, command: Command): Reply {
+  const name = (command.object?.words ?? []).join(' ').toLowerCase();
+  const ability = ctx.campaign.abilities.table.find(
+    (entry) => entry.id === name.replace(/\s+/g, '_') || entry.name.toLowerCase() === name,
+  );
+  if (ability || ['intimidate', 'taunt', 'seduce'].includes(name)) {
+    return blocked('Save it for a fight — nothing here to use it on.');
+  }
+  return say('Nothing comes of it. Try the plainer verb — LIGHT, WIELD, WEAR.');
 }
 
 // ── quests ──────────────────────────────────────────────────────────

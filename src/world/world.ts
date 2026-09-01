@@ -185,6 +185,16 @@ export class World {
   }
 
   /**
+   * A roll stream seeded on `(turn, action)`, independent of the generation
+   * stream. A combat turn re-told from the same seed and label produces the
+   * same dice, which is what the "no save-scumming by regenerate" rule wants —
+   * and it never disturbs the world-generation rolls that share the world seed.
+   */
+  combatRng(label: string): Rng {
+    return new Rng(`${this.seed}:${label}`);
+  }
+
+  /**
    * Everything whose `location` points here. One query, one field — and the
    * only way anything ever asks what is in a room, a chest or a pocket.
    */

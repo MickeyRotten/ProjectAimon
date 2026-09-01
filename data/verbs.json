@@ -73,7 +73,8 @@
       "note": "Also how a companion is commanded: TELL <companion> TO <action>." },
     { "id": "say",      "words": ["say"],     "patterns": ["VN","VNPN"] },
 
-    { "id": "attack",   "words": ["attack","hit","kill","fight"], "patterns": ["VN","VNPN"] },
+    { "id": "attack",   "words": ["attack","hit","kill","fight"], "patterns": ["V","VN","VNPN"],
+      "note": "Bare ATTACK in a fight swings at the nearest foe; ATTACK <foe> names one." },
     { "id": "use",      "words": ["use","cast","perform"], "patterns": ["VN","VNPN"],
       "note": "USE <ability> ON <target>. Falls through to normal handling for non-ability nouns, so USE TORCH lights it." },
     { "id": "flee",     "words": ["flee","run","escape"], "patterns": ["V"] },

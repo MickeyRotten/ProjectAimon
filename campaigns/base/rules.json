@@ -186,6 +186,24 @@
       ]
     }
   },
+  "COMBAT": {
+    "_note": "Combat constants. The formulas themselves live in FORMULAS; these are the knobs the resolver reads.",
+    "unarmed": {
+      "damage": "1d2",
+      "penetration": 0,
+      "complexity": 0
+    },
+    "playerBaseThreat": 10,
+    "fleeParting": true,
+    "_fleeNote": "Flee always works. The cost is a parting hit from one still-standing enemy.",
+    "senseCostsTurn": true
+  },
+  "PRESENCE_BREAK": {
+    "_note": "At zero Resolve a creature breaks, and how it breaks is read from its friendliness. Low flees with its loot, middle surrenders it, high joins you. Bands, like everything else.",
+    "flee": [0, 39],
+    "surrender": [40, 74],
+    "join": [75, 100]
+  },
   "TAXONOMY": {
     "undead": {
       "presenceImmune": true

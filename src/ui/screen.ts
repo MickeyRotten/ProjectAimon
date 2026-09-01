@@ -82,10 +82,13 @@ export function mountScreen(
     (root.querySelector('#statline') as HTMLElement).textContent = [
       status['name'],
       `HP ${status['hp']}`,
+      `RES ${status['resolve']}`,
+      `LIB ${status['libido']}`,
       `GOLD ${status['gold']}`,
       `LOAD ${status['load']}`,
       `LIGHT ${status['light']}`,
       `T ${status['turn']}`,
+      ...(status['foes'] && status['foes'] !== '0' ? [`FOES ${status['foes']}`] : []),
     ].join('   ');
 
     const view = viewRoom(game.world, game.room);

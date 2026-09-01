@@ -18,7 +18,7 @@
 import type { ResolvedCampaign } from '../campaign/types';
 import { parse, type Command } from '../engine/parser';
 import { Rng } from '../engine/rng';
-import { ruleNumber, ruleString } from '../engine/rules';
+import { ruleArray, ruleNumber, ruleString } from '../engine/rules';
 import { objectiveComplete, type QuestCheckContext } from '../world/quests';
 import type { ObjectRecord, RoomRecord } from '../world/types';
 import { IN_PLAYER, inObject, inRoom } from '../world/types';
@@ -34,8 +34,18 @@ import {
   type Line,
   type Pending,
 } from './commands';
+import {
+  combatReduce,
+  emptyCombat,
+  enemyRound,
+  engageLines,
+  hostilesIn,
+  playerCombatAction,
+  type CombatContext,
+  type CombatState,
+} from './combat';
 import type { Effect } from './effects';
-import { createPlayer, playerMaxHp, type PlayerRecord } from './player';
+import { createPlayer, issueKit, playerMaxHp, playerMaxResolve, type PlayerRecord } from './player';
 import { anyLight, isDark, scopeOf, type ScopeEntry } from './scope';
 
 export interface TranscriptEntry {
@@ -53,6 +63,8 @@ export interface GameSnapshot {
   player: PlayerRecord;
   world: WorldSnapshot;
   transcript: TranscriptEntry[];
+  /** The live fight, if any. Born and dies with an encounter. */
+  combat?: CombatState;
 }
 
 export interface BeginOptions {
@@ -75,6 +87,12 @@ export class Game {
   player: PlayerRecord;
   turn = 0;
   readonly transcript: TranscriptEntry[] = [];
+  /** The live combat session. Inactive until something turns hostile. */
+  combat: CombatState = emptyCombat();
+  /** Counts combat turns, so each rolls its own seeded `(turn, action)` stream. */
+  private combatSeq = 0;
+  /** Set by a defeat during the world half, read out as narration after. */
+  private pendingDefeat: string | undefined;
 
   private pending: { question: Pending; command: Command } | undefined;
   private lastCommand: Command | undefined;
@@ -109,7 +127,7 @@ export class Game {
 
   /** Everything worth saving, deep-copied. */
   snapshot(): GameSnapshot {
-    return {
+    const snapshot: GameSnapshot = {
       version: 1,
       campaignId: this.campaign.id,
       campaignVersion: this.campaign.manifest.version,
@@ -118,6 +136,9 @@ export class Game {
       world: this.world.snapshot(),
       transcript: structuredClone(this.transcript),
     };
+    // A dead fight is not worth saving; a live one rides along with the world.
+    if (this.combat.active) snapshot.combat = structuredClone(this.combat);
+    return snapshot;
   }
 
   /**
@@ -131,6 +152,7 @@ export class Game {
     const game = new Game(campaign, world, structuredClone(snapshot.player));
     game.turn = snapshot.turn;
     game.transcript.push(...structuredClone(snapshot.transcript));
+    if (snapshot.combat) game.combat = structuredClone(snapshot.combat);
     return game;
   }
 
@@ -170,6 +192,14 @@ export class Game {
    */
   submit(raw: string): TurnResult {
     const lines: Line[] = [line(raw, 'echo')];
+
+    // A live fight takes over the loop: a command is a combat action, and the
+    // world half runs the enemy round rather than only the clock.
+    if (this.combat.active && hostilesIn(this.world, this.player.roomId).length > 0) {
+      return this.combatTurn(raw, lines);
+    }
+    if (this.combat.active) this.combat = emptyCombat(); // hostiles all gone
+
     const command = this.commandFor(raw, lines);
     if (!command) return this.finish(raw, lines, false);
 
@@ -204,7 +234,67 @@ export class Game {
       this.apply([{ kind: 'visit', roomId: room.id }]);
       lines.push(...this.describeHere(first || !this.player.brief));
     }
+    // Walking into a room that holds hostiles starts a fight — announced now,
+    // fought from the next turn, so the entry itself is never a free hit.
+    lines.push(...this.maybeBeginCombat());
     return this.finish(raw, lines, true);
+  }
+
+  /**
+   * One combat turn: the player's action lands at the player-half write point,
+   * then the world half runs the enemy round. Defeat, if it comes, is narrated
+   * after — the corpse run has already moved the player to the Hub.
+   */
+  private combatTurn(raw: string, lines: Line[]): TurnResult {
+    const command = this.commandFor(raw, lines);
+    if (!command) return this.finish(raw, lines, false);
+
+    const reply = playerCombatAction(this.combatContext(), command);
+    this.forced = undefined;
+    lines.push(...reply.lines);
+    if (!reply.free) this.lastCommand = command;
+    if (reply.free) return this.finish(raw, lines, false);
+
+    const before = this.player.roomId;
+    // ── step 7: the player half's one write point ────────────────────
+    this.apply(reply.effects);
+    // ── steps 8-12: the world half — enemy round, then clock and light ─
+    lines.push(...this.worldHalf());
+
+    if (this.pendingDefeat) {
+      lines.push(...this.defeatLines(this.pendingDefeat));
+      this.pendingDefeat = undefined;
+      lines.push(...this.describeHere(!this.player.brief));
+    } else if (this.player.roomId !== before) {
+      const room = this.room;
+      const first = !room.visited;
+      this.apply([{ kind: 'visit', roomId: room.id }]);
+      lines.push(...this.describeHere(first || !this.player.brief));
+      lines.push(...this.maybeBeginCombat());
+    }
+    return this.finish(raw, lines, true);
+  }
+
+  /** Begin a fight if the current room holds hostiles and none is under way. */
+  private maybeBeginCombat(): Line[] {
+    if (this.combat.active) return [];
+    if (hostilesIn(this.world, this.player.roomId).length === 0) return [];
+    this.apply([{ kind: 'combat', op: { t: 'begin' } }]);
+    return engageLines(this.combatContext());
+  }
+
+  /** The context combat handlers read: the command context plus dice and session. */
+  private combatContext(): CombatContext {
+    return { ...this.context(), rng: this.world.combatRng(`combat:${this.turn}:${this.combatSeq++}`), combat: this.combat };
+  }
+
+  /** What a defeat reads out. The mechanics already ran; this is only the telling. */
+  private defeatLines(by: string): Line[] {
+    const how = by === 'resolve' ? 'Your nerve breaks before your body does.' : 'You go down under the blows.';
+    return [
+      line(how, 'warn'),
+      line('You wake at the Hub, stripped to a crude kit. Your goods lie where you fell — go and take them back.', 'warn'),
+    ];
   }
 
   // ── parsing, disambiguation, AGAIN ────────────────────────────────
@@ -332,8 +422,136 @@ export class Game {
         case 'failQuest':
           this.world.failQuest(effect.questId);
           break;
+        case 'npcHp': {
+          const npc = this.world.npcs.get(effect.id);
+          if (npc) npc.hp = Math.min(npc.maxHp, npc.hp + effect.delta);
+          break;
+        }
+        case 'npcResolve': {
+          const npc = this.world.npcs.get(effect.id);
+          if (npc) npc.resolve = Math.min(npc.maxResolve, npc.resolve + effect.delta);
+          break;
+        }
+        case 'npcDead':
+          this.killNpc(effect.id);
+          break;
+        case 'npcBreak':
+          this.breakNpc(effect.id, effect.outcome);
+          break;
+        case 'spawnCreature':
+          this.world.npcs.set(effect.record.id, effect.record);
+          break;
+        case 'growSkill':
+          this.growSkill(effect.axis, effect.id, effect.delta);
+          break;
+        case 'defeatPlayer':
+          this.defeatPlayer(effect.victorId, effect.by);
+          break;
+        case 'combat':
+          if (effect.op.t === 'sense') {
+            const npc = this.world.npcs.get(effect.op.id);
+            if (npc) npc.sensed = true;
+          } else {
+            combatReduce(this.combat, effect.op);
+          }
+          break;
       }
     }
+  }
+
+  // ── combat state writes ───────────────────────────────────────────
+
+  /** A killed creature: a corpse now, its purse spilled into the room's floor. */
+  private killNpc(id: string): void {
+    const npc = this.world.npcs.get(id);
+    if (!npc) return;
+    npc.hp = 0;
+    npc.hostile = false;
+    npc.defeated = true;
+    // Its held gear falls where it stood. Killing pays; routing does not.
+    for (const object of this.world.contentsOf(`npc:${id}`).objects) {
+      this.world.moveTo(object.id, inRoom(this.player.roomId));
+    }
+  }
+
+  /**
+   * A broken creature leaves the fight the way its friendliness said it would:
+   * the fled vanish with their loot, the surrendered and won-over stay as
+   * people. Only structure this loop never touches — a room's rooms and edges.
+   */
+  private breakNpc(id: string, outcome: string): void {
+    const npc = this.world.npcs.get(id);
+    if (!npc) return;
+    npc.resolve = 0;
+    npc.hostile = false;
+    npc.broke = outcome;
+    if (outcome === 'flee') {
+      npc.location = null; // gone, taking what it carried
+    } else if (outcome === 'surrender') {
+      for (const object of this.world.contentsOf(`npc:${id}`).objects) {
+        this.world.moveTo(object.id, inRoom(this.player.roomId));
+      }
+    }
+    // `join` keeps its gear and stands in the room as a now-friendly face.
+  }
+
+  private growSkill(axis: 'weapon' | 'approach' | 'armour', id: string, delta: number): void {
+    if (axis === 'weapon') this.player.weaponSkills[id] = (this.player.weaponSkills[id] ?? 0) + delta;
+    else if (axis === 'approach') this.player.approachSkills[id] = (this.player.approachSkills[id] ?? 0) + delta;
+    else this.player.armourExpertise += delta;
+  }
+
+  /**
+   * The corpse run. A defeat — HP or Resolve, the two cost the same — strips the
+   * player, moves their purse and carried gear onto the victor in the room it
+   * happened, wakes them at the Hub, and hands them the free crude kit so the
+   * run back is never attempted naked. Losses are moved, never deleted.
+   */
+  private defeatPlayer(victorId: string, by: string): void {
+    const rules = this.campaign.rules;
+    const lose = ruleStrings(rules, 'DEFEAT.lose');
+    const victor = this.world.npcs.get(victorId);
+    const victorHold = victor && !victor.defeated ? `npc:${victorId}` : inRoom(this.player.roomId);
+
+    if (lose.includes('purse')) {
+      if (victor) victor.gold = (victor.gold ?? 0) + this.player.purse;
+      this.player.purse = 0;
+    }
+    if (lose.includes('carried')) {
+      for (const object of this.world.contentsOf(IN_PLAYER).objects) {
+        this.world.moveTo(object.id, victorHold);
+        (object.flags as Record<string, unknown>)['persistent'] = true;
+        (object.flags as Record<string, unknown>)['worn'] = false;
+      }
+      this.player.weaponWielded = '';
+      this.player.armourWorn = '';
+    }
+
+    const skillLoss = ruleNumber(rules, 'DEFEAT.skillLoss', 0);
+    if (skillLoss > 0) {
+      for (const key of Object.keys(this.player.weaponSkills)) {
+        this.player.weaponSkills[key] = Math.max(0, (this.player.weaponSkills[key] ?? 0) - skillLoss);
+      }
+    }
+
+    // Wake at the Hub, restored, and issue the standing crude kit.
+    this.player.roomId = this.campaign.manifest.hub.entryRoomId;
+    this.player.hp = playerMaxHp(this.campaign, this.player);
+    this.player.resolve = playerMaxResolve(this.campaign, this.player);
+    this.combat = emptyCombat();
+
+    const kitBases = ruleStrings(rules, 'DEFEAT.hubStarterKit');
+    const rng = this.world.combatRng(`defeat:${this.turn}:${victorId}`);
+    const kit = issueKit(this.campaign, rng, kitBases);
+    for (const item of kit) this.world.objects.set(item.id, item);
+    const weapon = kit.find((item) => item.flags.weapon);
+    const armour = kit.find((item) => item.flags.armour);
+    if (weapon) this.player.weaponWielded = weapon.id;
+    if (armour) {
+      armour.flags.worn = true;
+      this.player.armourWorn = armour.id;
+    }
+    this.pendingDefeat = by;
   }
 
   /**
@@ -370,8 +588,14 @@ export class Game {
       }
     }
 
-    // Movers — pursuers, wanderers, rivals — arrive with combat.
-    // The event deck arrives with quests. Both belong in this half, here.
+    // Movers — the enemy round. The creatures the player is fighting act here,
+    // in the world half, because that is where everything that is not the
+    // player has always moved. Their effects land at the write point below.
+    if (this.combat.active && hostilesIn(this.world, this.player.roomId).length > 0) {
+      const round = enemyRound(this.combatContext());
+      lines.push(...round.lines);
+      effects.push(...round.effects);
+    }
 
     // Quests settle in the world half: an objective the player just satisfied
     // becomes a completed quest and a paid reward, and a giver who has died
@@ -382,6 +606,14 @@ export class Game {
 
     // ── step 12: the world half's one write point ────────────────────
     this.apply(effects);
+
+    // A fight is over the moment the last hostile is down or gone. End it here,
+    // once the writes have landed, so the next turn is an ordinary one.
+    if (this.combat.active && !this.pendingDefeat && hostilesIn(this.world, this.player.roomId).length === 0) {
+      this.apply([{ kind: 'combat', op: { t: 'end' } }]);
+      lines.push(line('The way is clear.', 'ok'));
+    }
+
     lines.push(...this.lightFailure());
     return lines;
   }
@@ -497,14 +729,18 @@ export class Game {
   status(): Record<string, string> {
     const ctx = this.context();
     const light = anyLight(this.world, this.player.roomId);
+    const foes = this.combat.active ? hostilesIn(this.world, this.player.roomId).length : 0;
     return {
       name: this.player.name,
       hp: `${this.player.hp}/${playerMaxHp(this.campaign, this.player)}`,
+      resolve: `${this.player.resolve}/${playerMaxResolve(this.campaign, this.player)}`,
+      libido: String(this.player.libido),
       turn: String(this.turn),
       load: String(carriedWeight(ctx)),
       light: light ? `${light.burnRemaining}` : '—',
       where: this.room.id,
       gold: String(this.player.purse),
+      foes: String(foes),
     };
   }
 }
@@ -515,3 +751,7 @@ export const carriedObjects = (game: Game): ObjectRecord[] =>
 
 export const objectsHere = (game: Game): ObjectRecord[] =>
   game.world.contentsOf(inRoom(game.player.roomId)).objects;
+
+/** The string members of a rules array — `DEFEAT.lose`, the starter kit list. */
+const ruleStrings = (rules: Parameters<typeof ruleArray>[0], path: string): string[] =>
+  ruleArray(rules, path).filter((entry): entry is string => typeof entry === 'string');

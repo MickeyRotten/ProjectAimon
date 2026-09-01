@@ -545,6 +545,20 @@
     "m": 50,
     "f": 50
   },
+  "friendlinessRoll": {
+    "_note": "Decides how a creature breaks once Presence empties its Resolve, read against PRESENCE_BREAK. Beasts and the relentless run; the venal and lustful can be turned. Rolled per instance, never authored.",
+    "base": [10, 55],
+    "byTag": {
+      "venal": 15,
+      "lustful": 25,
+      "proud": 10,
+      "timid": 15,
+      "cunning": 5,
+      "relentless": -20,
+      "beast": -10,
+      "hulking": -5
+    }
+  },
   "compositions": {
     "_note": "Explicit encounter shapes. Picked before bases, then each part filters by area and room tags as usual. Replaces relying on the leader role alone.",
     "table": [
