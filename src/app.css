@@ -94,6 +94,9 @@ body {
 .err { color: var(--red); }
 .speak { color: var(--white); }
 .rule { color: var(--dim); }
+.pending { font-style: italic; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pending { animation: none; } }
 
 #promptline { display: flex; align-items: baseline; gap: .5ch; margin: 0; }
 #promptline .caret { color: var(--dim); font-weight: 700; }

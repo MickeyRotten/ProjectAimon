@@ -26,8 +26,18 @@ const CLASSES: Record<LineKind, string> = {
   speak: 'b speak',
 };
 
+/** A placeholder log line, printed while a cosmetic narrator call is in flight. */
+export interface PendingLine {
+  /** Replace the placeholder with the real line, once narration resolves. */
+  resolve(line: Line): void;
+  /** Remove the placeholder outright — no narration is coming after all. */
+  clear(): void;
+}
+
 export interface Screen {
   print(lines: readonly Line[]): void;
+  /** Print a dim, unsettled placeholder line the caller can later fill in or drop. */
+  printPending(line: Line): PendingLine;
   refresh(game: Game): void;
   focus(): void;
   /** Show the narrator's name and woven prose for a room, until the room changes. */
@@ -94,6 +104,29 @@ export function mountScreen(
       log.insertBefore(element, prompt);
     }
     log.scrollTop = log.scrollHeight;
+  };
+
+  /**
+   * A dim placeholder the caller can fill in or drop once an async narrator
+   * call settles — so a cosmetic follow-up in flight reads as "more is
+   * coming" rather than as a silent gap that looks like the finished answer.
+   */
+  const printPending = (pendingLine: Line): PendingLine => {
+    const element = document.createElement('p');
+    element.className = `${CLASSES[pendingLine.kind] ?? 'b'} pending`;
+    element.textContent = pendingLine.text;
+    log.insertBefore(element, prompt);
+    log.scrollTop = log.scrollHeight;
+    return {
+      resolve(finalLine: Line) {
+        element.className = CLASSES[finalLine.kind] ?? 'b';
+        element.textContent = finalLine.text;
+        log.scrollTop = log.scrollHeight;
+      },
+      clear() {
+        element.remove();
+      },
+    };
   };
 
   const refresh = (game: Game): void => {
@@ -179,5 +212,5 @@ export function mountScreen(
     prompt.classList.toggle('busy', active);
   };
 
-  return { print, refresh, focus: () => input.focus(), setRoomProse, setBusy };
+  return { print, printPending, refresh, focus: () => input.focus(), setRoomProse, setBusy };
 }

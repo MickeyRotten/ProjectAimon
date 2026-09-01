@@ -27,7 +27,7 @@ import {
   type SaveStore,
 } from './game/save';
 import { legalAttempt } from './game/tier2';
-import { mountScreen, type Screen } from './ui/screen';
+import { mountScreen, type PendingLine, type Screen } from './ui/screen';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
 import { NpcNarrator } from './narrator/npcs';
@@ -167,10 +167,18 @@ async function boot(): Promise<void> {
 
     // Steps 13-14: prose over the world the turn already resolved. Neither
     // changes state the engine reads, so both run after the mechanical turn
-    // is done and saved, never inside it.
-    if (result.voice) void narrateVoice(raw, result.voice);
-    else if (result.tier2) void narrateOutcome(raw, result.lines, result.tier2);
-    if (result.appearance) void narrateAppearance(result.appearance);
+    // is done and saved, never inside it. A dim placeholder marks each one as
+    // in flight, so the mechanical reply never reads as the finished answer
+    // when narration is still coming — only shown when there's a narrator to
+    // actually ask, so a no-key game never prints a "…" that never resolves.
+    if (result.voice && voices) {
+      void narrateVoice(raw, result.voice, screen.printPending(line('…', 'rule')));
+    } else if (result.tier2 && outcome) {
+      void narrateOutcome(raw, result.lines, result.tier2, screen.printPending(line('…', 'rule')));
+    }
+    if (result.appearance && npcAppearance) {
+      void narrateAppearance(result.appearance, screen.printPending(line('…', 'rule')));
+    }
     void narrateHere();
   }
 
@@ -199,19 +207,24 @@ async function boot(): Promise<void> {
    * staleness guard `narrateHere` uses, so a late line never turns up out of
    * context.
    */
-  async function narrateVoice(raw: string, target: { npcId: string; topic: string }): Promise<void> {
-    if (!voices) return;
+  async function narrateVoice(
+    raw: string,
+    target: { npcId: string; topic: string },
+    pending: PendingLine,
+  ): Promise<void> {
+    if (!voices) return pending.clear();
     const npc = game.world.npcs.get(target.npcId);
-    if (!npc) return;
+    if (!npc) return pending.clear();
     const roomId = game.room.id;
     const turn = game.turn; // finish() already wrote this turn's stub entry
     try {
       const reply = await voices.speak(npc, raw, target.topic, game.transcript);
       game.appendVoiceLine(turn, reply);
-      if (game.room.id !== roomId) return; // moved while we waited
-      screen.print([line(`"${reply}"`, 'speak')]);
+      if (game.room.id !== roomId) return pending.clear(); // moved while we waited
+      pending.resolve(line(`"${reply}"`, 'speak'));
     } catch {
       // A voicing failure never breaks play; the mechanical lines already stand.
+      pending.clear();
     }
   }
 
@@ -220,18 +233,19 @@ async function boot(): Promise<void> {
    * staleness guard as `narrateVoice` and `narrateHere`: dropped if the NPC
    * is no longer in scope by the time it lands.
    */
-  async function narrateAppearance(target: { npcId: string }): Promise<void> {
-    if (!npcAppearance) return;
+  async function narrateAppearance(target: { npcId: string }, pending: PendingLine): Promise<void> {
+    if (!npcAppearance) return pending.clear();
     const npc = game.world.npcs.get(target.npcId);
-    if (!npc) return;
+    if (!npc) return pending.clear();
     const roomId = game.room.id;
     try {
       const prose = await npcAppearance.describeAppearance(game.world, npc);
-      if (!prose) return;
-      if (game.room.id !== roomId) return; // moved while we waited
-      screen.print([line(prose)]);
+      if (!prose) return pending.clear();
+      if (game.room.id !== roomId) return pending.clear(); // moved while we waited
+      pending.resolve(line(prose));
     } catch {
       // A failure here never breaks play; the persona line already stands.
+      pending.clear();
     }
   }
 
@@ -241,8 +255,13 @@ async function boot(): Promise<void> {
    * internally the same way the room and voice narrators do), so the player
    * is never left with just the roll number.
    */
-  async function narrateOutcome(raw: string, mechanicalLines: Line[], result: 'success' | 'failure'): Promise<void> {
-    if (!outcome) return;
+  async function narrateOutcome(
+    raw: string,
+    mechanicalLines: Line[],
+    result: 'success' | 'failure',
+    pending: PendingLine,
+  ): Promise<void> {
+    if (!outcome) return pending.clear();
     const area = game.world.areas.get(game.room.areaId);
     const roomId = game.room.id;
     try {
@@ -256,11 +275,12 @@ async function boot(): Promise<void> {
         raw,
         outcome: result,
       });
-      if (game.room.id !== roomId) return; // moved while we waited
-      screen.print([line(prose)]);
+      if (game.room.id !== roomId) return pending.clear(); // moved while we waited
+      pending.resolve(line(prose));
     } catch {
       // Belt-and-braces: narrate() degrades internally and should not throw,
       // but the mechanical roll line already stands regardless.
+      pending.clear();
     }
   }
 
