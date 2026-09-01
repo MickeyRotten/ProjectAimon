@@ -280,5 +280,9 @@
     "m": 50,
     "f": 50
   },
-  "_sexNote": "Same field and same resolution order as monsters. An area override applies to NPCs too, or an all-female area with mixed shopkeepers reads as a bug."
+  "_sexNote": "Same field and same resolution order as monsters. An area override applies to NPCs too, or an all-female area with mixed shopkeepers reads as a bug.",
+  "defaultTags": [
+    "humanoid"
+  ],
+  "_tagNote": "Every generated NPC carries these plus whatever their role and traits add. Taxonomy drives Presence resistance, so an NPC with no taxonomy tag at all would be quietly immune to nothing and vulnerable to everything."
 }

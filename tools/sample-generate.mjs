@@ -120,12 +120,15 @@ function genMonster(areaId, roomTags, tier, areaDef, wantRole) {
   const role = wantRole
     ? (okRoles.find(r => r.id === wantRole) ?? pick(okRoles.length ? okRoles : mons.roles))
     : pick(okRoles.length ? okRoles : mons.roles);
-  const curve = mons.statCurve[String(base.tier)] ?? mons.statCurve['1'];
+  // The AREA's tier drives the curve; the base's tier only gates where it may
+  // appear. Keyed on the base, the tier 4 and 5 curves were unreachable.
+  const curve = mons.statCurve[String(tier)] ?? mons.statCurve['1'];
   const S = {};
-  for (const k of rules.STAT_ROLL.attributes) S[k] = curve.mean + ri(-3, 3) + (role.mods[k] ?? 0);
+  const spread = mons.statRoll.spread;
+  for (const k of rules.STAT_ROLL.attributes) S[k] = curve.mean + ri(-spread, spread) + (role.mods[k] ?? 0);
   base.tags.forEach(t => { const x = rules.TAXONOMY[t]; if (x?.hp) S.toughness = Math.round(S.toughness * x.hp); });
   let title = '', tags = [...base.tags, ...(role.tags ?? [])];
-  if (rnd() < mons.elites.chance[String(base.tier)]) {
+  if (rnd() < (mons.elites.chance[String(tier)] ?? 0)) {
     const e = pick(mons.elites.table);
     title = e.title + ' '; tags = [...tags, ...(e.tags ?? [])];
     Object.entries(e.mods).forEach(([k, v]) => { if (S[k] != null) S[k] += v; });

@@ -709,6 +709,35 @@ minHostiles: 3    minLootRooms: 2    minNpcs: 1
 lightSourceIfDarkArea: true          maxHostilesPerRoom: 1
 ```
 
+### Fixtures — the vocabulary of things that are not items
+
+A rule that places a chest, a door, a body, a hazard or a spill of coin carries
+a `fixture` block, and that block owns every word of the thing: its kind, its
+nouns, its adjectives, its tags and its flags. The roller reads the block; it
+does not know what a chest is.
+
+```jsonc
+"container": {
+  "chance": 0.3, "requires": ["indoor|storage|grave"], "lootRolls": [1, 2],
+  "fixture": {
+    "kind": "container",
+    "nouns": ["chest", "crate", "coffer", "strongbox", "barrel"],
+    "adjectives": ["banded", "warped", "iron-bound", "dust-furred"],
+    "tags": ["container"],
+    "flags": { "container": true, "open": false, "takeable": false }
+  }
+}
+```
+
+A rule with no fixture places an **item** instead, from `items.json`;
+`itemKind` narrows it (`light` is how a lamp is asked for). So the only two
+keys the engine knows by name are `hostile` and `npc`, because those are
+systems rather than objects. Everything else is a table entry, and a new kind
+of scenery costs no engine code.
+
+`lootRolls` fills whatever the rule made: the contents point at the fixture,
+never at the room, so a chest's contents are the same query one pointer deeper.
+
 **The guarantees are not optional.** A ten-room area rolled barren on the
 reference generator's first farmland run — zero hostiles, zero NPCs, one loot
 room. Small areas fall below expectation often enough that the top-up pass is

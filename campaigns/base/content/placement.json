@@ -1,5 +1,5 @@
 {
-  "_note": "Rolled per room after room types are assigned. requires[] filters on room tags.",
+  "_note": "Rolled per room after room types are assigned. requires[] filters on room tags. A rule with a `fixture` block builds an object that is not an item — a chest, a door, a body, a scatter of coins — and the block is where its vocabulary lives, so adding one never means touching the engine.",
   "container": {
     "chance": 0.3,
     "requires": [
@@ -8,13 +8,38 @@
     "lootRolls": [
       1,
       2
-    ]
+    ],
+    "fixture": {
+      "kind": "container",
+      "nouns": [
+        "chest",
+        "crate",
+        "coffer",
+        "strongbox",
+        "barrel"
+      ],
+      "adjectives": [
+        "banded",
+        "warped",
+        "iron-bound",
+        "dust-furred"
+      ],
+      "tags": [
+        "container"
+      ],
+      "flags": {
+        "container": true,
+        "open": false,
+        "takeable": false
+      }
+    }
   },
   "loot": {
     "chance": 0.16,
     "requires": [
       "!path"
-    ]
+    ],
+    "itemKind": "any"
   },
   "hostile": {
     "chance": 0.22,
@@ -27,32 +52,106 @@
     "chance": 0.2,
     "requires": [
       "dwelling|market|path|cell|hearth"
-    ]
+    ],
+    "_note": "An NPC rolls a role, two traits and a want. The persona string is assembled from them; the Narrator writes the voice."
   },
   "curiosity": {
     "chance": 0.18,
     "requires": [
       "landmark|shrine|ruin|vantage"
-    ]
+    ],
+    "fixture": {
+      "kind": "curio",
+      "nouns": [
+        "carving",
+        "mural",
+        "cairn",
+        "marker",
+        "shrine-stone"
+      ],
+      "adjectives": [
+        "weathered",
+        "half-buried",
+        "defaced",
+        "unfinished"
+      ],
+      "tags": [
+        "curio"
+      ],
+      "flags": {
+        "scenery": true,
+        "takeable": false
+      }
+    }
   },
   "lightSource": {
     "chance": 0.12,
     "requires": [
       "dwelling|storage|workspace"
-    ]
+    ],
+    "itemKind": "light"
   },
   "lockedDoor": {
     "chance": 0.14,
     "requires": [
       "indoor|underground"
     ],
-    "keyBand": "near"
+    "keyBand": "near",
+    "fixture": {
+      "kind": "door",
+      "nouns": [
+        "door",
+        "hatch",
+        "gate",
+        "shutter"
+      ],
+      "adjectives": [
+        "studded",
+        "swollen",
+        "barred",
+        "low"
+      ],
+      "tags": [
+        "door",
+        "sealed"
+      ],
+      "flags": {
+        "scenery": true,
+        "takeable": false,
+        "locked": true
+      }
+    },
+    "keyNouns": [
+      "key"
+    ]
   },
   "hazard": {
     "chance": 0.1,
     "requires": [
       "hazard|flooded"
-    ]
+    ],
+    "fixture": {
+      "kind": "curio",
+      "nouns": [
+        "pit",
+        "sinkhole",
+        "rotten floor",
+        "slick of scum"
+      ],
+      "adjectives": [
+        "black",
+        "yawning",
+        "half-hidden"
+      ],
+      "tags": [
+        "curio",
+        "fragile"
+      ],
+      "flags": {
+        "scenery": true,
+        "takeable": false
+      }
+    }
   },
   "corpse": {
     "chance": 0.09,
@@ -62,21 +161,65 @@
     "lootRolls": [
       1,
       1
-    ]
+    ],
+    "fixture": {
+      "kind": "container",
+      "nouns": [
+        "corpse",
+        "body",
+        "remains",
+        "bones"
+      ],
+      "adjectives": [
+        "picked-over",
+        "curled",
+        "long-dead"
+      ],
+      "tags": [
+        "container"
+      ],
+      "flags": {
+        "container": true,
+        "open": true,
+        "takeable": false
+      }
+    }
   },
   "goldPile": {
     "chance": 0.1,
     "requires": [
       "!path"
-    ]
+    ],
+    "fixture": {
+      "kind": "treasure",
+      "nouns": [
+        "coins",
+        "scatter of coin",
+        "spill of silver"
+      ],
+      "adjectives": [
+        "loose",
+        "tarnished",
+        "counted-out"
+      ],
+      "tags": [
+        "treasure"
+      ],
+      "flags": {
+        "takeable": true
+      },
+      "gold": true
+    }
   },
   "guarantees": {
-    "_note": "Applied after rolling, so an area is never barren or unlit.",
+    "_note": "Applied after rolling, so an area is never barren or unlit. Not optional: small areas roll below expectation often enough that this pass is load-bearing.",
     "minHostiles": 3,
     "minLootRooms": 2,
     "minNpcs": 1,
     "lightSourceIfDarkArea": false,
     "maxHostilesPerRoom": 1,
-    "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering."
+    "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering.",
+    "maxHostileRoomFraction": 0.5,
+    "_slackNote": "Roughly a third of rooms should hold nothing mechanical — that is where atmosphere lives. The cap stops a top-up filling a small area with fights."
   }
 }

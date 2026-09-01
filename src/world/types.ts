@@ -202,3 +202,137 @@ export interface EdgeRecord {
 }
 
 export const roomCoord = (room: RoomRecord): Coord => ({ x: room.x, y: room.y, z: room.z });
+
+// ── the things that sit in the world ────────────────────────────────
+
+/**
+ * Where something is. One field, one source of truth:
+ *
+ *   `room:<roomId>`   lying in a room
+ *   `player`          carried
+ *   `obj:<objectId>`  inside a container
+ *   `npc:<npcId>`     held by someone — which is also vendor stock
+ *   `null`            out of play
+ *
+ * It points at ids, never at coordinates. Most locations have no coordinate at
+ * all: a sword in a chest carried by a shopkeeper is three pointers deep and
+ * nowhere on the map.
+ */
+export type Location = string | null;
+
+export const IN_PLAYER: Location = 'player';
+export const inRoom = (roomId: string): Location => `room:${roomId}`;
+export const inObject = (objectId: string): Location => `obj:${objectId}`;
+export const heldBy = (npcId: string): Location => `npc:${npcId}`;
+
+/** The room a location points at, or undefined when it points elsewhere. */
+export const roomOfLocation = (location: Location): string | undefined =>
+  location?.startsWith('room:') ? location.slice(5) : undefined;
+
+/**
+ * Behaviour comes from flags, not subtypes — one objects table holds items,
+ * doors, scenery and containers alike.
+ */
+export interface ObjectFlags {
+  takeable?: boolean;
+  scenery?: boolean;
+  container?: boolean;
+  open?: boolean;
+  locked?: boolean;
+  lockedById?: string;
+  lightSource?: boolean;
+  lit?: boolean;
+  wearable?: boolean;
+  worn?: boolean;
+  edible?: boolean;
+  weapon?: boolean;
+  armour?: boolean;
+  untradable?: boolean;
+  /** Dropped player gear, which repopulation must never clear away. */
+  persistent?: boolean;
+}
+
+export interface ObjectRecord {
+  campaignId: string;
+  id: string;
+  name: string;
+  /** What the parser will match on. Never the display name alone. */
+  nouns: string[];
+  adjectives: string[];
+  location: Location;
+  desc: string;
+  tags: string[];
+  /** What it was generated from. Every combat value derives from these three. */
+  baseId: string;
+  quality: string;
+  affixes: string[];
+  flags: ObjectFlags;
+  /** Starts at 100, drops on a fumble, and is what `repair` repairs. */
+  condition: number;
+  /** Turns of light left. Zero on anything that does not burn. */
+  burnRemaining: number;
+  /**
+   * Coin held, for a purse or a spill of it. Stored rather than derived: a
+   * count of coins is not recoverable from a base and a quality.
+   */
+  gold?: number;
+}
+
+export interface Attributes {
+  brawn: number;
+  agility: number;
+  toughness: number;
+  charisma: number;
+  willpower: number;
+  wits: number;
+}
+
+/**
+ * One table for everyone who is not the player — shopkeepers, quest givers and
+ * the things that attack you. `hostile` is a flag on the record, not a second
+ * table, because a bribed footpad and a hired sword are the same record with a
+ * different disposition.
+ *
+ * Monsters skip weapon-skill and armour-expertise maths entirely and store
+ * final values. Everything the player derives from attributes, they store.
+ */
+export interface NpcRecord {
+  campaignId: string;
+  id: string;
+  name: string;
+  /** Every former name. Matchers read name plus aliases, never name alone. */
+  aliases: string[];
+  location: Location;
+  persona: string;
+  tags: string[];
+  /** Rolled per instance. Drives pronouns and nothing mechanical. */
+  sex: string;
+  stats: Attributes;
+  hp: number;
+  maxHp: number;
+  resolve: number;
+  maxResolve: number;
+  armourReduction: number;
+  penetration: number;
+  weaponDamage: string;
+  /** Added to the die. The player derives this from Brawn; a creature stores it. */
+  damageBonus: number;
+  attacksPerRound: number;
+  threat: number;
+  friendliness: number;
+  bribeThreshold: number;
+  disposition: number;
+  standing: number;
+  sensed: boolean;
+  isVendor: boolean;
+  priceModifier: number;
+  hostile: boolean;
+  /** What it was generated from, which is what repopulation reads. */
+  baseId: string;
+  role: string;
+  /** The gambit list this creature decides with, by name in abilities.json. */
+  gambits: string;
+  abilities: string[];
+  /** True when Presence pressure can never land — undead, constructs, minds. */
+  presenceImmune: boolean;
+}

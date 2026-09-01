@@ -33,6 +33,10 @@
       "penetration": 25
     }
   },
+  "statRoll": {
+    "_note": "Each attribute rolls the tier mean plus or minus the spread. It was prose in the statCurve note and therefore unreadable by the engine.",
+    "spread": 3
+  },
   "bases": [
     {
       "id": "rat_swarm",

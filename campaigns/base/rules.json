@@ -635,6 +635,29 @@
     "_netArmourNote": "Toughness scales reduction FIRST, then penetration subtracts. The other order makes high-penetration weapons useless against tough targets in light armour.",
     "finalDamage": "max(1, round(rawDamage * (1 - min(netArmour, ARMOUR_CAP) / 100)))"
   },
+  "DERIVED": {
+    "_note": "The derived values from the gameplay rules, in the only place a formula may live. Nothing derived may be stored on a record: retuning a value here has to reach every character and every creature already in the world.",
+    "hpPerToughness": 2,
+    "resolvePerWillpower": 2,
+    "carryPerBrawn": 10,
+    "accuracyPerAgility": 2,
+    "evasionPerAgility": 1,
+    "presencePerCharisma": 2,
+    "composurePerWillpower": 1,
+    "rapportPerCharisma": 1,
+    "critPerWits": 1,
+    "damageBonus": {
+      "from": "brawn",
+      "offset": 10,
+      "div": 3
+    },
+    "pressureBonus": {
+      "from": "wits",
+      "offset": 10,
+      "div": 3
+    },
+    "_bonusNote": "floor((attribute - offset) / div), as written in the gameplay rules."
+  },
   "CAMPAIGN_MERGE": {
     "objects": "deepMerge",
     "primitives": "campaignWins",

@@ -95,8 +95,12 @@ id, name, nouns[], adjectives[], location, desc, tags[]
 baseId, quality, affixes[]          ← what it was generated from
 flags: takeable, scenery, container, open, locked, lockedById,
        lightSource, lit, wearable, worn, edible, weapon, armour, untradable
-condition (0-100), burnRemaining
+condition (0-100), burnRemaining, gold?
 ```
+
+`gold` is the one exception to the line below, and only for coin: a purse's
+value is not recoverable from a base and a quality, so it is rolled once from
+the loot tier and written down.
 
 **Combat values are derived, never stored.** `damage`, `penetration`,
 `reduction`, `penalty` and `price` all compute from `baseId` + `quality` +
@@ -110,11 +114,19 @@ percentage now.
 `condition` starts at 100 and drops on a fumble. It is what `repair` repairs;
 without it the gold sink had nothing to act on.
 
-**`npcs`** — `campaignId, id, name, aliases[], location, persona, tags[],
-stats{brawn, agility, toughness, charisma, willpower, wits}, hp, resolve,
-armourReduction, penetration, weaponDamage, attacksPerRound, threat,
-friendliness, bribeThreshold, disposition, standing, sensed, isVendor,
-priceModifier, imageBlob`
+**`npcs`** — `campaignId, id, name, aliases[], location, persona, tags[], sex,
+stats{brawn, agility, toughness, charisma, willpower, wits}, hp, maxHp,
+resolve, maxResolve, armourReduction, penetration, weaponDamage, damageBonus,
+attacksPerRound, threat, friendliness, bribeThreshold, disposition, standing,
+sensed, isVendor, priceModifier, imageBlob, hostile, baseId, role, gambits,
+abilities[], presenceImmune`
+**One table holds everyone who is not the player**, and `hostile` is a flag on
+the record rather than a second table: a bribed footpad and a hired sword are
+the same row with a different disposition. `baseId` and `role` are what it was
+generated from, which is what repopulation reads. `sex` is rolled per instance
+and drives pronouns only. `damageBonus` is stored because a creature has no
+Brawn-derived maths to run, and `presenceImmune` is the taxonomy lookup
+resolved once at generation.
 `location` uses **the same pointer as objects** — `"room:r_barn"`, `"player"`
 for an active companion, `null` when out of play. NPCs were previously given a
 `roomId`, which was an inconsistency: two position systems means two places to

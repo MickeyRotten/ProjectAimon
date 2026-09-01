@@ -331,13 +331,43 @@ export function validateCampaign(
   for (const [key, rule] of Object.entries(campaign.placement ?? {})) {
     if (key.startsWith('_') || key === 'guarantees') continue;
     const at = `content/placement.json.${key}`;
-    const value = rule as { chance?: unknown; requires?: unknown };
+    const value = rule as {
+      chance?: unknown;
+      requires?: unknown;
+      itemKind?: unknown;
+      keyBand?: unknown;
+      fixture?: { kind?: unknown; nouns?: unknown; adjectives?: unknown; tags?: unknown };
+    };
     if (typeof value.chance !== 'number') {
       error(`${at}.chance`, 'expected a number');
     } else if (value.chance < 0 || value.chance > 1) {
       error(`${at}.chance`, `${value.chance} is outside 0..1`);
     }
     checkRequires(`${at}.requires`, value.requires, 'room');
+
+    // A rule places either an item of some kind or a fixture built from its
+    // own vocabulary. Either way the words come from the table, so the table
+    // is where a missing one has to be caught.
+    if (typeof value.itemKind === 'string' && value.itemKind !== 'any') {
+      checkTag(`${at}.itemKind`, value.itemKind, 'object');
+    }
+    if (value.fixture) {
+      const fixtureAt = `${at}.fixture`;
+      checkTag(`${fixtureAt}.kind`, value.fixture.kind, 'object');
+      checkTags(`${fixtureAt}.tags`, value.fixture.tags as string[] | undefined, 'object');
+      if (!Array.isArray(value.fixture.nouns) || value.fixture.nouns.length === 0) {
+        error(`${fixtureAt}.nouns`, 'at least one noun, or the parser cannot name it');
+      }
+      if (!Array.isArray(value.fixture.adjectives) || value.fixture.adjectives.length === 0) {
+        error(`${fixtureAt}.adjectives`, 'at least one adjective');
+      }
+    }
+    if (typeof value.keyBand === 'string') {
+      const bands = readObject(campaign.rules, ['DISTANCE_BANDS']);
+      if (!(value.keyBand in bands)) {
+        error(`${at}.keyBand`, `no distance band "${value.keyBand}" in rules.json`);
+      }
+    }
   }
 
   // ── items ─────────────────────────────────────────────────────────

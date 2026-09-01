@@ -6,8 +6,9 @@
  * and nothing else. In particular:
  *
  *  - A room never stores its exits. `exitsOf` is a query over `edges`.
- *  - A room never stores its contents. That query belongs to whatever holds
- *    `location`, and there is no `contents` field here to tempt anyone.
+ *  - A room never stores its contents. Objects and people carry a `location`
+ *    pointer and the room carries nothing, so "what is in here" is one query
+ *    over one field — `contentsOf`. There is no `contents` array to drift.
  *  - Distance is `hopsFrom`, counted along edges. Never coordinates.
  *
  * Generation happens in exactly one place — `enterGate` — because "walking
@@ -16,18 +17,24 @@
  */
 
 import type { ResolvedCampaign } from '../campaign/types';
+import { rollSex } from '../content/sex';
+import { deriveHp, deriveResolve, floorAttributes, rollAttributes } from '../content/stats';
 import { Rng } from '../engine/rng';
 import { ruleObject } from '../engine/rules';
 import { generateArea, mintAreaId, reserveArea } from './area';
 import { WorldLattice } from './lattice';
 import {
   coordKey,
+  inRoom,
   isDirection,
   opposite,
   type AreaRecord,
   type Coord,
   type Direction,
   type EdgeRecord,
+  type Location,
+  type NpcRecord,
+  type ObjectRecord,
   type RoomRecord,
 } from './types';
 
@@ -53,6 +60,12 @@ export class World {
   readonly areas = new Map<string, AreaRecord>();
   readonly rooms = new Map<string, RoomRecord>();
   readonly edges = new Map<string, EdgeRecord>();
+  /** Items, doors, scenery and containers alike. Behaviour is flags, not types. */
+  readonly objects = new Map<string, ObjectRecord>();
+  /** Everyone who is not the player. `hostile` separates a wolf from a smith. */
+  readonly npcs = new Map<string, NpcRecord>();
+  /** World flags. Spawn upgrades and conditional stats are the first readers. */
+  readonly flags = new Set<string>();
   /** Everything generation logged, oldest first. Shown on the boot screen. */
   readonly notes: string[] = [];
 
@@ -76,6 +89,45 @@ export class World {
   /** The RNG state, for the save. Restoring it resumes the same world stream. */
   rngState(): number {
     return this.rng.toState();
+  }
+
+  /**
+   * Everything whose `location` points here. One query, one field — and the
+   * only way anything ever asks what is in a room, a chest or a pocket.
+   */
+  contentsOf(location: Location): { objects: ObjectRecord[]; npcs: NpcRecord[] } {
+    return {
+      objects: [...this.objects.values()].filter((object) => object.location === location),
+      npcs: [...this.npcs.values()].filter((npc) => npc.location === location),
+    };
+  }
+
+  objectsIn(roomId: string): ObjectRecord[] {
+    return this.contentsOf(inRoom(roomId)).objects;
+  }
+
+  npcsIn(roomId: string): NpcRecord[] {
+    return this.contentsOf(inRoom(roomId)).npcs;
+  }
+
+  /** What is inside a container, which is the same query one pointer deeper. */
+  contentsOfObject(objectId: string): ObjectRecord[] {
+    return [...this.objects.values()].filter((object) => object.location === `obj:${objectId}`);
+  }
+
+  /**
+   * Move anything, anywhere: a room, a container, an NPC's hands, the player,
+   * or out of play with `null`. One field is written, so there is no second
+   * place to forget.
+   */
+  moveTo(id: string, location: Location): void {
+    const object = this.objects.get(id);
+    if (object) {
+      object.location = location;
+      return;
+    }
+    const npc = this.npcs.get(id);
+    if (npc) npc.location = location;
   }
 
   roomsOf(areaId: string): RoomRecord[] {
@@ -158,12 +210,15 @@ export class World {
       rng: this.rng.fork(stub.id),
       lattice: this.lattice,
       stub,
+      flags: this.flags,
     });
 
     this.areas.set(result.area.id, result.area);
     for (const room of result.rooms) this.addRoom(room);
     for (const newEdge of result.edges) this.addEdge(newEdge);
     for (const newStub of result.stubs) this.areas.set(newStub.id, newStub);
+    for (const object of result.objects) this.objects.set(object.id, object);
+    for (const npc of result.npcs) this.npcs.set(npc.id, npc);
     this.note(result.area.id, result.notes);
 
     edge.roomB = result.area.entryRoomId;
@@ -223,6 +278,55 @@ export class World {
         roomB: to,
         dirFromA: dir,
         oneWay: false,
+      });
+    }
+
+    // The Hub's people are hand-authored rather than rolled, but they are the
+    // same records with the same `location` pointer — nothing downstream may
+    // need to know which of the two made them.
+    for (const npc of hub.npcs) {
+      // Hand-authored people still roll a body: the shop and the bank read the
+      // same fields off the same record as anyone met out in the world.
+      const stats = floorAttributes(rollAttributes(this.rng, this.campaign.rules));
+      const maxHp = deriveHp(this.campaign.rules, stats.toughness);
+      const maxResolve = deriveResolve(this.campaign.rules, stats.willpower);
+      this.npcs.set(npc.id, {
+        campaignId: this.campaign.id,
+        id: npc.id,
+        name: npc.name,
+        aliases: [],
+        location: npc.location,
+        persona: npc.persona,
+        tags: [...npc.tags],
+        sex: rollSex({
+          rng: this.rng,
+          own: npc.sex,
+          fallback: this.campaign.npcs.sexDefault,
+        }),
+        stats,
+        hp: maxHp,
+        maxHp,
+        resolve: maxResolve,
+        maxResolve,
+        armourReduction: 0,
+        penetration: 0,
+        weaponDamage: '',
+        damageBonus: 0,
+        attacksPerRound: 1,
+        threat: 0,
+        friendliness: 0,
+        bribeThreshold: 0,
+        disposition: 0,
+        standing: 0,
+        sensed: false,
+        isVendor: npc.isVendor === true,
+        priceModifier: 1,
+        hostile: false,
+        baseId: npc.id,
+        role: (npc.services ?? [])[0] ?? '',
+        gambits: '',
+        abilities: [],
+        presenceImmune: false,
       });
     }
 

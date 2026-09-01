@@ -127,6 +127,51 @@ but with the above in place it now almost never runs: five hundred generated
 areas across forty worlds hit two repacks, dropped no edges, and produced no
 undrawable connection at all.
 
+## What building the placement roller settled
+
+Six things, all of them the same shape: a value the design stated in prose that
+the engine could not read.
+
+**The derived values moved into `rules.json`.** `HP = Toughness x 2` was
+written in the gameplay rules and nowhere a program could reach, so the first
+creature generator would have had `* 2` in it — a tuning knob nobody can turn,
+and exactly what rule 4 forbids. `DERIVED` now holds the whole block, and both
+bonus formulas with it. Same for the creature stat spread, which lived inside a
+`_note` string.
+
+**A creature's numbers come from the area's tier, not from its base's.** The
+base's tier is a *gate* — it decides where a thing may appear, at
+`tierGate.overTierWeight` when it is above the room — and `statCurve[tier]`
+decides what it is worth when it gets there. The reference generator used
+`base.tier`, which left the tier 4 and 5 curves and elite chances unreachable
+forever. A rat in a tier 5 warren is a tier 5 rat, and that is the point of the
+curve.
+
+**Group size caps across the encounter, not per part.** A `warband` rolls a
+leader part and an escort part, both of which may land on the same base, so a
+per-part clamp put four hulking things in one room anyway. The cap counts what
+is already standing there.
+
+**Fixtures are table data.** See *Fixtures* in
+[world-and-generation.md](world-and-generation.md). The roller knows `hostile`
+and `npc` by name because those are systems; everything else it places is a
+block of nouns and flags it never interprets.
+
+**Coin is stored; everything else about an object is derived.** A purse's value
+cannot be recovered from a base and a quality, so `gold` is a field. Damage,
+penetration, reduction, penalty, price and weight are computed on read against
+`WEAPON_TABLE`, `ARMOUR_TABLE` and the base's own `price`, and a price that is
+itself a rule — the waystone token's — is read through a `priceFrom` path
+rather than restated in the content table.
+
+**The top-up needed a ceiling as well as a floor.** `minHostiles: 3` in a
+ten-room area whose tags mostly allow a fight will fill it, and the design also
+asks for roughly a third of rooms holding nothing mechanical.
+`maxHostileRoomFraction` is what keeps both promises; where an area's tags
+cannot satisfy a minimum at all, the shortfall is logged rather than forced.
+
+---
+
 ---
 
 ## Port manifest — harvesting Project Loom
