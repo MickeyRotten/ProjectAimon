@@ -47,6 +47,14 @@ export interface Reply {
   free: boolean;
   question?: Pending | undefined;
   failure?: FailureCode | undefined;
+  /**
+   * Set when an NPC has something to answer. The engine already decided
+   * everything mechanical; this only tells the edge (main.ts) which NPC to
+   * ask the narrator to voice, and about what. No prose ever feeds back into
+   * state, so this is read-only for the narrator — it is never validated,
+   * never applied, and carries no effect of its own.
+   */
+  voice?: { npcId: string; topic: string } | undefined;
 }
 
 export interface CommandContext {
@@ -82,11 +90,11 @@ const blocked = (text: string, failure: FailureCode = 'PRECONDITION'): Reply => 
 const NOT_YET: Record<string, string> = {
   eat: 'Consumables land after combat.',
   drink: 'Consumables land after combat.',
-  ask: 'The narrator voices people at build step 7.',
-  tell: 'The narrator voices people at build step 7.',
-  say: 'The narrator voices people at build step 7.',
-  give: 'The narrator voices people at build step 7.',
-  show: 'The narrator voices people at build step 7.',
+  // Handing over an item is a real transfer of state, not narration, and the
+  // economy it depends on lands with the shop — voicing "give" without
+  // actually moving the item would be prose the world does not back up.
+  give: 'Trading items lands with the shop.',
+  show: 'Trading items lands with the shop.',
   buy: 'The shop opens once there is a reason to spend.',
   sell: 'The shop opens once there is a reason to spend.',
   list: 'The shop opens once there is a reason to spend.',
@@ -134,6 +142,11 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       return wield(ctx, command);
     case 'talk':
       return talk(ctx, command);
+    case 'ask':
+    case 'tell':
+      return askOrTell(ctx, command);
+    case 'say':
+      return sayTo(ctx, command);
     case 'attack':
       return attackOutOfCombat(ctx);
     case 'flee':
@@ -600,9 +613,57 @@ function talk(ctx: CommandContext, command: Command): Reply {
     };
   }
   return {
-    lines: [line('The narrator voices people at build step 7. For now, they only offer work.', 'rule')],
-    effects: [],
-    free: true,
+    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
+    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
+    free: false,
+    voice: { npcId: npc.id, topic: '' },
+  };
+}
+
+/**
+ * `ask X about Y` and `tell X about/to Y` — both resolve the addressee the
+ * same way `talk` does, then hand off to the narrator with whatever
+ * followed as the topic. The engine decides nothing about the content of an
+ * answer; it only picks who is being spoken to.
+ */
+function askOrTell(ctx: CommandContext, command: Command): Reply {
+  const found = resolve(ctx, command.object);
+  if ('reply' in found) return found.reply;
+  const npc = found.entry.npc;
+  if (!npc) {
+    const verb = command.verb === 'ask' ? 'asking' : 'telling';
+    return blocked(`There is no ${verb} the ${found.entry.name} anything.`, 'WRONG_VERB');
+  }
+  const topic = command.indirect?.words.join(' ') ?? '';
+  return {
+    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
+    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
+    free: false,
+    voice: { npcId: npc.id, topic },
+  };
+}
+
+/**
+ * `say <words> to X` — the addressee sits after the preposition, unlike ask
+ * and tell. Said with no one named, it lands on no one; the engine still
+ * has nothing to add on top of that.
+ */
+function sayTo(ctx: CommandContext, command: Command): Reply {
+  if (!command.indirect) {
+    return say('You say it aloud. No one answers.');
+  }
+  const found = resolve(ctx, command.indirect);
+  if ('reply' in found) return found.reply;
+  const npc = found.entry.npc;
+  if (!npc) {
+    return blocked(`There is no saying anything to the ${found.entry.name}.`, 'WRONG_VERB');
+  }
+  const topic = command.object?.words.join(' ') ?? '';
+  return {
+    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
+    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
+    free: false,
+    voice: { npcId: npc.id, topic },
   };
 }
 

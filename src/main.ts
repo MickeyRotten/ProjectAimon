@@ -16,7 +16,7 @@ import './app.css';
 import { loadCampaign } from './campaign/loader';
 import { formatReport } from './campaign/validate';
 import { line, type Line } from './game/commands';
-import { Game } from './game/game';
+import { Game, type TurnResult } from './game/game';
 import {
   AUTOSAVE_ID,
   browserSaveStore,
@@ -26,11 +26,15 @@ import {
   snapshotId,
   type SaveStore,
 } from './game/save';
+import { legalAttempt } from './game/tier2';
 import { mountScreen, type Screen } from './ui/screen';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
-import { loadSettings, saveSettings, type NarratorSettings } from './narrator/settings';
+import { OutcomeNarrator } from './narrator/outcome';
 import { RoomNarrator } from './narrator/rooms';
+import { loadSettings, saveSettings, type NarratorSettings } from './narrator/settings';
+import { Translator } from './narrator/translate';
+import { VoiceNarrator } from './narrator/voices';
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app') as HTMLElement;
@@ -66,19 +70,35 @@ async function boot(): Promise<void> {
     banner.push(line('HELP lists the verbs. Move with n s e w u d.', 'rule'));
   }
 
-  // The narrator: rebuilt whenever the key or a model changes. Absent until a
-  // key is set, and the game runs on placeholder text until then.
+  // The narrator's four jobs, all built from the same client and rebuilt
+  // together whenever the key or a model changes. Absent until a key is
+  // set, and the game runs on placeholder text and the bare Tier 1 parser
+  // error until then.
   let settings = loadSettings();
-  let narrator = makeNarrator();
+  let narrator: RoomNarrator | undefined;
+  let translator: Translator | undefined;
+  let voices: VoiceNarrator | undefined;
+  let outcome: OutcomeNarrator | undefined;
+  makeNarrators();
 
-  function makeNarrator(): RoomNarrator | undefined {
-    if (!settings.apiKey) return undefined;
+  function makeNarrators(): void {
+    if (!settings.apiKey) {
+      narrator = undefined;
+      translator = undefined;
+      voices = undefined;
+      outcome = undefined;
+      return;
+    }
     const client = openRouterClient({
       apiKey: settings.apiKey,
       appTitle: 'Aimon',
       ...(typeof location !== 'undefined' ? { appUrl: location.origin } : {}),
     });
-    return new RoomNarrator({ campaign, client, settings });
+    const deps = { campaign, client, settings };
+    narrator = new RoomNarrator(deps);
+    translator = new Translator(deps);
+    voices = new VoiceNarrator(deps);
+    outcome = new OutcomeNarrator(deps);
   }
 
   const screen: Screen = mountScreen(root, (raw) => handle(raw), {
@@ -89,7 +109,7 @@ async function boot(): Promise<void> {
     () => settings,
     (next: NarratorSettings) => {
       settings = saveSettings(next);
-      narrator = makeNarrator();
+      makeNarrators();
       screen.print([line(narrator ? 'Narrator on.' : 'Narrator off — no API key set.', 'rule')]);
       void narrateHere();
     },
@@ -114,15 +134,73 @@ async function boot(): Promise<void> {
       return;
     }
 
-    const result = game.submit(raw);
+    // Step 2, then step 3: the ladder only ever runs outside combat, and
+    // `plan()` is called exactly once — calling it twice would silently drop
+    // a pending disambiguation answer the second time.
+    const result = game.inCombat() ? game.submit(raw) : await stepThrough(raw);
+
     screen.print(result.lines);
     screen.refresh(game);
     // Step 15: persist. One write point, once per turn that was actually spent.
     if (result.spent) await store.put(recordOf(game, 'auto', 'autosave'));
-    // Steps 13-14 for the room: the narrator writes prose over the world the
-    // turn already resolved. It changes no state the engine reads, so it runs
-    // after the mechanical turn is done and saved, never inside it.
+
+    // Steps 13-14: prose over the world the turn already resolved. Neither
+    // changes state the engine reads, so both run after the mechanical turn
+    // is done and saved, never inside it.
+    if (result.voice) void narrateVoice(raw, result.voice);
+    else if (result.tier2) void narrateOutcome(raw, result.lines);
     void narrateHere();
+  }
+
+  /** Step 3: on a Tier 1 miss, try the translator, then Tier 2, then Tier 3. */
+  async function stepThrough(raw: string): Promise<TurnResult> {
+    const plan = game.plan(raw);
+    if (plan.kind !== 'unparsed' || !translator) return game.respond(raw, plan);
+
+    const ctx = game.context();
+    const roomId = game.room.id;
+
+    const translated = await translator.toCommand(raw, roomId, ctx.scope, campaign.verbs);
+    if (translated) return game.run(raw, translated);
+
+    const classified = await translator.classify(raw, roomId, ctx.scope);
+    const attempt = classified ? legalAttempt(campaign.rules, ctx.scope, classified) : undefined;
+    if (attempt) return game.resolveTier2(raw, attempt);
+
+    return game.tier3(raw);
+  }
+
+  /** The NPC's spoken reply to `talk`, `ask`, `tell` or `say`. */
+  async function narrateVoice(raw: string, target: { npcId: string; topic: string }): Promise<void> {
+    if (!voices) return;
+    const npc = game.world.npcs.get(target.npcId);
+    if (!npc) return;
+    try {
+      const reply = await voices.speak(npc, raw, target.topic);
+      screen.print([line(`"${reply}"`, 'speak')]);
+    } catch {
+      // A voicing failure never breaks play; the mechanical lines already stand.
+    }
+  }
+
+  /** Prose over a Tier 2 outcome — the roll and effect already happened. */
+  async function narrateOutcome(raw: string, mechanicalLines: Line[]): Promise<void> {
+    if (!outcome) return;
+    const area = game.world.areas.get(game.room.areaId);
+    try {
+      const prose = await outcome.narrate({
+        areaName: area?.name ?? game.room.areaId,
+        areaTone: area?.themeTokens.join(', ') ?? '',
+        history: game.transcript,
+        roomName: game.room.name,
+        roomDesc: game.room.baseDesc,
+        facts: mechanicalLines.filter((entry) => entry.kind === 'roll').map((entry) => entry.text),
+        raw,
+      });
+      if (prose) screen.print([line(prose)]);
+    } catch {
+      // The mechanical roll line already printed; prose is a bonus, not a dependency.
+    }
   }
 
   /**

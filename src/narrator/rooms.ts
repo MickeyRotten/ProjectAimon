@@ -28,6 +28,7 @@ import type { World } from '../world/world';
 import { describeObject, sentenceList, titleOf, viewRoom } from '../game/describe';
 import type { LlmClient } from './llm';
 import type { NarratorSettings } from './settings';
+import { clean, fill } from './text';
 
 export interface RoomProse {
   name: string;
@@ -269,20 +270,6 @@ function covers(render: string, notables: Notable[]): boolean {
 function mentions(render: string, words: string[]): boolean {
   const haystack = render.toLowerCase();
   return words.some((word) => word.length > 2 && haystack.includes(word));
-}
-
-/** Trim wrapping quotes and code fences a model sometimes adds around prose. */
-function clean(text: string): string {
-  return text
-    .trim()
-    .replace(/^```[a-z]*\n?|\n?```$/g, '')
-    .replace(/^["'“]|["'”]$/g, '')
-    .trim();
-}
-
-/** `{{key}}` substitution. A missing key is left as-is, which shows up loudly in output. */
-function fill(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (whole, key: string) => vars[key] ?? whole);
 }
 
 /**

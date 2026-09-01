@@ -133,13 +133,16 @@ export function parse(raw: string, verbs: VerbTable): ParseResult {
   }
 
   const head = tokens[0] as string;
-  const verb = verbs.verbs.find((entry) => entry.words.includes(head));
+  const verb = verbs.verbs.find(
+    (entry) => entry.words.includes(head) && !(entry.soloWords?.includes(head) && tokens.length > 1),
+  );
   if (!verb) {
     return {
       ok: false,
       failure: { code: 'UNKNOWN_VERB', message: `"${head}" is not something you can do.`, word: head },
     };
   }
+  const word = verb.words[0] as string;
 
   let rest = tokens.slice(1).filter((word, index) => !(index === 0 && PARTICLES.includes(word)));
   rest = rest.filter((word) => !articles.has(word));
@@ -148,7 +151,7 @@ export function parse(raw: string, verbs: VerbTable): ParseResult {
     if (verb.patterns.includes('V')) return { ok: true, command: { raw, verb: verb.id } };
     return {
       ok: false,
-      failure: { code: 'UNKNOWN_NOUN', message: `${cap(head)} what?` },
+      failure: { code: 'UNKNOWN_NOUN', message: `${cap(word)} what?` },
     };
   }
 
@@ -162,25 +165,33 @@ export function parse(raw: string, verbs: VerbTable): ParseResult {
   const cut = rest.findIndex((word) => PREPOSITIONS.includes(word));
   let objectWords = cut === -1 ? rest : rest.slice(0, cut);
   let indirectWords = cut === -1 ? [] : rest.slice(cut + 1);
-  const preposition = cut === -1 ? undefined : (rest[cut] as string);
+  let preposition = cut === -1 ? undefined : (rest[cut] as string);
 
-  // `look at the chest` is what people type for `examine chest`, and refusing
-  // it teaches the player the parser is stupid rather than that the verb is.
-  if (verb.id === 'look' && preposition === 'at' && indirectWords.length > 0) {
+  // A leading preposition otherwise strands the noun in `indirect` and leaves
+  // the direct object empty — `talk to marda`, `listen to the guard`. A verb
+  // that absorbs this preposition treats what follows as its direct object.
+  if (cut === 0 && preposition !== undefined && verb.absorbs?.includes(preposition)) {
     objectWords = indirectWords;
     indirectWords = [];
+    preposition = undefined;
+  }
+
+  // `look at the chest` / `look in the chest` is what people type for
+  // `examine chest`, and refusing it teaches the player the parser is stupid
+  // rather than that the verb is.
+  if (verb.id === 'look' && objectWords.length > 0) {
     return { ok: true, command: { raw, verb: 'examine', object: phraseOf(objectWords, verbs) } };
   }
 
   if (!verb.patterns.includes('VN') && !verb.patterns.includes('VNPN')) {
     return {
       ok: false,
-      failure: { code: 'WRONG_VERB', message: `${cap(head)} does not take an object.` },
+      failure: { code: 'WRONG_VERB', message: `${cap(word)} does not take an object.` },
     };
   }
 
   if (objectWords.length === 0) {
-    return { ok: false, failure: { code: 'UNKNOWN_NOUN', message: `${cap(head)} what?` } };
+    return { ok: false, failure: { code: 'UNKNOWN_NOUN', message: `${cap(word)} what?` } };
   }
 
   const object = phraseOf(objectWords, verbs);

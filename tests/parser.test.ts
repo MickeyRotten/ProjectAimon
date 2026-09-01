@@ -44,6 +44,25 @@ describe('the parser', () => {
 
   it('reads look at X as examine, which is what people type', () => {
     expect(ok('look at the chest')).toMatchObject({ verb: 'examine' });
+    expect(ok('look under the bed')).toMatchObject({ verb: 'examine', object: { words: ['bed'] } });
+    expect(ok('look in the chest')).toMatchObject({ verb: 'examine', object: { words: ['chest'] } });
+  });
+
+  it('promotes a leading preposition into the direct object for verbs that absorb it', () => {
+    expect(ok('talk to marda')).toMatchObject({ verb: 'talk', object: { words: ['marda'] } });
+    expect(ok('talk with marda')).toMatchObject({ verb: 'talk', object: { words: ['marda'] } });
+    expect(ok('greet marda')).toMatchObject({ verb: 'talk', object: { words: ['marda'] } });
+    expect(ok('listen to the door')).toMatchObject({ verb: 'listen', object: { words: ['door'] } });
+  });
+
+  it('only matches a solo-word abbreviation when it is the whole input', () => {
+    expect(ok('i').verb).toBe('inventory');
+    expect(failure('i say hi to marda').code).toBe('UNKNOWN_VERB');
+  });
+
+  it('names the verb, not the typed word, in its own error messages', () => {
+    expect(failure('head').message).toBe('Go what?');
+    expect(failure('wait sword').message).toBe('Wait does not take an object.');
   });
 
   it('splits on a preposition into a VNPN command', () => {

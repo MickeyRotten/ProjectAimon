@@ -316,6 +316,10 @@ export interface VerbDef {
   id: string;
   words: string[];
   patterns: string[];
+  /** Prepositions this verb swallows when they'd otherwise strand the object. */
+  absorbs?: string[];
+  /** Words that match this verb only when they are the entire input. */
+  soloWords?: string[];
 }
 
 export interface VerbTable {

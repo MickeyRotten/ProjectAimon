@@ -16,7 +16,7 @@
  */
 
 import type { ResolvedCampaign } from '../campaign/types';
-import { parse, type Command } from '../engine/parser';
+import { parse, type Command, type ParseFailure } from '../engine/parser';
 import { Rng } from '../engine/rng';
 import { ruleArray, ruleNumber, ruleString } from '../engine/rules';
 import { objectiveComplete, type QuestCheckContext } from '../world/quests';
@@ -47,6 +47,7 @@ import {
 import type { Effect } from './effects';
 import { createPlayer, issueKit, playerMaxHp, playerMaxResolve, type PlayerRecord } from './player';
 import { anyLight, isDark, scopeOf, type ScopeEntry } from './scope';
+import { resolveAttempt, type Tier2Attempt } from './tier2';
 
 export interface TranscriptEntry {
   turn: number;
@@ -79,7 +80,21 @@ export interface TurnResult {
   turn: number;
   /** True when the world half ran — i.e. the input cost a turn. */
   spent: boolean;
+  /** Set when a handler named someone to voice. main.ts asks the narrator after. */
+  voice?: { npcId: string; topic: string } | undefined;
+  /** Set only by `resolveTier2` — the edge's cue to narrate this outcome. */
+  tier2?: boolean | undefined;
 }
+
+/**
+ * What step 2 of the loop decided, before anything is executed. `unparsed` is
+ * the hook the Tier 2/3 ladder hangs off — the edge (main.ts) tries the
+ * translator and classifier only when it sees this, and never otherwise.
+ */
+export type Plan =
+  | { kind: 'command'; command: Command }
+  | { kind: 'note'; lines: Line[] }
+  | { kind: 'unparsed'; failure: ParseFailure };
 
 export class Game {
   readonly campaign: ResolvedCampaign;
@@ -183,6 +198,11 @@ export class Game {
     return roomLines(this.context(), full);
   }
 
+  /** True while a live fight is holding the loop, whatever the player types. */
+  inCombat(): boolean {
+    return this.combat.active && hostilesIn(this.world, this.player.roomId).length > 0;
+  }
+
   /**
    * One player input, all the way through the loop.
    *
@@ -195,14 +215,42 @@ export class Game {
 
     // A live fight takes over the loop: a command is a combat action, and the
     // world half runs the enemy round rather than only the clock.
-    if (this.combat.active && hostilesIn(this.world, this.player.roomId).length > 0) {
+    if (this.inCombat()) {
       return this.combatTurn(raw, lines);
     }
     if (this.combat.active) this.combat = emptyCombat(); // hostiles all gone
 
-    const command = this.commandFor(raw, lines);
-    if (!command) return this.finish(raw, lines, false);
+    return this.respond(raw, this.plan(raw), lines);
+  }
 
+  /**
+   * The rest of `submit` once a `Plan` exists. Split out so main.ts's Tier
+   * 2/3 ladder can call `plan()` exactly once — `plan()` consumes a pending
+   * disambiguation question the moment it runs, so calling it twice for the
+   * same input would silently drop the answer the second time.
+   */
+  respond(raw: string, plan: Plan, lines: Line[] = [line(raw, 'echo')]): TurnResult {
+    if (plan.kind === 'unparsed') {
+      // Tier 2 classification and the Tier 3 flavour reply are the
+      // narrator's — main.ts tries them first when there is a key. This is
+      // the no-key path: the engine says what it actually knows.
+      lines.push(line(plan.failure.message, 'rule'));
+      return this.finish(raw, lines, false);
+    }
+    if (plan.kind === 'note') {
+      lines.push(...plan.lines);
+      return this.finish(raw, lines, false);
+    }
+    return this.run(raw, plan.command, lines);
+  }
+
+  /**
+   * Steps 4 through 16 for an already-resolved command — whether it came
+   * from `plan()` untouched, or from the translator's canonical re-entry
+   * after a Tier 1 failure. Never used for a combat action; combat has its
+   * own resolver and its own write point in `combatTurn`.
+   */
+  run(raw: string, command: Command, lines: Line[] = [line(raw, 'echo')]): TurnResult {
     const ctx = this.context();
     const reply = execute(this.forced ? { ...ctx, forced: this.forced } : ctx, command);
     this.forced = undefined;
@@ -237,7 +285,36 @@ export class Game {
     // Walking into a room that holds hostiles starts a fight — announced now,
     // fought from the next turn, so the entry itself is never a free hit.
     lines.push(...this.maybeBeginCombat());
-    return this.finish(raw, lines, true);
+    return this.finish(raw, lines, true, { voice: reply.voice });
+  }
+
+  /**
+   * Tier 3 — pure expression. No canonical command, no legal Tier 2 attempt:
+   * just prose, over an unparsed input that cost nothing. No roll, no state
+   * change, no write point touched.
+   */
+  tier3(raw: string): TurnResult {
+    return this.finish(raw, [line(raw, 'echo')], false);
+  }
+
+  /**
+   * Tier 2 — a validated attempt only; `legalAttempt` in tier2.ts is what
+   * validates. Resolution rolls and picks the effect the same way any other
+   * handler would, then lands at this file's one write point like every
+   * other command.
+   */
+  resolveTier2(raw: string, attempt: Tier2Attempt): TurnResult {
+    const lines: Line[] = [line(raw, 'echo')];
+    const ctx = this.context();
+    const rng = this.world.combatRng(`tier2:${this.turn}`);
+    const reply = resolveAttempt(ctx, attempt, rng);
+    lines.push(...reply.lines);
+
+    // ── step 7: the player half's one write point ────────────────────
+    this.apply(reply.effects);
+    lines.push(...this.worldHalf());
+    lines.push(...this.maybeBeginCombat());
+    return this.finish(raw, lines, true, { tier2: true });
   }
 
   /**
@@ -246,7 +323,7 @@ export class Game {
    * after — the corpse run has already moved the player to the Hub.
    */
   private combatTurn(raw: string, lines: Line[]): TurnResult {
-    const command = this.commandFor(raw, lines);
+    const command = this.commandForCombat(raw, lines);
     if (!command) return this.finish(raw, lines, false);
 
     const reply = playerCombatAction(this.combatContext(), command);
@@ -299,31 +376,40 @@ export class Game {
 
   // ── parsing, disambiguation, AGAIN ────────────────────────────────
 
-  private commandFor(raw: string, lines: Line[]): Command | undefined {
+  /**
+   * Step 2: turn raw input into a command, or say why not. The only place
+   * `this.pending` and `AGAIN` are resolved, so it is the single entry point
+   * both `submit` and combat go through — main.ts's Tier 2/3 ladder calls it
+   * directly to decide whether the translator is worth trying at all.
+   */
+  plan(raw: string): Plan {
     // A pending "which one?" gets first refusal on the next input, and is
     // dropped rather than argued with when the answer does not answer it.
     if (this.pending) {
       const answer = this.answerPending(raw);
       this.pending = undefined;
-      if (answer) return answer;
+      if (answer) return { kind: 'command', command: answer };
     }
 
     const parsed = parse(raw, this.campaign.verbs);
     if (!parsed.ok) {
-      // Tier 2 classification and the Tier 3 flavour reply are the narrator's,
-      // and the narrator arrives at build step 7. Until then the engine says
-      // what it actually knows.
-      lines.push(line(parsed.failure.message, 'rule'));
-      return undefined;
+      return { kind: 'unparsed', failure: parsed.failure };
     }
     if (parsed.command.verb === 'again') {
       if (!this.lastCommand) {
-        lines.push(line('Nothing to repeat.', 'rule'));
-        return undefined;
+        return { kind: 'note', lines: [line('Nothing to repeat.', 'rule')] };
       }
-      return this.lastCommand;
+      return { kind: 'command', command: this.lastCommand };
     }
-    return parsed.command;
+    return { kind: 'command', command: parsed.command };
+  }
+
+  private commandForCombat(raw: string, lines: Line[]): Command | undefined {
+    const result = this.plan(raw);
+    if (result.kind === 'command') return result.command;
+    if (result.kind === 'note') lines.push(...result.lines);
+    else lines.push(line(result.failure.message, 'rule'));
+    return undefined;
   }
 
   /** Match an answer against the candidates the question offered. */
@@ -406,6 +492,11 @@ export class Game {
           if (effect.value) this.world.flags.add(effect.id);
           else this.world.flags.delete(effect.id);
           break;
+        case 'npcDisposition': {
+          const npc = this.world.npcs.get(effect.id);
+          if (npc) npc.disposition += effect.delta;
+          break;
+        }
         case 'extraTurns':
           this.owedTurns += effect.turns;
           break;
@@ -713,7 +804,12 @@ export class Game {
 
   // ── bookkeeping ───────────────────────────────────────────────────
 
-  private finish(raw: string, lines: Line[], spent: boolean): TurnResult {
+  private finish(
+    raw: string,
+    lines: Line[],
+    spent: boolean,
+    extra?: Pick<TurnResult, 'voice' | 'tier2'>,
+  ): TurnResult {
     this.transcript.push({
       turn: this.turn,
       input: raw,
@@ -722,7 +818,7 @@ export class Game {
         .map((entry) => entry.text)
         .join('\n'),
     });
-    return { lines, turn: this.turn, spent };
+    return { lines, turn: this.turn, spent, ...extra };
   }
 
   /** The status line's numbers, in one place so the UI derives nothing. */

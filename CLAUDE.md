@@ -8,12 +8,18 @@ autosave, quests (six templates, distance-band placement, the Distant reservatio
 a predicate registry and a journal), and now combat: the two-track resolver, the
 Presence route with break-by-friendliness, the ability/gambit/primer/stance
 engine, crits and fumbles, skill growth, and the corpse run. The game is walkable,
-has work to do in it, and fights back. Step 7, the Narrator, is now under way:
-**part one is built** — the OpenRouter client, on-device settings with the two
-model slots, and the room narrator (two-layer descriptions: batch-generated
+has work to do in it, and fights back. Step 7, the Narrator, **is built**:
+**part one** — the OpenRouter client, on-device settings with the two model
+slots, and the room narrator (two-layer descriptions: batch-generated
 `baseDesc` plus the content-signature-cached woven render), degrading to
-placeholder text whenever there is no key. Part two — outcome narration, NPC
-voicing, and the Tier 2/3 input side — is next, over the same seam.
+placeholder text whenever there is no key. **Part two** — the Tier 2/3 input
+side, NPC voicing and outcome narration — is built over the same seam: a
+translator that re-enters the deterministic parser once before falling to a
+Tier 2 classifier (engine-validated, engine-picks-the-effect) and then to
+free Tier 3 expression; `talk`/`ask`/`tell`/`say` hand off to a voiced NPC
+reply; a Tier 2 outcome gets a narrated line alongside its roll. Every path
+still degrades to the bare engine text with no key, exactly as room
+description does.
 
 ---
 

@@ -1157,7 +1157,8 @@ function approachMult(rules: JsonObject, approach: string, tags: readonly string
   return mult;
 }
 
-const clampChance = (rules: JsonObject, value: number): number => {
+/** The one clamp every chance in the game passes through — combat and Tier 2 alike. */
+export const clampChance = (rules: JsonObject, value: number): number => {
   const [lo, hi] = ruleRange(rules, 'CLAMP');
   return Math.max(lo, Math.min(hi, Math.round(value)));
 };

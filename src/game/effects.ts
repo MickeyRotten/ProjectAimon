@@ -49,6 +49,9 @@ export type Effect =
   | { kind: 'brief'; value: boolean }
   | { kind: 'pronoun'; ref: string; id: string }
   | { kind: 'worldFlag'; id: string; value: boolean }
+  /** A Tier 2 outcome against a non-hostile NPC. Never chosen by the model —
+   * the engine picks this from Tier 2's closed effect vocabulary. */
+  | { kind: 'npcDisposition'; id: string; delta: number }
   /** Extra turns the world half must burn — the cost of a forced retreat. */
   | { kind: 'extraTurns'; turns: number }
   /** Take on an offered quest. Rolls the band and places the objective on apply. */
