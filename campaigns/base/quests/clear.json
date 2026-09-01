@@ -1,0 +1,13 @@
+{
+  "_note": "Empty a room of what holds it. A hostile is placed there on accept; completed when nothing hostile stands in the room. Needs combat, step 6, to resolve.",
+  "type": "clear",
+  "bands": { "near": 30, "quiteNear": 45, "far": 20, "distant": 5 },
+  "targetTags": ["wild|dark|storage|ruin|grave|cell"],
+  "objective": {
+    "kind": "clear",
+    "place": "hostile",
+    "completedBy": "roomCleared"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold", "item"]
+}

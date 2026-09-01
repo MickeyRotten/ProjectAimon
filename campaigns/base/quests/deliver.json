@@ -1,0 +1,13 @@
+{
+  "_note": "The giver hands over a parcel on accept; carry it to the destination room. Completed on arrival. Handing it to a specific person is dialogue, step 7 — for now the place is the objective.",
+  "type": "deliver",
+  "bands": { "near": 30, "quiteNear": 45, "far": 20, "distant": 5 },
+  "targetTags": ["dwelling|market|hearth|shrine|path|settled"],
+  "objective": {
+    "kind": "deliver",
+    "place": "parcel",
+    "completedBy": "atRoom"
+  },
+  "hintFrom": ["tags", "direction", "band"],
+  "rewards": ["gold"]
+}

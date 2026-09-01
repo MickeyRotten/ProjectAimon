@@ -32,4 +32,10 @@ export type Effect =
   | { kind: 'pronoun'; ref: string; id: string }
   | { kind: 'worldFlag'; id: string; value: boolean }
   /** Extra turns the world half must burn — the cost of a forced retreat. */
-  | { kind: 'extraTurns'; turns: number };
+  | { kind: 'extraTurns'; turns: number }
+  /** Take on an offered quest. Rolls the band and places the objective on apply. */
+  | { kind: 'acceptQuest'; questId: string }
+  /** Mark a quest complete and grant its rewards, gold into the purse. */
+  | { kind: 'completeQuest'; questId: string }
+  /** Fail a quest whose giver has died. */
+  | { kind: 'failQuest'; questId: string };
