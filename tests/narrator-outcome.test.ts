@@ -27,6 +27,7 @@ const baseInput = {
   roomDesc: 'Worn flagstones underfoot.',
   facts: ['(charisma, moderate: 62% — rolled 40, a success)'],
   raw: 'i ask marda about the ruins',
+  outcome: 'success' as const,
 };
 
 describe('OutcomeNarrator.narrate', () => {
@@ -37,18 +38,25 @@ describe('OutcomeNarrator.narrate', () => {
     expect(prose).toBe('Marda relaxes a little at the question.');
   });
 
-  it('degrades to undefined on a client failure, never throwing', async () => {
+  it('degrades to a truthful fallback line on a client failure, never throwing', async () => {
     const client = new ScriptedClient([new Error('down')]);
     const narrator = new OutcomeNarrator({ campaign, client, settings });
     const prose = await narrator.narrate(baseInput);
-    expect(prose).toBeUndefined();
+    expect(prose).toBe('It goes over about as well as you hoped.');
   });
 
-  it('degrades to undefined when the model returns nothing', async () => {
+  it('degrades to a truthful fallback line when the model returns nothing', async () => {
     const client = new ScriptedClient(['']);
     const narrator = new OutcomeNarrator({ campaign, client, settings });
     const prose = await narrator.narrate(baseInput);
-    expect(prose).toBeUndefined();
+    expect(prose).toBe('It goes over about as well as you hoped.');
+  });
+
+  it('degrades to the failure fallback line when the outcome was a failure', async () => {
+    const client = new ScriptedClient([new Error('down')]);
+    const narrator = new OutcomeNarrator({ campaign, client, settings });
+    const prose = await narrator.narrate({ ...baseInput, outcome: 'failure' });
+    expect(prose).toBe("It doesn't land the way you hoped.");
   });
 
   it('folds the engine facts into the prompt untouched, so they cannot be contradicted', async () => {

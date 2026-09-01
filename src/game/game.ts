@@ -82,8 +82,8 @@ export interface TurnResult {
   spent: boolean;
   /** Set when a handler named someone to voice. main.ts asks the narrator after. */
   voice?: { npcId: string; topic: string } | undefined;
-  /** Set only by `resolveTier2` — the edge's cue to narrate this outcome. */
-  tier2?: boolean | undefined;
+  /** Set only by `resolveTier2` — the edge's cue to narrate this outcome, and what it was. */
+  tier2?: 'success' | 'failure' | undefined;
 }
 
 /**
@@ -314,7 +314,7 @@ export class Game {
     this.apply(reply.effects);
     lines.push(...this.worldHalf());
     lines.push(...this.maybeBeginCombat());
-    return this.finish(raw, lines, true, { tier2: true });
+    return this.finish(raw, lines, true, { tier2: reply.outcome });
   }
 
   /**

@@ -166,7 +166,7 @@ async function boot(): Promise<void> {
     // changes state the engine reads, so both run after the mechanical turn
     // is done and saved, never inside it.
     if (result.voice) void narrateVoice(raw, result.voice);
-    else if (result.tier2) void narrateOutcome(raw, result.lines);
+    else if (result.tier2) void narrateOutcome(raw, result.lines, result.tier2);
     void narrateHere();
   }
 
@@ -188,23 +188,37 @@ async function boot(): Promise<void> {
     return game.tier3(raw);
   }
 
-  /** The NPC's spoken reply to `talk`, `ask`, `tell` or `say`. */
+  /**
+   * The NPC's spoken reply to `talk`, `ask`, `tell` or `say`. Fire-and-forget
+   * from `handle()`, so the player is free to type on before this resolves —
+   * drop the reply if they've left the room by the time it lands, the same
+   * staleness guard `narrateHere` uses, so a late line never turns up out of
+   * context.
+   */
   async function narrateVoice(raw: string, target: { npcId: string; topic: string }): Promise<void> {
     if (!voices) return;
     const npc = game.world.npcs.get(target.npcId);
     if (!npc) return;
+    const roomId = game.room.id;
     try {
       const reply = await voices.speak(npc, raw, target.topic);
+      if (game.room.id !== roomId) return; // moved while we waited
       screen.print([line(`"${reply}"`, 'speak')]);
     } catch {
       // A voicing failure never breaks play; the mechanical lines already stand.
     }
   }
 
-  /** Prose over a Tier 2 outcome — the roll and effect already happened. */
-  async function narrateOutcome(raw: string, mechanicalLines: Line[]): Promise<void> {
+  /**
+   * Prose over a Tier 2 outcome — the roll and effect already happened.
+   * `outcome.narrate` always resolves to some truthful line (it degrades
+   * internally the same way the room and voice narrators do), so the player
+   * is never left with just the roll number.
+   */
+  async function narrateOutcome(raw: string, mechanicalLines: Line[], result: 'success' | 'failure'): Promise<void> {
     if (!outcome) return;
     const area = game.world.areas.get(game.room.areaId);
+    const roomId = game.room.id;
     try {
       const prose = await outcome.narrate({
         areaName: area?.name ?? game.room.areaId,
@@ -214,10 +228,13 @@ async function boot(): Promise<void> {
         roomDesc: game.room.baseDesc,
         facts: mechanicalLines.filter((entry) => entry.kind === 'roll').map((entry) => entry.text),
         raw,
+        outcome: result,
       });
-      if (prose) screen.print([line(prose)]);
+      if (game.room.id !== roomId) return; // moved while we waited
+      screen.print([line(prose)]);
     } catch {
-      // The mechanical roll line already printed; prose is a bonus, not a dependency.
+      // Belt-and-braces: narrate() degrades internally and should not throw,
+      // but the mechanical roll line already stands regardless.
     }
   }
 

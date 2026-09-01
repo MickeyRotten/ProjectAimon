@@ -28,6 +28,8 @@ export interface OutcomeInput {
   /** The engine's own sentences for what just happened — never contradicted. */
   facts: readonly string[];
   raw: string;
+  /** Already decided by the engine; the fallback needs it when the model can't be reached. */
+  outcome: 'success' | 'failure';
 }
 
 /** How many recent turns of transcript the packet's history tier carries. */
@@ -44,9 +46,15 @@ export class OutcomeNarrator {
     this.settings = deps.settings;
   }
 
-  async narrate(input: OutcomeInput): Promise<string | undefined> {
+  /**
+   * Prose for a Tier 2 outcome. Always degrades to a short, truthful line
+   * built from the outcome the engine already decided — a Tier 2 attempt has
+   * no other text of its own, so unlike the room and voice narrators this one
+   * cannot leave the player with silence when the model can't be reached.
+   */
+  async narrate(input: OutcomeInput): Promise<string> {
     const template = this.campaign.prompts['prompts/outcome.md'];
-    if (!template) return undefined;
+    if (!template) return this.fallback(input);
 
     const history = input.history
       .slice(-HISTORY_WINDOW)
@@ -74,10 +82,16 @@ export class OutcomeNarrator {
           maxTokens: this.settings.maxTokens,
         }),
       );
-      return reply.length > 0 ? reply : undefined;
+      return reply.length > 0 ? reply : this.fallback(input);
     } catch {
-      return undefined;
+      return this.fallback(input);
     }
+  }
+
+  private fallback(input: OutcomeInput): string {
+    return input.outcome === 'success'
+      ? 'It goes over about as well as you hoped.'
+      : "It doesn't land the way you hoped.";
   }
 
   private systemPrompt(): string {
