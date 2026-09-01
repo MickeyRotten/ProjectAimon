@@ -7,8 +7,11 @@ android {
         applicationId "com.mickeyrotten.aimon"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Version is normally 1 / "1.0"; CI passes an incrementing code and
+        // name (-PaimonVersionCode / -PaimonVersionName) so each release is a
+        // new version and Obtainium offers it as an update.
+        versionCode project.hasProperty('aimonVersionCode') ? aimonVersionCode.toInteger() : 1
+        versionName project.hasProperty('aimonVersionName') ? aimonVersionName : "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +19,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Signing details come from the environment, which CI fills in from the
+    // repo's encrypted secrets — the key itself is never stored in the repo.
+    // Signing every build with the same key is what lets Android and Obtainium
+    // update an installed copy in place (keeping your saves) instead of
+    // rejecting it for a changed signature. When the env vars are absent (a PR
+    // build, or a local build with no key), the release APK is left unsigned.
+    signingConfigs {
+        release {
+            if (System.getenv('RELEASE_STORE_FILE')) {
+                storeFile file(System.getenv('RELEASE_STORE_FILE'))
+                storePassword System.getenv('RELEASE_STORE_PASSWORD')
+                keyAlias System.getenv('RELEASE_KEY_ALIAS')
+                keyPassword System.getenv('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv('RELEASE_STORE_FILE')) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
