@@ -252,6 +252,18 @@ export class World {
     if (prose.baseDesc && prose.baseDesc.trim().length > 0) room.baseDesc = prose.baseDesc.trim();
   }
 
+  /**
+   * The same out-of-band prose write as `writeProse`, for an NPC's invariant
+   * physical description — written once on first EXAMINE, never regenerated.
+   */
+  writeNpcProse(npcId: string, prose: { physiqueDesc?: string }): void {
+    const npc = this.npcs.get(npcId);
+    if (!npc) return;
+    if (prose.physiqueDesc && prose.physiqueDesc.trim().length > 0) {
+      npc.physiqueDesc = prose.physiqueDesc.trim();
+    }
+  }
+
   roomAt(coord: Coord): RoomRecord | undefined {
     const id = this.byCoord.get(coordKey(coord));
     return id ? this.rooms.get(id) : undefined;

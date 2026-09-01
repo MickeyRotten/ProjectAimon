@@ -30,6 +30,7 @@ import { legalAttempt } from './game/tier2';
 import { mountScreen, type Screen } from './ui/screen';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
+import { NpcNarrator } from './narrator/npcs';
 import { OutcomeNarrator } from './narrator/outcome';
 import { RoomNarrator } from './narrator/rooms';
 import { loadSettings, saveSettings, type NarratorSettings } from './narrator/settings';
@@ -70,15 +71,15 @@ async function boot(): Promise<void> {
     banner.push(line('HELP lists the verbs. Move with n s e w u d.', 'rule'));
   }
 
-  // The narrator's four jobs, all built from the same client and rebuilt
-  // together whenever the key or a model changes. Absent until a key is
-  // set, and the game runs on placeholder text and the bare Tier 1 parser
-  // error until then.
+  // The narrator's jobs, all built from the same client and rebuilt together
+  // whenever the key or a model changes. Absent until a key is set, and the
+  // game runs on placeholder text and the bare Tier 1 parser error until then.
   let settings = loadSettings();
   let narrator: RoomNarrator | undefined;
   let translator: Translator | undefined;
   let voices: VoiceNarrator | undefined;
   let outcome: OutcomeNarrator | undefined;
+  let npcAppearance: NpcNarrator | undefined;
   makeNarrators();
 
   function makeNarrators(): void {
@@ -87,6 +88,7 @@ async function boot(): Promise<void> {
       translator = undefined;
       voices = undefined;
       outcome = undefined;
+      npcAppearance = undefined;
       return;
     }
     const client = openRouterClient({
@@ -99,6 +101,7 @@ async function boot(): Promise<void> {
     translator = new Translator(deps);
     voices = new VoiceNarrator(deps);
     outcome = new OutcomeNarrator(deps);
+    npcAppearance = new NpcNarrator(deps);
   }
 
   // Locks input only while the just-typed command is still being resolved —
@@ -167,6 +170,7 @@ async function boot(): Promise<void> {
     // is done and saved, never inside it.
     if (result.voice) void narrateVoice(raw, result.voice);
     else if (result.tier2) void narrateOutcome(raw, result.lines, result.tier2);
+    if (result.appearance) void narrateAppearance(result.appearance);
     void narrateHere();
   }
 
@@ -208,6 +212,26 @@ async function boot(): Promise<void> {
       screen.print([line(`"${reply}"`, 'speak')]);
     } catch {
       // A voicing failure never breaks play; the mechanical lines already stand.
+    }
+  }
+
+  /**
+   * A physique/outfit line for an NPC just EXAMINEd. Fire-and-forget, same
+   * staleness guard as `narrateVoice` and `narrateHere`: dropped if the NPC
+   * is no longer in scope by the time it lands.
+   */
+  async function narrateAppearance(target: { npcId: string }): Promise<void> {
+    if (!npcAppearance) return;
+    const npc = game.world.npcs.get(target.npcId);
+    if (!npc) return;
+    const roomId = game.room.id;
+    try {
+      const prose = await npcAppearance.describeAppearance(game.world, npc);
+      if (!prose) return;
+      if (game.room.id !== roomId) return; // moved while we waited
+      screen.print([line(prose)]);
+    } catch {
+      // A failure here never breaks play; the persona line already stands.
     }
   }
 

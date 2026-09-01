@@ -10,6 +10,10 @@ Rules:
 - Keep it tight: the permanent description is two sentences; the whole render
   should be three or four at most.
 - Do not restate the room's name.
+- Stay as concrete as the permanent description. Don't soften its physical
+  detail into mood while weaving in the contents — place each item, creature
+  or person somewhere specific and physical (what it's on, leaning against,
+  standing in), not just declared present.
 
 Permanent description of the room:
 {{base}}

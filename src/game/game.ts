@@ -84,6 +84,8 @@ export interface TurnResult {
   voice?: { npcId: string; topic: string } | undefined;
   /** Set only by `resolveTier2` — the edge's cue to narrate this outcome, and what it was. */
   tier2?: 'success' | 'failure' | undefined;
+  /** Set when EXAMINE landed on an NPC. main.ts asks the narrator for a physique/outfit line. */
+  appearance?: { npcId: string } | undefined;
 }
 
 /**
@@ -285,7 +287,7 @@ export class Game {
     // Walking into a room that holds hostiles starts a fight — announced now,
     // fought from the next turn, so the entry itself is never a free hit.
     lines.push(...this.maybeBeginCombat());
-    return this.finish(raw, lines, true, { voice: reply.voice });
+    return this.finish(raw, lines, true, { voice: reply.voice, appearance: reply.appearance });
   }
 
   /**
@@ -808,7 +810,7 @@ export class Game {
     raw: string,
     lines: Line[],
     spent: boolean,
-    extra?: Pick<TurnResult, 'voice' | 'tier2'>,
+    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance'>,
   ): TurnResult {
     this.transcript.push({
       turn: this.turn,

@@ -362,6 +362,8 @@ export interface NpcRecord {
   aliases: string[];
   location: Location;
   persona: string;
+  /** Written once by the narrator on first EXAMINE. Empty until then. */
+  physiqueDesc?: string;
   tags: string[];
   /** Rolled per instance. Drives pronouns and nothing mechanical. */
   sex: string;

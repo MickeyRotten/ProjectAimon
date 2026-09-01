@@ -55,6 +55,12 @@ export interface Reply {
    * never applied, and carries no effect of its own.
    */
   voice?: { npcId: string; topic: string } | undefined;
+  /**
+   * Set when EXAMINE lands on an NPC. Tells the edge (main.ts) which NPC to
+   * ask the narrator for a physique/outfit line, printed after the persona
+   * line that already stands. Same read-only, no-effect discipline as `voice`.
+   */
+  appearance?: { npcId: string } | undefined;
 }
 
 export interface CommandContext {
@@ -269,6 +275,7 @@ function examine(ctx: CommandContext, command: Command): Reply {
       ],
       effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
       free: false,
+      appearance: { npcId: npc.id },
     };
   }
 
