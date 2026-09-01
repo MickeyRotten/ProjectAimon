@@ -101,6 +101,19 @@ async function boot(): Promise<void> {
     outcome = new OutcomeNarrator(deps);
   }
 
+  // Counts LLM calls in flight for the current turn. Several can overlap (a
+  // Tier 2/3 translation, then voicing and room prose fired together), so this
+  // is a count, not a flag: the busy indicator only toggles on the 0<->1 edge.
+  let pendingLlmCalls = 0;
+  function track<T>(work: Promise<T>): Promise<T> {
+    pendingLlmCalls += 1;
+    if (pendingLlmCalls === 1) screen.setBusy(true);
+    return work.finally(() => {
+      pendingLlmCalls -= 1;
+      if (pendingLlmCalls === 0) screen.setBusy(false);
+    });
+  }
+
   const screen: Screen = mountScreen(root, (raw) => handle(raw), {
     onSettings: () => settingsPanel.open(),
   });
@@ -111,7 +124,7 @@ async function boot(): Promise<void> {
       settings = saveSettings(next);
       makeNarrators();
       screen.print([line(narrator ? 'Narrator on.' : 'Narrator off — no API key set.', 'rule')]);
-      void narrateHere();
+      void track(narrateHere());
     },
   );
 
@@ -122,7 +135,7 @@ async function boot(): Promise<void> {
   screen.print(game.describeHere(true));
   screen.refresh(game);
   screen.focus();
-  void narrateHere();
+  void track(narrateHere());
 
   async function handle(raw: string): Promise<void> {
     // Storage is asynchronous and the turn loop is not, so saving is answered
@@ -137,7 +150,7 @@ async function boot(): Promise<void> {
     // Step 2, then step 3: the ladder only ever runs outside combat, and
     // `plan()` is called exactly once — calling it twice would silently drop
     // a pending disambiguation answer the second time.
-    const result = game.inCombat() ? game.submit(raw) : await stepThrough(raw);
+    const result = game.inCombat() ? game.submit(raw) : await track(stepThrough(raw));
 
     screen.print(result.lines);
     screen.refresh(game);
@@ -147,9 +160,9 @@ async function boot(): Promise<void> {
     // Steps 13-14: prose over the world the turn already resolved. Neither
     // changes state the engine reads, so both run after the mechanical turn
     // is done and saved, never inside it.
-    if (result.voice) void narrateVoice(raw, result.voice);
-    else if (result.tier2) void narrateOutcome(raw, result.lines);
-    void narrateHere();
+    if (result.voice) void track(narrateVoice(raw, result.voice));
+    else if (result.tier2) void track(narrateOutcome(raw, result.lines));
+    void track(narrateHere());
   }
 
   /** Step 3: on a Tier 1 miss, try the translator, then Tier 2, then Tier 3. */

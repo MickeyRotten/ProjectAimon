@@ -104,6 +104,8 @@ input {
 .cursor { color: var(--white); animation: blink 1.06s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+#promptline.busy .caret { animation: blink 1.06s steps(1) infinite; }
+input:disabled { opacity: .5; }
 
 .mono {
   position: fixed; right: 8px; bottom: calc(10px + env(safe-area-inset-bottom));

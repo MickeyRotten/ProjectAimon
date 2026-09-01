@@ -32,6 +32,8 @@ export interface Screen {
   focus(): void;
   /** Show the narrator's name and woven prose for a room, until the room changes. */
   setRoomProse(roomId: string, name: string, prose: string): void;
+  /** Lock or unlock input while an LLM call for the current turn is in flight. */
+  setBusy(active: boolean): void;
 }
 
 export interface ScreenHooks {
@@ -57,7 +59,7 @@ export function mountScreen(
     </div>
     <div class="log" id="log" aria-live="polite">
       <p id="promptline">
-        <span class="caret">&gt;</span>
+        <span class="caret" id="caret">&gt;</span>
         <input id="in" autocomplete="off" autocapitalize="off" spellcheck="false"
                aria-label="Enter a command">
         <span class="cursor" aria-hidden="true">█</span>
@@ -74,6 +76,9 @@ export function mountScreen(
   const input = root.querySelector('#in') as HTMLInputElement;
   const history: string[] = [];
   let cursor = 0;
+  // True while an LLM call for the current turn is in flight. Blocks new
+  // input so a second command can't land while the first is still resolving.
+  let busy = false;
   // The narrator's render for the room the player is in. Held so a refresh does
   // not overwrite good prose with the structural placeholder every turn; it is
   // cleared implicitly by moving, when the room id no longer matches.
@@ -120,6 +125,7 @@ export function mountScreen(
 
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
+      if (busy) return;
       const raw = input.value;
       input.value = '';
       if (raw.trim().length === 0) return;
@@ -166,5 +172,12 @@ export function mountScreen(
     (root.querySelector('#rdesc') as HTMLElement).textContent = text;
   };
 
-  return { print, refresh, focus: () => input.focus(), setRoomProse };
+  const setBusy = (active: boolean): void => {
+    busy = active;
+    input.disabled = active;
+    (root.querySelector('#caret') as HTMLElement).textContent = active ? '…' : '>';
+    prompt.classList.toggle('busy', active);
+  };
+
+  return { print, refresh, focus: () => input.focus(), setRoomProse, setBusy };
 }
