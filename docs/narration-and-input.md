@@ -453,6 +453,66 @@ truth rather than by forbidding it the subject.
 
 ---
 
+## NPC appearance — two layers
+
+The narrator's fourth job: `EXAMINE <npc>` prints the mechanical name/persona/
+disposition lines exactly as before — engine text, always available, no key
+required — then a physique-and-outfit line follows, on the same two-layer
+scheme as room description.
+
+### The two layers
+
+**`physiqueDesc`** — build, bearing, face, any notable scar or feature. Never
+names clothing, armour or a weapon. Written once, on the NPC's **first**
+EXAMINE, never regenerated — the same write-once discipline as a room's
+`baseDesc`, just triggered lazily instead of batched.
+
+**The woven render** — `physiqueDesc` plus whatever the NPC is currently
+wearing or wielding, written as one short paragraph. This is what EXAMINE
+shows.
+
+### Lazy, not batched — the one place this diverges from rooms
+
+Room `baseDesc` batches every room in an area in one call, because every room
+in a generated area is guaranteed to be walked through. Most NPCs are never
+examined, so generating physique for all of them up front would spend calls
+on NPCs the player never looks twice at. Physique generates on demand, the
+first time EXAMINE actually asks for it.
+
+### Cached by gear signature
+
+```
+key = npcId + hash(physiqueDesc) + sorted(worn/wielded item ids)
+```
+
+Grounded in `world.contentsOf(heldBy(npcId))`, filtered to items flagged
+`worn` or `weapon` — a vendor's whole stock sits at the same location and is
+not "worn," so the filter matters. Re-examining an NPC whose gear hasn't
+changed is free and reads identically; arming or re-equipping them changes
+the key and costs one call. Capped at 8 renders per NPC, evicted
+least-recently-used — same shape as the room cache.
+
+### Grounding, the same way the woven room render is grounded
+
+Physique is invented freely, the same latitude `baseDesc` has for a room's
+mood and wear. Worn and carried items are hard facts: the prompt must mention
+every one listed and invent no equipment beyond it, the identical rule
+`room-render.md` applies to room contents.
+
+### Non-blocking, with a placeholder marking the wait
+
+EXAMINE's mechanical lines print immediately; the appearance line is a
+fire-and-forget follow-up, same as NPC voicing and Tier 2 outcome prose. All
+three now print a dim `"…"` placeholder the moment the call starts, swapped
+for the real line (or dropped, on failure or staleness) once it settles —
+`Screen.printPending`, `src/ui/screen.ts`. Input is never locked for this;
+only Tier 2/3 command *resolution* locks input. Without a placeholder the
+mechanical reply looked finished while more prose was still arriving, which
+read as nothing having happened at all.
+
+
+---
+
 ## Structured output: emit canonical, read lenient
 
 Applies to **every** call that expects structured output — Tier 2 classification,

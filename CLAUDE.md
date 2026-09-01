@@ -17,9 +17,17 @@ side, NPC voicing and outcome narration — is built over the same seam: a
 translator that re-enters the deterministic parser once before falling to a
 Tier 2 classifier (engine-validated, engine-picks-the-effect) and then to
 free Tier 3 expression; `talk`/`ask`/`tell`/`say` hand off to a voiced NPC
-reply; a Tier 2 outcome gets a narrated line alongside its roll. Every path
-still degrades to the bare engine text with no key, exactly as room
-description does.
+reply; a Tier 2 outcome gets a narrated line alongside its roll. **Part
+three** — `EXAMINE <npc>` now follows its mechanical persona line with a
+physique-and-outfit render on the same two-layer scheme as room description,
+lazily generated on an NPC's first EXAMINE rather than batched, since most
+NPCs are never looked at closely. Every path still degrades to the bare
+engine text with no key, exactly as room description does. Every
+fire-and-forget narration follow-up (voicing, outcome prose, NPC appearance)
+now shows a dim "…" placeholder while its call is in flight, swapped for the
+real line once it lands, so the mechanical reply never reads as finished
+while more prose is still coming — never blocking input, which stays locked
+only for Tier 2/3 command resolution.
 
 ---
 
@@ -132,6 +140,8 @@ tables; the engine must produce the same shapes.
 - Repair, training, hiring, and the Hub-return consumable — the gold sinks
 - Attribute growth via rare items and a Hub trainer
 - Dialogue: LLM voices NPCs, code owns every number
+- NPC appearance on EXAMINE: LLM-narrated physique and outfit, same two-layer
+  scheme as room description, grounded in what the NPC actually wears/wields
 - ASCII map derived from the room graph
 - **Campaigns** — content packs merged over base, importable as one JSON bundle
 - **Saving and loading** — autosave slot plus unlimited named snapshots
