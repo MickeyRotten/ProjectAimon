@@ -23,7 +23,14 @@ body {
 
 .status {
   background: var(--grey); color: var(--black); font-weight: 700;
-  flex: 0 0 auto; padding: 3px 10px; position: sticky; top: 0; z-index: 5;
+  flex: 0 0 auto; position: sticky; top: 0; z-index: 5;
+  /* viewport-fit=cover lets us draw under the camera cutout and curved
+     corners, so pad the bar out by the device's safe-area insets: the top
+     inset drops the text below the notch, the right inset clears the gear
+     button off the bezel. The bar's background still fills the notch area. */
+  padding:
+    calc(3px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right))
+    3px calc(10px + env(safe-area-inset-left));
   white-space: pre-wrap; display: flex; align-items: center; gap: 8px;
 }
 .status #statline { flex: 1 1 auto; min-width: 0; }
