@@ -40,8 +40,6 @@ export interface PlayerRecord {
   weaponWielded: string;
   /** What `it`, `him`, `her` and `them` last referred to. */
   pronounRefs: Record<string, string | null>;
-  /** Room name only on a revisit, full description on `look`. */
-  brief: boolean;
 }
 
 export interface CreatePlayerOptions {
@@ -92,7 +90,6 @@ export function createPlayer(options: CreatePlayerOptions): CreatedPlayer {
     armourWorn: '',
     weaponWielded: '',
     pronounRefs: { it: null, him: null, her: null, them: null },
-    brief: false,
   };
 
   const kit = issueKit(campaign, rng, [

@@ -95,8 +95,7 @@
 
     { "id": "save",     "words": ["save"],    "patterns": ["V","VN"] },
     { "id": "load",     "words": ["load","restore"], "patterns": ["V","VN"] },
-    { "id": "help",     "words": ["help","?","commands"], "patterns": ["V"] },
-    { "id": "brief",    "words": ["brief","verbose"], "patterns": ["V"] }
+    { "id": "help",     "words": ["help","?","commands"], "patterns": ["V"] }
   ],
 
   "articlesStripped": ["a","an","the","some","my","his","her","their"],

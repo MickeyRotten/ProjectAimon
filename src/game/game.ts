@@ -116,9 +116,9 @@ export interface TurnResult {
   appearance?: { npcId: string; fallback: Line } | undefined;
   /**
    * The id of an area just walked into through a gate, if this turn crossed
-   * one. main.ts uses it to hold the reveal behind a "Generating new area"
-   * loader until the new area's prose is written — an ordinary in-area step
-   * leaves it undefined and reveals immediately.
+   * one. main.ts uses it to hold the reveal behind the full-screen area loader
+   * until the new area's descriptions are batch-written — an ordinary in-area
+   * step leaves it undefined and reveals immediately.
    */
   enteredArea?: string | undefined;
   /**
@@ -348,10 +348,11 @@ export class Game {
 
     if (this.player.roomId !== before) {
       const room = this.room;
-      const first = !room.visited;
       // ── the second write point covers the visit mark as well ───────
       this.apply([{ kind: 'visit', roomId: room.id }]);
-      lines.push(...this.describeHere(first || !this.player.brief));
+      // The description lives in the top pane now; the log gets only the name
+      // and a `Here: …` arrival line. LOOK still prints the full text on demand.
+      lines.push(...this.describeHere(false));
     }
     // Walking into a room that holds hostiles starts a fight — announced now,
     // fought from the next turn, so the entry itself is never a free hit.
@@ -440,12 +441,11 @@ export class Game {
     if (this.pendingDefeat) {
       lines.push(...this.defeatLines(this.pendingDefeat));
       this.pendingDefeat = undefined;
-      lines.push(...this.describeHere(!this.player.brief));
+      lines.push(...this.describeHere(false));
     } else if (this.player.roomId !== before) {
       const room = this.room;
-      const first = !room.visited;
       this.apply([{ kind: 'visit', roomId: room.id }]);
-      lines.push(...this.describeHere(first || !this.player.brief));
+      lines.push(...this.describeHere(false));
       lines.push(...this.maybeBeginCombat());
     }
     return this.finish(raw, lines, true);
@@ -585,9 +585,6 @@ export class Game {
           if (room) room.visited = true;
           break;
         }
-        case 'brief':
-          this.player.brief = effect.value;
-          break;
         case 'pronoun':
           this.player.pronounRefs[effect.ref] = effect.id;
           break;
@@ -906,7 +903,7 @@ export class Game {
       line(`${cost} turns spent getting clear.`, 'rule'),
     ];
     if (dropped > 0) lines.push(line(`${dropped} gold lost in the scramble.`, 'warn'));
-    lines.push(...this.describeHere(true));
+    lines.push(...this.describeHere(false));
     return lines;
   }
 

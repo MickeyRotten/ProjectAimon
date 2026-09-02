@@ -55,7 +55,6 @@ export type Effect =
   | { kind: 'resolve'; delta: number }
   | { kind: 'libido'; delta: number }
   | { kind: 'visit'; roomId: string }
-  | { kind: 'brief'; value: boolean }
   | { kind: 'pronoun'; ref: string; id: string }
   | { kind: 'worldFlag'; id: string; value: boolean }
   /** A Tier 2 outcome against a non-hostile NPC. Never chosen by the model —

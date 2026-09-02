@@ -209,12 +209,6 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       };
     case 'wait':
       return say('You wait. The world does not.');
-    case 'brief':
-      return {
-        lines: [line(ctx.player.brief ? 'Verbose descriptions.' : 'Brief descriptions.')],
-        effects: [{ kind: 'brief', value: !ctx.player.brief }],
-        free: true,
-      };
     case 'help':
       return help(ctx);
     case 'read':
