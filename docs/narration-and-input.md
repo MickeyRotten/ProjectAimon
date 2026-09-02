@@ -73,8 +73,18 @@ the game punishes you for talking like a person.
 
 *"I sit by the fire and think about my brother."*
 
-No roll, no state change, no cost. Just prose. This should exist and should be
-free — not every sentence needs to be a move.
+No roll, no state change, no cost. Just prose — and it **is** prose now: a Tier 3
+line gets a fresh narrated reply over the same **expression seam** flavour verbs
+use (`src/narrator/expression.ts`), never cached, so the same words read
+differently each time. With no key it degrades to a short canned line, and it
+still touches no state and spends no turn. Not every sentence needs to be a move.
+
+**Flavour verbs share this seam.** `smell`, `listen`, `grope` and the rest carry
+`flavourOnly` in `verbs.json`; the parser flags the command and it always routes
+to a fresh expression call rather than a canned "nothing happens". This is the
+ephemeral half of the narrator: room and NPC prose are generated once and cached
+for consistency, while flavour and expression are generated every time for
+aliveness.
 
 
 ---
@@ -183,7 +193,8 @@ never a parser.
 
 ```
 raw input
-  → normalise      lowercase, strip articles, expand abbreviations
+  → normalise      lowercase, strip articles, strip a first-person lead-in
+                   (`i`, `im`, `let me`), expand abbreviations
   → tokenise       verb / noun phrase / preposition / noun phrase
   → grammar match  against the fixed verb table
   → [on failure]   LLM translation attempt → re-enter grammar match ONCE

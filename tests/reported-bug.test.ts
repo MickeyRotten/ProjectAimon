@@ -89,11 +89,12 @@ describe('the reported session', () => {
     const game = Game.begin({ campaign, seed: 'bug-report', name: 'Vess', archetype: 'freebooter' });
     marda(game);
 
-    // Sans a narrator key, an unparsed input degrades to the engine's own
-    // honest failure — never the "I" abbreviation swallowing the sentence.
-    const noKey = game.submit('i say hi to marda').lines.map((l) => l.text).join('\n');
-    expect(noKey).not.toContain('I does not take an object');
-    expect(noKey).toBe('i say hi to marda\n"i" is not something you can do.');
+    // The "I" abbreviation never swallows the sentence. It now reads as a
+    // first-person lead-in: it strips, and `say` opens the conversation —
+    // a better answer than the old bare failure, and still not the bug.
+    const said = game.submit('i say hi to marda').lines.map((l) => l.text).join('\n');
+    expect(said).not.toContain('I does not take an object');
+    expect(said).toContain('Marda turns to hear you out.');
 
     // The abbreviation itself is untouched.
     const inventory = game.submit('i').lines.map((l) => l.text).join('\n');

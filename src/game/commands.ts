@@ -69,6 +69,13 @@ export interface Reply {
    * the ask fails. Same read-only, no-effect discipline as `voice`.
    */
   appearance?: { npcId: string; fallback: Line } | undefined;
+  /**
+   * Set by a flavour verb (and by Tier 3 pure expression, from the game loop).
+   * Ephemeral prose with no state behind it: main.ts asks the narrator for a
+   * fresh line — never cached — and shows `fallback` when there is no narrator
+   * to ask. Same read-only, no-effect discipline as `voice` and `appearance`.
+   */
+  express?: { raw: string; verb?: string | undefined; target?: string | undefined; fallback: Line } | undefined;
 }
 
 export interface CommandContext {
@@ -129,6 +136,10 @@ const NOT_YET: Record<string, string> = {
 };
 
 export function execute(ctx: CommandContext, command: Command): Reply {
+  // Flavour verbs (smell, listen, grope, …) carry no mechanical outcome; the
+  // parser flags them and they always route to fresh narration, wherever they
+  // land in the table.
+  if (command.flavour) return flavour(ctx, command);
   switch (command.verb) {
     case 'go':
     case 'enter':
@@ -206,13 +217,12 @@ export function execute(ctx: CommandContext, command: Command): Reply {
     case 'help':
       return help(ctx);
     case 'read':
-    case 'listen':
-    case 'smell':
-    case 'touch':
     case 'push':
     case 'pull':
     case 'turn':
     case 'throw':
+      // Not flavour-flagged (they may gain mechanical triggers later), but with
+      // nothing to act on today they narrate the same way flavour verbs do.
       return flavour(ctx, command);
     default: {
       const note = NOT_YET[command.verb];
@@ -316,10 +326,25 @@ function examine(ctx: CommandContext, command: Command): Reply {
 }
 
 function flavour(ctx: CommandContext, command: Command): Reply {
-  const found = resolve(ctx, command.object);
-  if ('reply' in found) return found.reply;
-  // Tier 3: expression, no roll, no state change, no cost beyond the turn.
-  return say(`You ${command.verb} the ${found.entry.name}. Nothing comes of it.`);
+  // A target is nice to have but not required — `smell` with no object is the
+  // air of the room. A bad object name still resolves to its failure reply.
+  let target: string | undefined;
+  if (command.object) {
+    const found = resolve(ctx, command.object);
+    if ('reply' in found) return found.reply;
+    target = found.entry.name;
+  }
+  // No roll, no state change: the narrator writes a fresh line every time, and
+  // the canned sentence is only the fallback when there is no narrator to ask.
+  const fallback = target
+    ? `You ${command.verb} the ${target}. Nothing comes of it.`
+    : `You ${command.verb}. Nothing comes of it.`;
+  return {
+    lines: [],
+    effects: [],
+    free: false,
+    express: { raw: command.raw, verb: command.verb, target, fallback: line(fallback) },
+  };
 }
 
 // ── carrying ────────────────────────────────────────────────────────
