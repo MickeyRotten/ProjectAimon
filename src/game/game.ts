@@ -127,6 +127,8 @@ export interface TurnResult {
    * canned line shown when there is no narrator to ask.
    */
   express?: { raw: string; verb?: string | undefined; target?: string | undefined; fallback: Line } | undefined;
+  /** A UI-only request to open the full-floor map overlay. No state behind it. */
+  showMap?: boolean | undefined;
 }
 
 /**
@@ -328,7 +330,7 @@ export class Game {
     this.pending = reply.question ? { question: reply.question, command } : undefined;
     if (!reply.question && reply.failure === undefined) this.lastCommand = command;
 
-    if (reply.free) return this.finish(raw, lines, false);
+    if (reply.free) return this.finish(raw, lines, false, reply.showMap ? { showMap: true } : undefined);
 
     const before = this.player.roomId;
     // ── step 7: the player half's one write point ────────────────────
@@ -925,7 +927,7 @@ export class Game {
     raw: string,
     lines: Line[],
     spent: boolean,
-    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance' | 'enteredArea' | 'express'>,
+    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance' | 'enteredArea' | 'express' | 'showMap'>,
   ): TurnResult {
     this.transcript.push({
       turn: this.turn,

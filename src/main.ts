@@ -28,6 +28,7 @@ import {
   type SaveStore,
 } from './game/save';
 import { mountScreen, type PendingLine, type Screen } from './ui/screen';
+import { mapModel } from './world/map';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
 import { ExpressionNarrator } from './narrator/expression';
@@ -182,6 +183,8 @@ async function boot(): Promise<void> {
 
     screen.print(result.lines);
     screen.refresh(game);
+    // MAP opens the full-floor overlay — a UI-only view, no turn, no state.
+    if (result.showMap) screen.showMapOverlay(mapModel(game.world, game.player.roomId, {}));
     // Step 15: persist. One write point, once per turn that was actually spent.
     if (result.spent) await store.put(recordOf(game, 'auto', 'autosave'));
 

@@ -76,4 +76,15 @@ describe('mapModel', () => {
     expect(gates.length).toBeGreaterThan(0);
     for (const cell of gates) expect(cell.label).toBe('a way out');
   });
+
+  it('with no radius draws the whole floor, padded so edge gates still get a cell', () => {
+    const world = World.create({ campaign, seed: 'map-full' });
+    visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
+    const full = mapModel(world, 'hub_gate', {})!;
+    // The full view carries the gate cells (a padded window includes the
+    // coordinate one step past the boundary room that holds them).
+    expect(kinds(full.cells, 'gate').length).toBeGreaterThan(0);
+    // And it is at least as wide as the mini-map's fixed 5-room window.
+    expect(full.gridCols).toBeGreaterThanOrEqual(mapModel(world, 'hub_gate', { radius: 2 })!.gridCols - 2);
+  });
 });
