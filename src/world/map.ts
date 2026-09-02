@@ -221,10 +221,12 @@ export function mapModel(
     y0 = here.y - options.radius;
     y1 = here.y + options.radius;
   } else {
-    x0 = Math.min(...level.map((room) => room.x));
-    x1 = Math.max(...level.map((room) => room.x));
-    y0 = Math.min(...level.map((room) => room.y));
-    y1 = Math.max(...level.map((room) => room.y));
+    // The whole floor, padded by one so a gate one step past the edge — and the
+    // outward stub connectors — get a cell to sit in.
+    x0 = Math.min(...level.map((room) => room.x)) - 1;
+    x1 = Math.max(...level.map((room) => room.x)) + 1;
+    y0 = Math.min(...level.map((room) => room.y)) - 1;
+    y1 = Math.max(...level.map((room) => room.y)) + 1;
   }
 
   const roomAt = (x: number, y: number): RoomRecord | undefined =>

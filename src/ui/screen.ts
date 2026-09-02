@@ -13,7 +13,7 @@
 
 import type { Line, LineKind } from '../game/commands';
 import type { Game } from '../game/game';
-import { mapModel } from '../world/map';
+import { mapModel, type MapModel } from '../world/map';
 import { viewRoom } from '../game/describe';
 
 const CLASSES: Record<LineKind, string> = {
@@ -50,6 +50,34 @@ function mapTracks(count: number): string {
   return Array.from({ length: count }, (_, i) => (i % 2 === 1 ? 'var(--mroom)' : 'var(--mconn)')).join(' ');
 }
 
+/**
+ * Paint a map model into a grid element — room cells on the odd tracks,
+ * connectors on the even ones. Shared by the always-on mini-map and the full
+ * MAP overlay; the two differ only in cell size, set by CSS on the element.
+ */
+function paintGrid(grid: HTMLElement, model: MapModel): void {
+  grid.style.gridTemplateColumns = mapTracks(model.gridCols);
+  grid.style.gridTemplateRows = mapTracks(model.gridRows);
+  const children: HTMLElement[] = [];
+  for (const cell of model.cells) {
+    const el = document.createElement('div');
+    el.className = `mcell m-${cell.kind}`;
+    el.textContent = cell.glyph;
+    el.setAttribute('aria-label', cell.label);
+    el.style.gridColumn = String(cell.gc + 1);
+    el.style.gridRow = String(cell.gr + 1);
+    children.push(el);
+  }
+  for (const connector of model.connectors) {
+    const el = document.createElement('div');
+    el.className = `mconn m-${connector.dir}${connector.stub ? ' stub' : ''}`;
+    el.style.gridColumn = String(connector.gc + 1);
+    el.style.gridRow = String(connector.gr + 1);
+    children.push(el);
+  }
+  grid.replaceChildren(...children);
+}
+
 /** A placeholder log line, printed while a cosmetic narrator call is in flight. */
 export interface PendingLine {
   /** Replace the placeholder with the real line, once narration resolves. */
@@ -72,6 +100,8 @@ export interface Screen {
    * Replaced by the next `setRoomProse` or `refresh`.
    */
   setRoomPending(roomId: string, label: string): void;
+  /** Open the full-floor map overlay for the given model (or an empty state). */
+  showMapOverlay(model: MapModel | undefined): void;
   /** Lock or unlock input while an LLM call for the current turn is in flight. */
   setBusy(active: boolean): void;
 }
@@ -112,6 +142,21 @@ export function mountScreen(
       <button class="m1" data-m="cga" aria-pressed="true">CGA</button>
       <button class="m2" data-m="amber" aria-pressed="false">Amber</button>
       <button class="m3" data-m="green" aria-pressed="false">Green</button>
+    </div>
+    <div class="map-overlay" id="mapoverlay" role="dialog" aria-label="Map" aria-modal="true" hidden>
+      <div class="map-panel" id="mappanel" tabindex="-1">
+        <div class="map-head">
+          <span class="map-title" id="maptitle"></span>
+          <button class="map-close" id="mapclose" aria-label="Close map">✕</button>
+        </div>
+        <div class="map-scroll"><div class="gridmap big" id="mapfull"></div></div>
+        <div class="map-legend">
+          <span><i class="mcell m-here">▣</i> here</span>
+          <span><i class="mcell m-visited">□</i> walked</span>
+          <span><i class="mcell m-frontier">?</i> unexplored</span>
+          <span><i class="mcell m-gate">▨</i> way out</span>
+        </div>
+      </div>
     </div>`;
 
   const log = root.querySelector('#log') as HTMLElement;
@@ -199,26 +244,7 @@ export function mountScreen(
       return;
     }
     label.textContent = `${model.areaName} (${model.floorLabel})`;
-    grid.style.gridTemplateColumns = mapTracks(model.gridCols);
-    grid.style.gridTemplateRows = mapTracks(model.gridRows);
-    const children: HTMLElement[] = [];
-    for (const cell of model.cells) {
-      const el = document.createElement('div');
-      el.className = `mcell m-${cell.kind}`;
-      el.textContent = cell.glyph;
-      el.setAttribute('aria-label', cell.label);
-      el.style.gridColumn = String(cell.gc + 1);
-      el.style.gridRow = String(cell.gr + 1);
-      children.push(el);
-    }
-    for (const connector of model.connectors) {
-      const el = document.createElement('div');
-      el.className = `mconn m-${connector.dir}${connector.stub ? ' stub' : ''}`;
-      el.style.gridColumn = String(connector.gc + 1);
-      el.style.gridRow = String(connector.gr + 1);
-      children.push(el);
-    }
-    grid.replaceChildren(...children);
+    paintGrid(grid, model);
   };
 
   input.addEventListener('keydown', (event) => {
@@ -264,6 +290,38 @@ export function mountScreen(
     });
   }
 
+  // The full-floor MAP overlay: the same grid renderer at a larger scale, over
+  // a backdrop. Dismissed by the close button, a backdrop click, or Escape.
+  const mapOverlay = root.querySelector('#mapoverlay') as HTMLElement;
+  const closeMap = (): void => {
+    mapOverlay.hidden = true;
+    input.focus();
+  };
+  (root.querySelector('#mapclose') as HTMLElement).addEventListener('click', closeMap);
+  mapOverlay.addEventListener('click', (event) => {
+    if (event.target === mapOverlay) closeMap();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !mapOverlay.hidden) closeMap();
+  });
+
+  const showMapOverlay = (model: MapModel | undefined): void => {
+    const title = root.querySelector('#maptitle') as HTMLElement;
+    const grid = root.querySelector('#mapfull') as HTMLElement;
+    if (!model) {
+      title.textContent = 'Map — nothing walked yet';
+      grid.replaceChildren();
+    } else {
+      title.textContent = `${model.areaName} (${model.floorLabel})`;
+      paintGrid(grid, model);
+    }
+    mapOverlay.hidden = false;
+    // Focus the dialog itself, not the close button: the same Enter keypress
+    // that ran MAP would land its keyup on a focused button and fire it,
+    // closing the overlay the instant it opened. A div never activates.
+    (root.querySelector('#mappanel') as HTMLElement).focus();
+  };
+
   const setRoomProse = (roomId: string, name: string, text: string): void => {
     prose = { roomId, name, text };
     (root.querySelector('#rname') as HTMLElement).textContent = name;
@@ -291,5 +349,5 @@ export function mountScreen(
     prompt.classList.toggle('busy', active);
   };
 
-  return { print, printPending, refresh, focus: () => input.focus(), setRoomProse, setRoomPending, setBusy };
+  return { print, printPending, refresh, focus: () => input.focus(), setRoomProse, setRoomPending, showMapOverlay, setBusy };
 }
