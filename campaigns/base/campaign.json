@@ -5,85 +5,284 @@
   "version": "0.1.0",
   "permadeath": false,
   "startingArea": "hub",
-  "gatewayArchetypes": ["farmland", "town"],
-
+  "gatewayArchetypes": [
+    "farmland",
+    "town"
+  ],
   "_hubNote": "Hand-authored, permanent, six rooms. The only place in the game not generated. Rooms use world coordinates like everywhere else; the Hub cube is reserved at 0,0,0 before anything else is allocated.",
-
   "hub": {
-    "cube": { "x0": 0, "y0": 0, "z0": 0, "x1": 2, "y1": 2, "z1": 0 },
+    "cube": {
+      "x0": 0,
+      "y0": 0,
+      "z0": 0,
+      "x1": 2,
+      "y1": 2,
+      "z1": 0
+    },
     "entryRoomId": "hub_yard",
     "rooms": [
-      { "id": "hub_yard", "x": 1, "y": 1, "z": 0, "name": "The Guild Yard",
-        "tags": ["outdoor","open","settled","lit","safe","junction","landmark"],
-        "baseDesc": "Flagstones worn into shallow bowls by boots that came back, and by boots that came back changed. A board by the arch carries notices, most of them out of date. The gate stands open onto the road east." },
-
-      { "id": "hub_hall", "x": 1, "y": 0, "z": 0, "name": "The Long Hall",
-        "tags": ["indoor","dwelling","hearth","settled","lit","safe"],
-        "baseDesc": "Trestle tables, a fire that is never quite out, and a wall of hooks where people hang what they do not want to carry. Someone has scratched a tally into the beam above the hearth and stopped counting." },
-
-      { "id": "hub_armoury", "x": 0, "y": 1, "z": 0, "name": "Marda's Counter",
-        "tags": ["indoor","market","workspace","settled","lit","safe"],
-        "baseDesc": "A counter of scarred oak, racks behind it, and a smell of oil and cold iron. Nothing here is new. Most of it has been sold twice." },
-
-      { "id": "hub_bank", "x": 2, "y": 1, "z": 0, "name": "The Strongroom",
-        "tags": ["indoor","storage","settled","lit","safe","quiet"],
-        "baseDesc": "A short room with a long ledger and a door that is thicker than it needs to be. The clerk does not look up until you put something on the desk." },
-
-      { "id": "hub_yard_post", "x": 1, "y": 2, "z": 0, "name": "The Training Post",
-        "tags": ["outdoor","workspace","settled","lit","safe"],
-        "baseDesc": "A stump, a pell, and a rack of blunt practice gear that has been repaired more often than replaced. The ground here does not grow anything any more." },
-
-      { "id": "hub_gate", "x": 2, "y": 2, "z": 0, "name": "The Roadgate",
-        "tags": ["outdoor","path","settled","lit","safe","landmark"],
-        "baseDesc": "The arch, the road, and a milestone with the top third broken off. Whatever it used to say about distances, it does not say now." }
+      {
+        "id": "hub_yard",
+        "x": 1,
+        "y": 1,
+        "z": 0,
+        "name": "The Guild Yard",
+        "tags": [
+          "outdoor",
+          "open",
+          "settled",
+          "lit",
+          "safe",
+          "junction",
+          "landmark"
+        ],
+        "baseDesc": "Flagstones worn into shallow bowls by boots that came back, and by boots that came back changed. A board by the arch carries notices, most of them out of date. The gate stands open onto the road east."
+      },
+      {
+        "id": "hub_hall",
+        "x": 1,
+        "y": 0,
+        "z": 0,
+        "name": "The Long Hall",
+        "tags": [
+          "indoor",
+          "dwelling",
+          "hearth",
+          "settled",
+          "lit",
+          "safe"
+        ],
+        "baseDesc": "Trestle tables, a fire that is never quite out, and a wall of hooks where people hang what they do not want to carry. Someone has scratched a tally into the beam above the hearth and stopped counting."
+      },
+      {
+        "id": "hub_armoury",
+        "x": 0,
+        "y": 1,
+        "z": 0,
+        "name": "Marda's Counter",
+        "tags": [
+          "indoor",
+          "market",
+          "workspace",
+          "settled",
+          "lit",
+          "safe"
+        ],
+        "baseDesc": "A counter of scarred oak, racks behind it, and a smell of oil and cold iron. Nothing here is new. Most of it has been sold twice."
+      },
+      {
+        "id": "hub_bank",
+        "x": 2,
+        "y": 1,
+        "z": 0,
+        "name": "The Strongroom",
+        "tags": [
+          "indoor",
+          "storage",
+          "settled",
+          "lit",
+          "safe",
+          "quiet"
+        ],
+        "baseDesc": "A short room with a long ledger and a door that is thicker than it needs to be. The clerk does not look up until you put something on the desk."
+      },
+      {
+        "id": "hub_yard_post",
+        "x": 1,
+        "y": 2,
+        "z": 0,
+        "name": "The Training Post",
+        "tags": [
+          "outdoor",
+          "workspace",
+          "settled",
+          "lit",
+          "safe"
+        ],
+        "baseDesc": "A stump, a pell, and a rack of blunt practice gear that has been repaired more often than replaced. The ground here does not grow anything any more."
+      },
+      {
+        "id": "hub_gate",
+        "x": 2,
+        "y": 2,
+        "z": 0,
+        "name": "The Roadgate",
+        "tags": [
+          "outdoor",
+          "path",
+          "settled",
+          "lit",
+          "safe",
+          "landmark"
+        ],
+        "baseDesc": "The arch, the road, and a milestone with the top third broken off. Whatever it used to say about distances, it does not say now."
+      }
     ],
     "edges": [
-      ["hub_yard", "n", "hub_hall"],
-      ["hub_yard", "w", "hub_armoury"],
-      ["hub_yard", "e", "hub_bank"],
-      ["hub_yard", "s", "hub_yard_post"],
-      ["hub_bank", "s", "hub_gate"]
+      [
+        "hub_yard",
+        "n",
+        "hub_hall"
+      ],
+      [
+        "hub_yard",
+        "w",
+        "hub_armoury"
+      ],
+      [
+        "hub_yard",
+        "e",
+        "hub_bank"
+      ],
+      [
+        "hub_yard",
+        "s",
+        "hub_yard_post"
+      ],
+      [
+        "hub_bank",
+        "s",
+        "hub_gate"
+      ]
     ],
     "gates": [
-      { "fromRoom": "hub_gate", "dir": "e", "archetype": "farmland" },
-      { "fromRoom": "hub_gate", "dir": "s", "archetype": "town" }
+      {
+        "fromRoom": "hub_gate",
+        "dir": "e",
+        "archetype": "farmland"
+      },
+      {
+        "fromRoom": "hub_gate",
+        "dir": "s",
+        "archetype": "town"
+      }
     ],
     "npcs": [
-      { "id": "hub_marda", "name": "Marda", "location": "room:hub_armoury",
-        "sex": { "f": 100 }, "isVendor": true, "services": ["buy","sell","repair"],
-        "persona": "quartermaster. blunt and watchful. Wants a fair price, for once.",
-        "tags": ["humanoid","venal"] },
-      { "id": "hub_clerk", "name": "the clerk", "location": "room:hub_bank",
-        "sex": { "m": 50, "f": 50 }, "isVendor": false, "services": ["deposit","withdraw"],
-        "persona": "strongroom clerk. exhausted and guarded. Wants to be left alone.",
-        "tags": ["humanoid"] },
-      { "id": "hub_master", "name": "the master-at-arms", "location": "room:hub_yard_post",
-        "sex": { "m": 50, "f": 50 }, "isVendor": false, "services": ["train","hire"],
-        "persona": "master-at-arms. bitter and generous. Wants a rival humbled.",
-        "tags": ["humanoid","proud"] }
+      {
+        "id": "hub_marda",
+        "name": "Marda",
+        "location": "room:hub_armoury",
+        "sex": {
+          "f": 100
+        },
+        "isVendor": true,
+        "services": [
+          "buy",
+          "sell",
+          "repair"
+        ],
+        "persona": "human, quartermaster, glowing with a maternal glow, always smiling",
+        "tags": [
+          "humanoid",
+          "kind",
+          "maternal"
+        ]
+      },
+      {
+        "id": "hub_lizzy",
+        "name": "Lizzy",
+        "location": "room:hub_bank",
+        "sex": {
+          "f": 100
+        },
+        "isVendor": false,
+        "services": [
+          "deposit",
+          "withdraw"
+        ],
+        "persona": "lizardfolk, storeroom clerk, kind and curious, anal about order and labels",
+        "tags": [
+          "humanoid",
+          "kind",
+          "curious"
+        ]
+      },
+      {
+        "id": "hub_miranda",
+        "name": "Miranda",
+        "location": "room:hub_yard_post",
+        "sex": {
+          "f": 100
+        },
+        "isVendor": false,
+        "services": [
+          "train",
+          "hire"
+        ],
+        "persona": "human, master-at-arms, proud and powerful, ex-knight with a dark secret",
+        "tags": [
+          "humanoid",
+          "proud"
+        ]
+      }
     ]
   },
-
   "starterKit": {
     "_note": "Issued at character creation AND after every defeat. Tagged untradable so it cannot be farmed and sold.",
-    "items": ["club", "leather", "torch"],
-    "tags": ["untradable"],
+    "items": [
+      "club",
+      "leather",
+      "torch"
+    ],
+    "tags": [
+      "untradable"
+    ],
     "gold": 40
   },
-
   "characterCreation": {
     "method": "roll3d8PerAttribute",
     "rerollsAllowed": 2,
     "_rerollNote": "Two full rerolls. Attributes never rise in play, so a hopeless spread is a dead campaign, not a challenge.",
     "archetypes": [
-      { "id": "freebooter", "name": "Freebooter", "favours": ["brawn","toughness"],
-        "kit": ["axe","leather"], "blurb": "Hits hard, stands up, talks later." },
-      { "id": "cutpurse",   "name": "Cutpurse",   "favours": ["agility","wits"],
-        "kit": ["sword","leather"], "blurb": "Fast, sharp-eyed, better at leaving than arriving." },
-      { "id": "charmer",    "name": "Charmer",    "favours": ["charisma","willpower"],
-        "kit": ["club","leather"], "blurb": "Wins fights that never start." },
-      { "id": "roll",       "name": "Just roll",  "favours": [],
-        "kit": ["club","leather"], "blurb": "Take what the dice give you." }
+      {
+        "id": "freebooter",
+        "name": "Freebooter",
+        "favours": [
+          "brawn",
+          "toughness"
+        ],
+        "kit": [
+          "axe",
+          "leather"
+        ],
+        "blurb": "Hits hard, stands up, talks later."
+      },
+      {
+        "id": "cutpurse",
+        "name": "Cutpurse",
+        "favours": [
+          "agility",
+          "wits"
+        ],
+        "kit": [
+          "sword",
+          "leather"
+        ],
+        "blurb": "Fast, sharp-eyed, better at leaving than arriving."
+      },
+      {
+        "id": "charmer",
+        "name": "Charmer",
+        "favours": [
+          "charisma",
+          "willpower"
+        ],
+        "kit": [
+          "club",
+          "leather"
+        ],
+        "blurb": "Wins fights that never start."
+      },
+      {
+        "id": "roll",
+        "name": "Just roll",
+        "favours": [],
+        "kit": [
+          "club",
+          "leather"
+        ],
+        "blurb": "Take what the dice give you."
+      }
     ],
     "_archetypeNote": "An archetype does not change the roll. It swaps the two highest results into the favoured attributes and picks the opening kit — a nudge for a first-time player, not a class."
   }

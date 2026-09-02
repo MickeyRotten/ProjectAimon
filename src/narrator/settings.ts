@@ -27,9 +27,9 @@ export interface NarratorSettings {
 
 export const DEFAULT_SETTINGS: NarratorSettings = {
   apiKey: '',
-  narratorModel: 'anthropic/claude-3.5-sonnet',
-  translatorModel: 'anthropic/claude-3.5-haiku',
-  temperature: 0.8,
+  narratorModel: 'deepseek/deepseek-v4-flash',
+  translatorModel: 'openai/gpt-oss-120b',
+  temperature: 0.95,
   maxTokens: 500,
 };
 
