@@ -57,7 +57,18 @@ describe('the parser', () => {
 
   it('only matches a solo-word abbreviation when it is the whole input', () => {
     expect(ok('i').verb).toBe('inventory');
-    expect(failure('i say hi to marda').code).toBe('UNKNOWN_VERB');
+    // `i` followed by more is a first-person lead-in, not the inventory
+    // abbreviation: it strips and the real verb parses (here `say`).
+    expect(ok('i say hi to marda').verb).toBe('say');
+  });
+
+  it('strips a direct-action first-person lead-in so natural phrasing is free', () => {
+    expect(ok('i examine marda')).toMatchObject({ verb: 'examine' });
+    expect(ok('let me look').verb).toBe('look');
+    expect(ok('i take the sword')).toMatchObject({ verb: 'take' });
+    // A bare solo-word survives, and an intention phrase is left for Tier 2.
+    expect(ok('i').verb).toBe('inventory');
+    expect(failure('i try to talk her round').code).toBe('UNKNOWN_VERB');
   });
 
   it('names the verb, not the typed word, in its own error messages', () => {

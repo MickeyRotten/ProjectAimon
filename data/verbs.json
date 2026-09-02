@@ -100,6 +100,12 @@
   ],
 
   "articlesStripped": ["a","an","the","some","my","his","her","their"],
+  "_subjectNote": "Direct-action first-person lead-ins stripped before the verb, so 'I examine marda' and 'let me look' parse at Tier 1 for free. Longest match wins; a verb must remain, so a bare 'i' stays the inventory soloword. Apostrophes are gone by then, so I'm -> im. Deliberately NOT stripping intention phrases like 'I try to' / 'I want to': those carry the attempt semantics Tier 2 exists to classify, and stripping them would hijack a persuasion into a literal command.",
+  "subjectPrefixes": [
+    ["i"],
+    ["im"],
+    ["let","me"]
+  ],
   "pronouns": ["it","him","her","them"],
   "allWord": "all",
   "exceptWords": ["except","but"],

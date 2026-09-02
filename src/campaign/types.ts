@@ -320,6 +320,8 @@ export interface VerbDef {
   absorbs?: string[];
   /** Words that match this verb only when they are the entire input. */
   soloWords?: string[];
+  /** No state change; always narrated fresh — smell, listen, grope, … */
+  flavourOnly?: boolean;
 }
 
 export interface VerbTable {
@@ -327,6 +329,8 @@ export interface VerbTable {
   directions: Record<string, string>;
   verbs: VerbDef[];
   articlesStripped: string[];
+  /** Leading first-person lead-ins the parser strips: `[["i"],["let","me"],…]`. */
+  subjectPrefixes?: string[][];
   pronouns: string[];
   allWord: string;
   exceptWords: string[];

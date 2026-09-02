@@ -51,6 +51,16 @@ falls to speech rather than to an error. The tier ladder now lives in
 `src/game/ladder.ts` rather than inline at the edge, so it is testable.
 Vendors hold no stock yet, so the wares path always takes its empty branch
 today; the priced list turns on unchanged the day a stock roller lands.
+**Part five** — the ephemeral seam, which pushes more of the game onto fresh
+prose. The parser strips a first-person lead-in (`i`, `im`, `let me`) before
+matching, so `I examine marda` and `let me look` parse at Tier 1 for free
+instead of paying for an LLM rewrite — intention phrases (`I try to`) are left
+alone, since those are Tier 2's to classify. Flavour verbs (`smell`, `listen`,
+`grope`, …) now carry `flavourOnly` through to a **fresh** narrated line every
+time (`src/narrator/expression.ts`), never cached, and so does Tier 3 pure
+expression, over the same seam — the deliberate opposite of the generate-once
+caching room and NPC prose get, because flavour wants aliveness where those want
+consistency. Every path still degrades to a canned line with no key.
 
 ---
 

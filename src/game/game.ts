@@ -121,6 +121,12 @@ export interface TurnResult {
    * leaves it undefined and reveals immediately.
    */
   enteredArea?: string | undefined;
+  /**
+   * Ephemeral prose to narrate — a flavour verb or Tier 3 pure expression.
+   * Read-only for the narrator, never cached, never state. `fallback` is the
+   * canned line shown when there is no narrator to ask.
+   */
+  express?: { raw: string; verb?: string | undefined; target?: string | undefined; fallback: Line } | undefined;
 }
 
 /**
@@ -352,7 +358,7 @@ export class Game {
     // it always generates one on apply — so a gate effect this turn means the
     // room the player now stands in belongs to a freshly entered area.
     const enteredArea = reply.effects.some((effect) => effect.kind === 'enterGate') ? this.room.areaId : undefined;
-    return this.finish(raw, lines, true, { voice: reply.voice, appearance: reply.appearance, enteredArea });
+    return this.finish(raw, lines, true, { voice: reply.voice, appearance: reply.appearance, enteredArea, express: reply.express });
   }
 
   /**
@@ -361,7 +367,13 @@ export class Game {
    * change, no write point touched.
    */
   tier3(raw: string): TurnResult {
-    return this.finish(raw, [line(raw, 'echo')], false);
+    // Pure expression still gets a fresh narrated line — the ephemeral half of
+    // the same seam flavour verbs use. No verb, no target: it is whatever the
+    // player just said. Only ever reached when a translator (so a narrator)
+    // exists, so the fallback is a graceful last resort, not the usual path.
+    return this.finish(raw, [line(raw, 'echo')], false, {
+      express: { raw, fallback: line('You take a moment. Nothing comes of it.', 'rule') },
+    });
   }
 
   /**
@@ -913,7 +925,7 @@ export class Game {
     raw: string,
     lines: Line[],
     spent: boolean,
-    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance' | 'enteredArea'>,
+    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance' | 'enteredArea' | 'express'>,
   ): TurnResult {
     this.transcript.push({
       turn: this.turn,

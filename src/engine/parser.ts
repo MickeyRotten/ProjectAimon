@@ -45,6 +45,8 @@ export interface Command {
   object?: Phrase | undefined;
   preposition?: string | undefined;
   indirect?: Phrase | undefined;
+  /** The matched verb is flavour-only — no state change, always narrated. */
+  flavour?: boolean | undefined;
 }
 
 export interface ParseFailure {
@@ -120,7 +122,7 @@ export function toDirection(name: string): Direction | undefined {
 export function parse(raw: string, verbs: VerbTable): ParseResult {
   const articles = new Set(verbs.articlesStripped);
   const directions = directionWords(verbs);
-  const tokens = normalise(raw);
+  const tokens = stripSubjectPrefix(normalise(raw), verbs.subjectPrefixes);
   if (tokens.length === 0) {
     return { ok: false, failure: { code: 'UNKNOWN_VERB', message: 'Say something.' } };
   }
@@ -143,12 +145,13 @@ export function parse(raw: string, verbs: VerbTable): ParseResult {
     };
   }
   const word = verb.words[0] as string;
+  const flavour = verb.flavourOnly === true;
 
   let rest = tokens.slice(1).filter((word, index) => !(index === 0 && PARTICLES.includes(word)));
   rest = rest.filter((word) => !articles.has(word));
 
   if (rest.length === 0) {
-    if (verb.patterns.includes('V')) return { ok: true, command: { raw, verb: verb.id } };
+    if (verb.patterns.includes('V')) return { ok: true, command: { raw, verb: verb.id, flavour } };
     return {
       ok: false,
       failure: { code: 'UNKNOWN_NOUN', message: `${cap(word)} what?` },
@@ -222,7 +225,26 @@ export function parse(raw: string, verbs: VerbTable): ParseResult {
   const command: Command = { raw, verb: verb.id, object };
   if (preposition !== undefined) command.preposition = preposition;
   if (indirect !== undefined) command.indirect = indirect;
+  if (flavour) command.flavour = true;
   return { ok: true, command };
+}
+
+/**
+ * Strip a leading first-person lead-in — "I", "let me", "I want to" — so
+ * `I examine marda` parses at Tier 1 for free, the way `examine marda` does,
+ * instead of paying for an LLM rewrite. Only the longest matching prefix, and
+ * only when a verb still follows: a bare `i` stays the inventory soloword.
+ */
+function stripSubjectPrefix(tokens: string[], prefixes: string[][] | undefined): string[] {
+  if (!prefixes) return tokens;
+  let best: string[] | undefined;
+  for (const prefix of prefixes) {
+    if (prefix.length >= tokens.length) continue; // must leave a verb behind
+    if (prefix.every((token, index) => tokens[index] === token)) {
+      if (!best || prefix.length > best.length) best = prefix;
+    }
+  }
+  return best ? tokens.slice(best.length) : tokens;
 }
 
 /** `take all except the rope` — everything, minus what follows the exception. */

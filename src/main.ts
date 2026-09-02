@@ -30,12 +30,27 @@ import {
 import { mountScreen, type PendingLine, type Screen } from './ui/screen';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
+import { ExpressionNarrator } from './narrator/expression';
 import { NpcNarrator } from './narrator/npcs';
 import { OutcomeNarrator } from './narrator/outcome';
 import { RoomNarrator } from './narrator/rooms';
 import { loadSettings, saveSettings, type NarratorSettings } from './narrator/settings';
 import { Translator } from './narrator/translate';
 import { VoiceNarrator } from './narrator/voices';
+
+/** Present-participle labels for the flavour/expression pending indicator. */
+const EXPRESS_LABEL: Record<string, string> = {
+  smell: 'Smelling', listen: 'Listening', touch: 'Touching', grope: 'Groping',
+  slap: 'Slapping', fondle: 'Fondling', squeeze: 'Squeezing', rub: 'Rubbing',
+  stroke: 'Stroking', suck: 'Sucking', read: 'Reading', push: 'Pushing',
+  pull: 'Pulling', turn: 'Turning', throw: 'Throwing',
+};
+
+function expressLabel(target: { verb?: string | undefined; target?: string | undefined }): string {
+  if (!target.verb) return 'The world responds';
+  const gerund = EXPRESS_LABEL[target.verb] ?? 'Sensing';
+  return target.target ? `${gerund} the ${target.target}` : gerund;
+}
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app') as HTMLElement;
@@ -80,6 +95,7 @@ async function boot(): Promise<void> {
   let voices: VoiceNarrator | undefined;
   let outcome: OutcomeNarrator | undefined;
   let npcAppearance: NpcNarrator | undefined;
+  let expression: ExpressionNarrator | undefined;
   makeNarrators();
 
   function makeNarrators(): void {
@@ -89,6 +105,7 @@ async function boot(): Promise<void> {
       voices = undefined;
       outcome = undefined;
       npcAppearance = undefined;
+      expression = undefined;
       return;
     }
     const client = openRouterClient({
@@ -102,6 +119,7 @@ async function boot(): Promise<void> {
     voices = new VoiceNarrator(deps);
     outcome = new OutcomeNarrator(deps);
     npcAppearance = new NpcNarrator(deps);
+    expression = new ExpressionNarrator(deps);
   }
 
   // Locks input only while the just-typed command is still being resolved —
@@ -174,12 +192,16 @@ async function boot(): Promise<void> {
     // when narration is still coming — only shown when there's a narrator to
     // actually ask, so a no-key game never prints a "…" that never resolves.
     if (result.voice) {
-      if (voices) void narrateVoice(raw, result.voice, screen.printPending(line('…', 'rule')));
+      if (voices) void narrateVoice(raw, result.voice, screen.printPending(line(`${npcName(result.voice.npcId)} is thinking`, 'rule')));
       // No narrator to answer: some voiced turns carry the mechanical line
       // they replaced, so a keyless game never gets a turn with no output.
       else if (result.voice.fallback) screen.print([result.voice.fallback]);
     } else if (result.tier2 && outcome) {
-      void narrateOutcome(raw, result.lines, result.tier2, screen.printPending(line('…', 'rule')));
+      void narrateOutcome(raw, result.lines, result.tier2, screen.printPending(line('Resolving', 'rule')));
+    } else if (result.express) {
+      // A flavour verb or Tier 3 expression: always a fresh line, never cached.
+      if (expression) void narrateExpression(result.express, screen.printPending(line(expressLabel(result.express), 'rule')));
+      else screen.print([result.express.fallback]);
     }
     // Appearance is the one follow-up worth blocking on: it replaces the
     // mechanical persona line rather than supplementing it, so showing
@@ -189,7 +211,7 @@ async function boot(): Promise<void> {
     // the description is still being written.
     if (result.appearance) {
       if (npcAppearance) {
-        void track(narrateAppearance(result.appearance, screen.printPending(line('…', 'rule'))));
+        void track(narrateAppearance(result.appearance, screen.printPending(line(`Examining ${npcName(result.appearance.npcId)}`, 'rule'))));
       } else {
         screen.print([result.appearance.fallback]);
       }
@@ -299,6 +321,43 @@ async function boot(): Promise<void> {
       // Belt-and-braces: narrate() degrades internally and should not throw,
       // but the mechanical roll line already stands regardless.
       pending.clear();
+    }
+  }
+
+  /** An NPC's display name for a pending label, or a neutral stand-in. */
+  function npcName(id: string): string {
+    return game.world.npcs.get(id)?.name ?? 'they';
+  }
+
+  /**
+   * Prose for a flavour verb or a Tier 3 line — the ephemeral seam. Always a
+   * fresh call, never cached; fire-and-forget like voicing, with the same
+   * room-move staleness guard. Degrades to the payload's canned fallback so a
+   * network hiccup never leaves the placeholder hanging.
+   */
+  async function narrateExpression(
+    target: { raw: string; verb?: string | undefined; target?: string | undefined; fallback: Line },
+    pending: PendingLine,
+  ): Promise<void> {
+    if (!expression) return pending.resolve(target.fallback);
+    const area = game.world.areas.get(game.room.areaId);
+    const roomId = game.room.id;
+    try {
+      const prose = await expression.narrate({
+        areaName: area?.name ?? game.room.areaId,
+        areaTone: area?.themeTokens.join(', ') ?? '',
+        history: game.transcript,
+        roomName: game.room.name,
+        roomDesc: game.room.baseDesc,
+        raw: target.raw,
+        verb: target.verb,
+        target: target.target,
+      });
+      if (game.room.id !== roomId) return pending.clear(); // moved while we waited
+      pending.resolve(prose ? line(prose) : target.fallback);
+    } catch {
+      if (game.room.id !== roomId) return pending.clear();
+      pending.resolve(target.fallback);
     }
   }
 
