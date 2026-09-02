@@ -1,46 +1,49 @@
 /**
- * The NPC appearance narrator — a physique/outfit line for EXAMINE, on the
- * same two-layer scheme the room narrator already uses:
+ * The NPC appearance narrator — a single EXAMINE description per NPC,
+ * generated once and rechecked, never regenerated wholesale on every look:
  *
- *  - **physiqueDesc** — build, bearing, face. Written once on the first
- *    EXAMINE of this NPC, never regenerated. It never names clothing or gear.
- *  - **the woven render** — physiqueDesc plus whatever the NPC is currently
- *    wearing or wielding, written as one short paragraph. Cached by a
- *    signature of the NPC's worn/carried items, so re-examining an unchanged
- *    NPC is free and reads identically, and only a real gear change costs a
- *    call.
+ *  - **First EXAMINE**: generated from the NPC's tags, persona, role, sex,
+ *    current worn/wielded items, and its surrounding context (room tags and
+ *    area theme), written permanently as `description`.
+ *  - **Every later EXAMINE**: free, unless the game transcript has grown
+ *    since `descriptionSeen` (the transcript length as of the last time this
+ *    NPC's description was generated or confirmed unchanged). When it has,
+ *    one call judges whether anything narrated since then would have changed
+ *    the NPC's appearance and, if so, rewrites the description grounded in
+ *    the old text plus what changed; either way `descriptionSeen` advances,
+ *    so the same history is never rescanned.
  *
- * Unlike room baseDesc, this is not batched: most NPCs are never examined, so
- * generating physique for every NPC in an area up front would spend calls on
- * NPCs the player never looks at. It generates lazily, on first EXAMINE.
+ * Turn number is deliberately not the clock here: EXAMINE itself costs a
+ * turn (`free: false`), so `game.turn` advances on every single EXAMINE and
+ * can never tell two back-to-back examines of the same NPC apart from a
+ * real gap. `Game.transcript` grows by exactly one entry per submitted
+ * command regardless, so its length is the clock that actually works.
  *
  * The narrator owns prose and nothing else — it is handed the NPC's worn and
  * carried items as data and writes them up; it never decides what those are.
- * With no API key, or on a failed call, this returns `undefined` and EXAMINE
- * stands on its persona line alone.
+ * With no API key, or on a failed call, this returns `undefined` (first
+ * generation) or the last-known-good text (a failed recheck), and EXAMINE
+ * stands on its persona line alone or its prior description, never blank.
  */
 
 import type { ResolvedCampaign } from '../campaign/types';
-import { seedFrom } from '../engine/rng';
+import type { TranscriptEntry } from '../game/game';
 import type { NpcRecord } from '../world/types';
-import { heldBy } from '../world/types';
+import { heldBy, roomOfLocation } from '../world/types';
 import type { World } from '../world/world';
 import type { LlmClient } from './llm';
 import type { NarratorSettings } from './settings';
-import { clean, fill } from './text';
+import { clean, fill, formatHistory } from './text';
 
-/** Cap on distinct cached renders per NPC, evicted least-recently-used. */
-const RENDER_CAP = 8;
+interface Judged {
+  changed: boolean;
+  description: string;
+}
 
 export class NpcNarrator {
   private readonly campaign: ResolvedCampaign;
   private readonly client: LlmClient;
   private readonly settings: NarratorSettings;
-
-  /** signature -> woven prose. */
-  private readonly cache = new Map<string, string>();
-  /** npcId -> signatures held for it, oldest first, for per-NPC LRU eviction. */
-  private readonly perNpc = new Map<string, string[]>();
 
   constructor(deps: { campaign: ResolvedCampaign; client: LlmClient; settings: NarratorSettings }) {
     this.campaign = deps.campaign;
@@ -49,38 +52,59 @@ export class NpcNarrator {
   }
 
   /**
-   * The physique/outfit line for EXAMINE, or `undefined` if there is no
-   * narrator to ask. Everything here degrades silently — the caller already
-   * has the persona line to fall back on.
+   * The EXAMINE description, or `undefined` if there is no narrator to ask
+   * and nothing generated yet. `history` is the whole game transcript —
+   * unscoped, exactly what NPC voicing already uses — and by the time this
+   * runs it already includes the current EXAMINE's own just-pushed entry.
    */
-  async describeAppearance(world: World, npc: NpcRecord): Promise<string | undefined> {
-    const physique = await this.ensurePhysique(world, npc);
-    if (!physique) return undefined;
+  async describeAppearance(
+    world: World,
+    npc: NpcRecord,
+    history: readonly TranscriptEntry[],
+  ): Promise<string | undefined> {
+    const priorLength = Math.max(0, history.length - 1);
 
-    const items = this.wornItemsOf(world, npc);
-    const signature = this.signatureOf(npc, physique, items);
+    if (!npc.description && !npc.physiqueDesc) {
+      const fresh = await this.generate(world, npc);
+      if (!fresh) return undefined;
+      world.writeNpcProse(npc.id, { description: fresh, descriptionSeen: history.length });
+      return fresh;
+    }
 
-    const cached = this.cache.get(signature);
-    if (cached !== undefined) return cached;
+    if (!npc.description && npc.physiqueDesc) {
+      // A save from before this scheme existed. Seed from the old permanent
+      // physique line rather than discarding it — no call, no regeneration.
+      const seeded = npc.physiqueDesc.trim();
+      world.writeNpcProse(npc.id, { description: seeded, descriptionSeen: history.length });
+      return seeded;
+    }
 
-    const prose = await this.weave(physique, items);
-    if (prose) this.remember(npc.id, signature, prose);
-    return prose;
+    const seen = npc.descriptionSeen ?? 0;
+    if (priorLength <= seen) {
+      // Nothing has happened since the last check but more EXAMINEs of this
+      // NPC — still advance the checkpoint, or the next repeat would look
+      // stale again purely from EXAMINE's own turns piling up.
+      world.writeNpcProse(npc.id, { descriptionSeen: history.length });
+      return npc.description;
+    }
+
+    return this.recheck(world, npc, history.slice(seen, priorLength), history.length);
   }
 
-  // ── layer one: the permanent physique, generated once per NPC ───────
+  // ── fresh generation, once per NPC ───────────────────────────────────
 
-  private async ensurePhysique(world: World, npc: NpcRecord): Promise<string | undefined> {
-    if (npc.physiqueDesc && npc.physiqueDesc.trim().length > 0) return npc.physiqueDesc;
-
-    const template = this.campaign.prompts['prompts/npc-physique.md'];
+  private async generate(world: World, npc: NpcRecord): Promise<string | undefined> {
+    const template = this.campaign.prompts['prompts/npc-appearance.md'];
     if (!template) return undefined;
 
+    const items = this.wornItemsOf(world, npc);
     const user = fill(template, {
       sex: npc.sex || 'someone',
       role: npc.role || npc.baseId,
       traits: npc.persona || npc.role || npc.baseId,
       tags: npc.tags.join(', ') || '—',
+      items: items.length > 0 ? items.map((entry) => `- ${entry}`).join('\n') : 'Nothing notable.',
+      context: this.contextOf(world, npc),
     });
 
     try {
@@ -95,42 +119,58 @@ export class NpcNarrator {
           maxTokens: this.settings.maxTokens,
         }),
       );
-      if (reply.length === 0) return undefined;
-      world.writeNpcProse(npc.id, { physiqueDesc: reply });
-      return reply;
-    } catch {
-      return undefined;
-    }
-  }
-
-  // ── layer two: the woven render ──────────────────────────────────────
-
-  private async weave(physique: string, items: string[]): Promise<string | undefined> {
-    const template = this.campaign.prompts['prompts/npc-appearance.md'];
-    if (!template) return undefined;
-
-    const list = items.length > 0 ? items.map((entry) => `- ${entry}`).join('\n') : 'Nothing notable.';
-    const messages = [
-      { role: 'system' as const, content: this.systemPrompt() },
-      { role: 'user' as const, content: fill(template, { physique, items: list }) },
-    ];
-
-    try {
-      const reply = clean(
-        await this.client.complete({
-          model: this.settings.narratorModel,
-          messages,
-          temperature: this.settings.temperature,
-          maxTokens: this.settings.maxTokens,
-        }),
-      );
       return reply.length > 0 ? reply : undefined;
     } catch {
       return undefined;
     }
   }
 
-  // ── what the NPC is wearing or carrying ──────────────────────────────
+  // ── the recheck: judge, and rewrite only if warranted ────────────────
+
+  private async recheck(
+    world: World,
+    npc: NpcRecord,
+    window: readonly TranscriptEntry[],
+    newSeen: number,
+  ): Promise<string | undefined> {
+    const current = npc.description ?? '';
+    const template = this.campaign.prompts['prompts/npc-appearance-update.md'];
+    if (!template) return current || undefined;
+
+    const items = this.wornItemsOf(world, npc);
+    const user = fill(template, {
+      old: current,
+      history: formatHistory(window, window.length),
+      items: items.length > 0 ? items.map((entry) => `- ${entry}`).join('\n') : 'Nothing notable.',
+    });
+
+    try {
+      const reply = clean(
+        await this.client.complete({
+          model: this.settings.narratorModel,
+          messages: [
+            { role: 'system', content: this.systemPrompt() },
+            { role: 'user', content: user },
+          ],
+          temperature: this.settings.temperature,
+          maxTokens: this.settings.maxTokens,
+        }),
+      );
+      const judged = parseJudgeReply(reply, current);
+      world.writeNpcProse(npc.id, {
+        descriptionSeen: newSeen,
+        ...(judged.changed ? { description: judged.description } : {}),
+      });
+      return judged.changed ? judged.description : current || undefined;
+    } catch {
+      // Leave descriptionSeen untouched: a transient failure is retried on
+      // the next EXAMINE against the same (or larger) window, rather than
+      // silently marking history it never actually looked at as seen.
+      return current || undefined;
+    }
+  }
+
+  // ── what the NPC is wearing or carrying, and where it's standing ─────
 
   /** Worn gear and any weapon, since a shopkeeper's whole stock is not "worn." */
   private wornItemsOf(world: World, npc: NpcRecord): string[] {
@@ -140,23 +180,35 @@ export class NpcNarrator {
       .map((object) => object.name);
   }
 
-  private signatureOf(npc: NpcRecord, physique: string, items: string[]): string {
-    return `${npc.id}|${seedFrom(physique).toString(36)}|${[...items].sort().join(',')}`;
-  }
-
-  private remember(npcId: string, signature: string, prose: string): void {
-    if (this.cache.has(signature)) return;
-    this.cache.set(signature, prose);
-    const held = this.perNpc.get(npcId) ?? [];
-    held.push(signature);
-    while (held.length > RENDER_CAP) {
-      const evicted = held.shift();
-      if (evicted) this.cache.delete(evicted);
-    }
-    this.perNpc.set(npcId, held);
+  /** Room tags and area theme tokens — the same grounding a room's baseDesc gets. */
+  private contextOf(world: World, npc: NpcRecord): string {
+    const roomId = roomOfLocation(npc.location);
+    const room = roomId ? world.rooms.get(roomId) : undefined;
+    const area = room ? world.areas.get(room.areaId) : undefined;
+    const bits = [...(room?.tags ?? []), ...(area?.themeTokens ?? [])];
+    return bits.length > 0 ? bits.join(', ') : '—';
   }
 
   private systemPrompt(): string {
     return this.campaign.prompts['prompts/narrator.md'] ?? '';
   }
+}
+
+/**
+ * Read the judge+rewrite reply. The emit shape is `CHANGED: yes|no` then,
+ * only when changed, a `DESCRIPTION:` line — but the safe default on any
+ * malformed or ambiguous reply is always "nothing changed," never a blanked
+ * record: `CHANGED: yes` with no description that follows is treated as
+ * unchanged, and no `CHANGED:` marker at all is treated as unchanged too.
+ */
+function parseJudgeReply(reply: string, fallback: string): Judged {
+  const match = /CHANGED\s*:\s*([^\n]*)/i.exec(reply);
+  const verdict = match?.[1]?.trim().toLowerCase() ?? '';
+  const changed = verdict.length > 0 && !/^(no|none|unchanged|no change)/.test(verdict);
+  if (!changed) return { changed: false, description: fallback };
+
+  const descMatch = /DESCRIPTION\s*:\s*([\s\S]*)/i.exec(reply);
+  const description = descMatch?.[1] ? clean(descMatch[1]) : '';
+  if (description.length === 0) return { changed: false, description: fallback };
+  return { changed: true, description };
 }

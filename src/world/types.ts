@@ -362,7 +362,22 @@ export interface NpcRecord {
   aliases: string[];
   location: Location;
   persona: string;
-  /** Written once by the narrator on first EXAMINE. Empty until then. */
+  /**
+   * The EXAMINE description — physique, bearing, current gear, one text.
+   * Generated once on first EXAMINE; rechecked, never blindly regenerated,
+   * only when the transcript has grown since `descriptionSeen`.
+   */
+  description?: string;
+  /**
+   * Transcript length as of the last generation or confirmed-unchanged
+   * check. Not the turn of the last edit — a "nothing changed" result
+   * still advances this, so the same history is never rescanned.
+   */
+  descriptionSeen?: number;
+  /**
+   * Legacy field from the old physique/gear-signature scheme. Read once,
+   * as the seed for `description` on an old save; never written again.
+   */
   physiqueDesc?: string;
   tags: string[];
   /** Rolled per instance. Drives pronouns and nothing mechanical. */

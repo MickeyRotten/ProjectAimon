@@ -114,12 +114,23 @@ percentage now.
 `condition` starts at 100 and drops on a fumble. It is what `repair` repairs;
 without it the gold sink had nothing to act on.
 
-**`npcs`** — `campaignId, id, name, aliases[], location, persona, tags[], sex,
-stats{brawn, agility, toughness, charisma, willpower, wits}, hp, maxHp,
-resolve, maxResolve, armourReduction, penetration, weaponDamage, damageBonus,
-attacksPerRound, threat, friendliness, bribeThreshold, disposition, standing,
-sensed, isVendor, priceModifier, imageBlob, hostile, baseId, role, gambits,
-abilities[], presenceImmune`
+**`npcs`** — `campaignId, id, name, aliases[], location, persona, description,
+descriptionSeen, tags[], sex, stats{brawn, agility, toughness, charisma,
+willpower, wits}, hp, maxHp, resolve, maxResolve, armourReduction,
+penetration, weaponDamage, damageBonus, attacksPerRound, threat,
+friendliness, bribeThreshold, disposition, standing, sensed, isVendor,
+priceModifier, imageBlob, hostile, baseId, role, gambits, abilities[],
+presenceImmune`
+
+`description` and `descriptionSeen` are narrator-owned, written out-of-band
+by `World.writeNpcProse` the same way `name`/`baseDesc` are for rooms:
+`description` is the EXAMINE appearance line, generated once and rechecked
+against the transcript rather than regenerated on every look (see
+*NPC appearance* in [narration-and-input.md](narration-and-input.md));
+`descriptionSeen` is the transcript length as of the last time it was
+generated or confirmed unchanged. A legacy `physiqueDesc` field, from an
+earlier version of this scheme, may still be present on an old save — it is
+read once as a migration seed for `description` and never written again.
 **One table holds everyone who is not the player**, and `hostile` is a flag on
 the record rather than a second table: a bribed footpad and a hired sword are
 the same row with a different disposition. `baseId` and `role` are what it was

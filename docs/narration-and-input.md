@@ -453,51 +453,76 @@ truth rather than by forbidding it the subject.
 
 ---
 
-## NPC appearance — two layers
+## NPC appearance — one description, rechecked on history
 
 The narrator's fourth job: `EXAMINE <npc>` prints the mechanical name/persona/
 disposition lines exactly as before — engine text, always available, no key
-required — then a physique-and-outfit line follows, on the same two-layer
-scheme as room description.
+required — then an appearance line follows. Unlike room description, this is
+**not** a two-layer scheme: there is one stored `description` per NPC, and
+what triggers a regeneration is a judgment call over what has been narrated
+since it was last checked, not a deterministic content signature. Room
+description is unaffected by any of this — see above.
 
-### The two layers
+### Generated once, rechecked, never blindly regenerated
 
-**`physiqueDesc`** — build, bearing, face, any notable scar or feature. Never
-names clothing, armour or a weapon. Written once, on the NPC's **first**
-EXAMINE, never regenerated — the same write-once discipline as a room's
-`baseDesc`, just triggered lazily instead of batched.
+**`description`** — build, bearing, face, current gear, one short paragraph.
+Generated on the NPC's **first** EXAMINE from its tags, persona, role, sex,
+current worn/wielded items, and its surrounding context (room tags and area
+theme, the same grounding `baseDesc` gets from an area's theme tokens).
+Nothing is batched — most NPCs are never examined, so generating this for
+every NPC up front would spend calls on NPCs nobody looks at twice. It
+generates lazily, the first time EXAMINE actually asks for it, exactly as
+before.
 
-**The woven render** — `physiqueDesc` plus whatever the NPC is currently
-wearing or wielding, written as one short paragraph. This is what EXAMINE
-shows.
+On every **later** EXAMINE, the engine first asks a cheaper question: has
+anything happened since the description was last generated or confirmed
+unchanged? If not, the stored text is returned as-is, for free. If so, one
+call is handed the old description, everything narrated since, and the
+NPC's current gear, and judges whether anything would visibly change how the
+NPC looks — an injury, new gear, a narrated transformation — rewriting only
+if so.
 
-### Lazy, not batched — the one place this diverges from rooms
+### Why the clock is the transcript, not the turn count
 
-Room `baseDesc` batches every room in an area in one call, because every room
-in a generated area is guaranteed to be walked through. Most NPCs are never
-examined, so generating physique for all of them up front would spend calls
-on NPCs the player never looks twice at. Physique generates on demand, the
-first time EXAMINE actually asks for it.
+The obvious staleness clock — "has `game.turn` advanced since the last
+check" — does not work here, and it is worth writing down why: `EXAMINE`
+itself is not a free action (`free: false`), so it costs a turn like any
+other command. `game.turn` therefore advances on *every* EXAMINE, including
+two back-to-back examines of the same NPC with nothing else happening — a
+turn-number gate would see the second one as stale and fire a real check
+every single time, which is exactly the repeat-EXAMINE case that must stay
+free.
 
-### Cached by gear signature
+`Game.transcript` doesn't have this problem: `finish()` pushes exactly one
+entry per submitted command, free or not, so its length is a reliable
+per-command clock. The NPC record keeps `descriptionSeen`, the transcript
+length as of the last generation or confirmed-unchanged check (not the turn
+of the last actual *edit* — a "nothing changed" verdict still advances it,
+so the same history is never rescanned). A later EXAMINE is stale only if
+the transcript held more entries, prior to that EXAMINE's own, than
+`descriptionSeen` accounts for. The window handed to the judge call is
+exactly the entries in between — never the current EXAMINE itself, which
+cannot have changed anything about the NPC.
 
-```
-key = npcId + hash(physiqueDesc) + sorted(worn/wielded item ids)
-```
+A failed recheck call (network error, an unusable reply) leaves
+`descriptionSeen` untouched rather than advancing it, so the next EXAMINE
+retries against the same window instead of silently treating unseen history
+as seen — and returns the last-known-good `description` rather than nothing,
+since there is a valid answer already on hand.
 
-Grounded in `world.contentsOf(heldBy(npcId))`, filtered to items flagged
-`worn` or `weapon` — a vendor's whole stock sits at the same location and is
-not "worn," so the filter matters. Re-examining an NPC whose gear hasn't
-changed is free and reads identically; arming or re-equipping them changes
-the key and costs one call. Capped at 8 renders per NPC, evicted
-least-recently-used — same shape as the room cache.
+### Save compatibility
+
+An older save may carry `physiqueDesc` from before this scheme existed. It is
+read once, as the seed for `description`, and never written again — no
+regeneration, per the rule that loading a save never regenerates anything it
+already contains.
 
 ### Grounding, the same way the woven room render is grounded
 
-Physique is invented freely, the same latitude `baseDesc` has for a room's
-mood and wear. Worn and carried items are hard facts: the prompt must mention
-every one listed and invent no equipment beyond it, the identical rule
-`room-render.md` applies to room contents.
+The prompt must mention every currently worn or carried item and invent no
+equipment beyond it — the identical rule `room-render.md` applies to room
+contents. Physique and mood are otherwise invented freely, the same latitude
+a room's `baseDesc` has.
 
 ### Non-blocking, with a placeholder marking the wait
 

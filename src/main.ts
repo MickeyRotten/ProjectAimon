@@ -239,7 +239,7 @@ async function boot(): Promise<void> {
     if (!npc) return pending.clear();
     const roomId = game.room.id;
     try {
-      const prose = await npcAppearance.describeAppearance(game.world, npc);
+      const prose = await npcAppearance.describeAppearance(game.world, npc, game.transcript);
       if (!prose) return pending.clear();
       if (game.room.id !== roomId) return pending.clear(); // moved while we waited
       pending.resolve(line(prose));

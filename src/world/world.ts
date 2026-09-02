@@ -253,15 +253,20 @@ export class World {
   }
 
   /**
-   * The same out-of-band prose write as `writeProse`, for an NPC's invariant
-   * physical description — written once on first EXAMINE, never regenerated.
+   * The same out-of-band prose write as `writeProse`, for an NPC's EXAMINE
+   * description and the transcript length it was last generated or confirmed
+   * unchanged against. `descriptionSeen` is written whenever supplied, even
+   * when the text did not change — a "confirmed no change" result still has
+   * to advance the checkpoint so the next EXAMINE doesn't rescan the same
+   * history.
    */
-  writeNpcProse(npcId: string, prose: { physiqueDesc?: string }): void {
+  writeNpcProse(npcId: string, prose: { description?: string; descriptionSeen?: number }): void {
     const npc = this.npcs.get(npcId);
     if (!npc) return;
-    if (prose.physiqueDesc && prose.physiqueDesc.trim().length > 0) {
-      npc.physiqueDesc = prose.physiqueDesc.trim();
+    if (prose.description && prose.description.trim().length > 0) {
+      npc.description = prose.description.trim();
     }
+    if (prose.descriptionSeen !== undefined) npc.descriptionSeen = prose.descriptionSeen;
   }
 
   roomAt(coord: Coord): RoomRecord | undefined {
