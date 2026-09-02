@@ -114,6 +114,13 @@ export interface TurnResult {
    * if there's no narrator to ask or the ask fails.
    */
   appearance?: { npcId: string; fallback: Line } | undefined;
+  /**
+   * The id of an area just walked into through a gate, if this turn crossed
+   * one. main.ts uses it to hold the reveal behind a "Generating new area"
+   * loader until the new area's prose is written — an ordinary in-area step
+   * leaves it undefined and reveals immediately.
+   */
+  enteredArea?: string | undefined;
 }
 
 /**
@@ -341,7 +348,11 @@ export class Game {
     // Walking into a room that holds hostiles starts a fight — announced now,
     // fought from the next turn, so the entry itself is never a free hit.
     lines.push(...this.maybeBeginCombat());
-    return this.finish(raw, lines, true, { voice: reply.voice, appearance: reply.appearance });
+    // A gate crossing is the only move that lands the player in a new area, and
+    // it always generates one on apply — so a gate effect this turn means the
+    // room the player now stands in belongs to a freshly entered area.
+    const enteredArea = reply.effects.some((effect) => effect.kind === 'enterGate') ? this.room.areaId : undefined;
+    return this.finish(raw, lines, true, { voice: reply.voice, appearance: reply.appearance, enteredArea });
   }
 
   /**
@@ -902,7 +913,7 @@ export class Game {
     raw: string,
     lines: Line[],
     spent: boolean,
-    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance'>,
+    extra?: Pick<TurnResult, 'voice' | 'tier2' | 'appearance' | 'enteredArea'>,
   ): TurnResult {
     this.transcript.push({
       turn: this.turn,

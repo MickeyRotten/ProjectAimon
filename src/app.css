@@ -81,7 +81,26 @@ body {
 .panel .where { min-width: 0; }
 .panel .rname { color: var(--white); font-weight: 700; margin: 0 0 .2em; }
 .panel .rdesc { color: var(--grey); margin: 0; font-size: .92em; }
-.map { margin: 0; color: var(--grey); line-height: 1.1; font-size: 1.05em; }
+
+/* The mini-map: a small fixed window around the player, drawn as a CSS grid of
+   room squares with thin connectors between them. Room tracks sit on the odd
+   grid lines, connector tracks between; the margin connector tracks hold the
+   stubs that point off the window toward rooms it does not draw. */
+.mapwrap { flex: 0 0 auto; }
+.maplabel { color: var(--dim); font-size: .78em; margin: 0 0 4px; white-space: nowrap; }
+.gridmap { --mroom: 15px; --mconn: 8px; display: grid; justify-content: start; }
+.mcell {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; color: var(--grey);
+}
+.mcell.m-here { color: var(--black); background: var(--white); font-weight: 700; }
+.mcell.m-visited { color: var(--grey); }
+.mcell.m-frontier { color: var(--dim); }
+.mcell.m-gate { color: var(--amber); }
+.mconn { align-self: center; justify-self: center; background: var(--grey); }
+.mconn.m-h { width: 100%; height: 2px; }
+.mconn.m-v { width: 2px; height: 100%; }
+.mconn.stub { background: var(--dim); }
 
 .log {
   flex: 1 1 auto; overflow-y: auto;
@@ -101,9 +120,13 @@ body {
 .err { color: var(--red); }
 .speak { color: var(--white); }
 .rule { color: var(--dim); }
-.pending { font-style: italic; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .pending { animation: none; } }
+/* A call in flight: the label's letters bounce in a staggered wave, so it reads
+   as busy without a spinner. Real character spans, so a screen reader still
+   announces the plain label once — the motion is decorative. */
+.pending { font-style: italic; color: var(--dim); }
+.pending span { display: inline-block; animation: bounce .9s ease-in-out infinite; animation-delay: calc(var(--i) * 55ms); }
+@keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-0.28em); } }
+@media (prefers-reduced-motion: reduce) { .pending span { animation: none; } }
 
 #promptline { display: flex; align-items: baseline; gap: .5ch; margin: 0; }
 #promptline .caret { color: var(--dim); font-weight: 700; }
