@@ -87,4 +87,35 @@ describe('mapModel', () => {
     // And it is at least as wide as the mini-map's fixed 5-room window.
     expect(full.gridCols).toBeGreaterThanOrEqual(mapModel(world, 'hub_gate', { radius: 2 })!.gridCols - 2);
   });
+
+  it('is one continuous map: a crossed gate pulls the far area onto the same model', () => {
+    const world = World.create({ campaign, seed: 'map-cross' });
+    visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
+    // Avoid a "warren" gate: it drops two Z levels, and a merged map only ever
+    // spans one floor — pick a gate whose far entry room shares the hub's Z.
+    const gateExit = world
+      .exitsOf('hub_gate')
+      .find((exit) => exit.toRoomId === null && exit.gateArchetype !== 'warren');
+    expect(gateExit).toBeDefined();
+    const beyondArea = world.enterGate(gateExit!.edge.id);
+    expect(beyondArea.entryRoomId).toBeTruthy();
+    visit(world, beyondArea.entryRoomId!);
+
+    // Standing on the far side, the model still carries the hub's rooms —
+    // it is one map, not a fresh one that forgot where the player came from.
+    // A room drawn from a foreign area carries its area's name in the label.
+    const model = mapModel(world, beyondArea.entryRoomId!, {})!;
+    expect(model).toBeDefined();
+    const foreignCells = model.cells.filter((cell) => cell.label.includes(' — '));
+    expect(foreignCells.length).toBeGreaterThan(0);
+
+    // The seam between the two areas is marked, not drawn as an ordinary
+    // same-area corridor.
+    const seam = model.connectors.filter((connector) => connector.crossesArea);
+    expect(seam.length).toBeGreaterThan(0);
+
+    // areaHops: 0 is the escape hatch back to the old single-area behaviour.
+    const isolated = mapModel(world, beyondArea.entryRoomId!, { areaHops: 0 })!;
+    expect(isolated.cells.some((cell) => cell.label.includes(' — '))).toBe(false);
+  });
 });

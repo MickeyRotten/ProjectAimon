@@ -20,12 +20,20 @@ Task types:
 2. [ ] SPIKE: The world generation needs more rule-driven procedural generation. The likelihood of a Coven being right next to a Town should be low or zero, etc. Same as Minecraft, the biomes need to also consider adjacent biomes.
 
 ---
-3. [ ] NEW:
+3. [ ] NEW (OR ITERATE):
 
 Option A. I need two external, separate scripts (launched through individual .bat files). EXPORT.bat that exports all the json values related to the gameplay as a .csv, and an IMPORT.bat that parses a .csv back to json.
 
 Option B. The Editor should be extended and improved so that it's easier to create new areas, enemies, etc. and to tweak difficulty. Right now it's a rather raw representation of all the data.
 
 Regardless of Option, I would like to see descriptions for each tag, even if the LLM would not use a description field (though it would make it a bit more predictable in behaviour).
+
+---
+4. [x] ITERATE: When I move to a new Area, the map should also show the prtaevious, connected Areas. In other words, it's one big Map that gets built, rather than separate ones (except for different floors). We can have a rule that up to X connections get rendered, but the map is still one big map. The connector between two areas can have a different color to indicate a gate between two areas.
+
+   Done: rooms already lived in one shared X/Y/Z lattice across areas, but `mapModel()` filtered to only the current area before ever using those coordinates — so a crossed gate rendered as a dead end (no far-side room, and the "way out" ghost glyph disappears once a gate is crossed). `mapModel()` now walks outward from the player's area across *crossed* gates, up to `AREA_HOP_LIMIT` (1, overridable via a new `areaHops` option), and includes those areas' rooms on the same Z level — same floor only, per "except for different floors." The connector where two areas join is flagged `crossesArea` and rendered in the same amber used for the "way out" glyph, with a new "area gate" legend entry. See `src/world/map.ts`, `src/ui/screen.ts`, `src/app.css`, `tests/map-model.test.ts`.
+
+---
+5. [ ] NEW: In Config, add a button for "Restart Adventure" which does a hard reset, wipes everything (except settings) and starts the adventure fresh.
 
 ---

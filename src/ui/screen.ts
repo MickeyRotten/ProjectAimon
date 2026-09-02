@@ -70,7 +70,7 @@ function paintGrid(grid: HTMLElement, model: MapModel): void {
   }
   for (const connector of model.connectors) {
     const el = document.createElement('div');
-    el.className = `mconn m-${connector.dir}${connector.stub ? ' stub' : ''}`;
+    el.className = `mconn m-${connector.dir}${connector.stub ? ' stub' : ''}${connector.crossesArea ? ' area-gate' : ''}`;
     el.style.gridColumn = String(connector.gc + 1);
     el.style.gridRow = String(connector.gr + 1);
     children.push(el);
@@ -155,6 +155,7 @@ export function mountScreen(
           <span><i class="mcell m-visited">□</i> walked</span>
           <span><i class="mcell m-frontier">?</i> unexplored</span>
           <span><i class="mcell m-gate">▨</i> way out</span>
+          <span><i class="mswatch area-gate"></i> area gate</span>
         </div>
       </div>
     </div>`;
