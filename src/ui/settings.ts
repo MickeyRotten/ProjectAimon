@@ -31,6 +31,7 @@ export function mountSettings(
   root: HTMLElement,
   current: () => NarratorSettings,
   onSave: (settings: NarratorSettings) => void,
+  onRestart: () => void,
   options: { loadModels?: () => Promise<ModelInfo[]> } = {},
 ): SettingsPanel {
   const loadModels = options.loadModels ?? ((): Promise<ModelInfo[]> => fetchModels());
@@ -60,6 +61,13 @@ export function mountSettings(
       <div class="settings-actions">
         <button type="button" data-act="cancel">Cancel</button>
         <button type="submit" data-act="save">Save</button>
+      </div>
+      <hr class="settings-divider">
+      <p class="settings-note">Restart Adventure wipes your save — the world, your
+        character, every snapshot — and starts over. Your API key and model
+        settings are kept.</p>
+      <div class="settings-actions">
+        <button type="button" data-act="restart">Restart Adventure</button>
       </div>
     </form>`;
   root.appendChild(overlay);
@@ -184,6 +192,11 @@ export function mountSettings(
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     submit();
+  });
+  (overlay.querySelector('[data-act="restart"]') as HTMLElement).addEventListener('click', () => {
+    if (!window.confirm('Wipe this save and start over? This cannot be undone.')) return;
+    close();
+    onRestart();
   });
 
   return {

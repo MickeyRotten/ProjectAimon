@@ -72,6 +72,9 @@ body {
 }
 .settings-actions button[data-act="save"] { color: var(--white); border-color: var(--grey); }
 .settings-actions button:hover { border-color: var(--white); }
+.settings-divider { border: none; border-top: 1px solid var(--dim); margin: 2px 0; }
+.settings-actions button[data-act="restart"] { color: var(--red); border-color: var(--red); }
+.settings-actions button[data-act="restart"]:hover { background: var(--red); color: var(--bg); }
 
 .panel {
   flex: 0 0 auto; display: flex; gap: 16px; align-items: flex-start;

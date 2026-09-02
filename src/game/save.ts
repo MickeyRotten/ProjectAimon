@@ -62,6 +62,15 @@ export function recordOf(game: Game, kind: SaveKind, label: string): SaveRecord 
 
 export class SaveLoadError extends Error {}
 
+/** Delete every save — autosave and snapshots — for one campaign. Settings live
+ * elsewhere (localStorage) and are untouched. The "restart adventure" reset. */
+export async function wipeSaves(store: SaveStore, campaignId: string): Promise<void> {
+  const rows = await store.list();
+  await Promise.all(
+    rows.filter((row) => row.campaignId === campaignId).map((row) => store.delete(row.id)),
+  );
+}
+
 /**
  * Open a save. A save stamped against an older campaign version still loads —
  * the world is in the payload, not in the tables — but a save belonging to a

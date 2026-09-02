@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadCampaign } from '../src/campaign/loader';
 import type { ResolvedCampaign } from '../src/campaign/types';
 import { Game } from '../src/game/game';
-import { MemorySaveStore, openSave, recordOf } from '../src/game/save';
+import { MemorySaveStore, openSave, recordOf, wipeSaves } from '../src/game/save';
 import { IN_PLAYER, inRoom, type ObjectRecord } from '../src/world/types';
 
 const campaign: ResolvedCampaign = (await loadCampaign()).campaign;
@@ -309,5 +309,21 @@ describe('saving', () => {
     const record = recordOf(game, 'snapshot', 'x');
     record.campaignId = 'not-installed';
     expect(() => openSave(campaign, record)).toThrow(/not-installed/);
+  });
+
+  it('wipeSaves deletes every save for one campaign and leaves other campaigns alone', async () => {
+    const game = start('wipe-me');
+    const store = new MemorySaveStore();
+    await store.put(recordOf(game, 'auto', 'autosave'));
+    await store.put(recordOf(game, 'snapshot', 'before the gate'));
+    const otherRecord = recordOf(game, 'snapshot', 'elsewhere');
+    otherRecord.campaignId = 'not-installed';
+    await store.put(otherRecord);
+
+    await wipeSaves(store, campaign.id);
+
+    expect(await store.get(`auto:${campaign.id}`)).toBeUndefined();
+    expect(await store.get('snap:before the gate')).toBeUndefined();
+    expect(await store.get(otherRecord.id)).toEqual(otherRecord);
   });
 });

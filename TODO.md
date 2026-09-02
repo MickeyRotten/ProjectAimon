@@ -14,13 +14,13 @@ Task types:
 1. [ ] SPIKE: Very first area generated beyond the hub featured many unfair fights. Tier 1 enemies in the first area should have less HP and Resolve. The difficulty feels too high.
 
 ---
-[ ] SPIKE: Areas need an identity. I think when an Area is generated, there needs to also be some area-level information about the area, e.g. a Town should have an identity, a main form of trade, a leader, etc. An area can also not have an identity (or rather, it's identity is that there's nothing of interest). We also need some cap on the wealth of that area, so that we don't end up with an Area with every room having things to pick up and hundreds of gold. We could consider gamifying it a bit, and say that within this Area we can have X Containers, and each Container (whether chest, corpse or other) has a chance to yield a low, medium, high, or ultra rare reward, with the ultra rare reward's chance increasing based on the difficulty of the area... As a thought. Other items can also exist in rooms, but their value should be low. 
+2. [ ] SPIKE: Areas need an identity. I think when an Area is generated, there needs to also be some area-level information about the area, e.g. a Town should have an identity, a main form of trade, a leader, etc. An area can also not have an identity (or rather, it's identity is that there's nothing of interest). We also need some cap on the wealth of that area, so that we don't end up with an Area with every room having things to pick up and hundreds of gold. We could consider gamifying it a bit, and say that within this Area we can have X Containers, and each Container (whether chest, corpse or other) has a chance to yield a low, medium, high, or ultra rare reward, with the ultra rare reward's chance increasing based on the difficulty of the area... As a thought. Other items can also exist in rooms, but their value should be low. 
 
 ---
-2. [ ] SPIKE: The world generation needs more rule-driven procedural generation. The likelihood of a Coven being right next to a Town should be low or zero, etc. Same as Minecraft, the biomes need to also consider adjacent biomes.
+3. [ ] SPIKE: The world generation needs more rule-driven procedural generation. The likelihood of a Coven being right next to a Town should be low or zero, etc. Same as Minecraft, the biomes need to also consider adjacent biomes.
 
 ---
-3. [ ] NEW (OR ITERATE):
+4. [ ] NEW (OR ITERATE):
 
 Option A. I need two external, separate scripts (launched through individual .bat files). EXPORT.bat that exports all the json values related to the gameplay as a .csv, and an IMPORT.bat that parses a .csv back to json.
 
@@ -29,11 +29,25 @@ Option B. The Editor should be extended and improved so that it's easier to crea
 Regardless of Option, I would like to see descriptions for each tag, even if the LLM would not use a description field (though it would make it a bit more predictable in behaviour).
 
 ---
-4. [x] ITERATE: When I move to a new Area, the map should also show the prtaevious, connected Areas. In other words, it's one big Map that gets built, rather than separate ones (except for different floors). We can have a rule that up to X connections get rendered, but the map is still one big map. The connector between two areas can have a different color to indicate a gate between two areas.
+5. [x] ITERATE: When I move to a new Area, the map should also show the prtaevious, connected Areas. In other words, it's one big Map that gets built, rather than separate ones (except for different floors). We can have a rule that up to X connections get rendered, but the map is still one big map. The connector between two areas can have a different color to indicate a gate between two areas.
 
    Done: rooms already lived in one shared X/Y/Z lattice across areas, but `mapModel()` filtered to only the current area before ever using those coordinates — so a crossed gate rendered as a dead end (no far-side room, and the "way out" ghost glyph disappears once a gate is crossed). `mapModel()` now walks outward from the player's area across *crossed* gates, up to `AREA_HOP_LIMIT` (1, overridable via a new `areaHops` option), and includes those areas' rooms on the same Z level — same floor only, per "except for different floors." The connector where two areas join is flagged `crossesArea` and rendered in the same amber used for the "way out" glyph, with a new "area gate" legend entry. See `src/world/map.ts`, `src/ui/screen.ts`, `src/app.css`, `tests/map-model.test.ts`.
 
 ---
-5. [ ] NEW: In Config, add a button for "Restart Adventure" which does a hard reset, wipes everything (except settings) and starts the adventure fresh.
+6. [x] NEW: In Config, add a button for "Restart Adventure" which does a hard reset, wipes everything (except settings) and starts the adventure fresh.
+
+   Done: `wipeSaves(store, campaignId)` in `src/game/save.ts` deletes every
+   save row (autosave and every named snapshot) for the loaded campaign,
+   reusing the existing `SaveStore.list()`/`delete()`. The settings overlay
+   (`src/ui/settings.ts`) gained a danger-zone section below Cancel/Save — a
+   warning line and a red "Restart Adventure" button, gated by a native
+   `confirm()` since destroying a save can't be undone. `main.ts` wires it to
+   a new `restartAdventure()` that wipes the save, calls `Game.begin()` with
+   a fresh seed the same way `boot()` does for a brand-new game, and prints
+   the same banner — no page reload, matching the settings panel's existing
+   no-reload philosophy. Settings (API key, model slots) live in
+   `localStorage`, entirely separate from the Dexie `saves` table, so they
+   are untouched. See `src/game/save.ts`, `src/ui/settings.ts`, `src/main.ts`,
+   `src/app.css`, `tests/game.test.ts`.
 
 ---

@@ -25,6 +25,7 @@ import {
   parseSaveCommand,
   recordOf,
   snapshotId,
+  wipeSaves,
   type SaveStore,
 } from './game/save';
 import { mountScreen, type PendingLine, type Screen } from './ui/screen';
@@ -153,6 +154,7 @@ async function boot(): Promise<void> {
       screen.print([line(narrator ? 'Narrator on.' : 'Narrator off — no API key set.', 'rule')]);
       void narrateHere();
     },
+    () => void restartAdventure(),
   );
 
   screen.print(banner);
@@ -382,6 +384,22 @@ async function boot(): Promise<void> {
     } catch {
       // A narrator failure never breaks play; the placeholder text stands.
     }
+  }
+
+  /** Wipe this campaign's save (autosave and every snapshot) and begin a new
+   * world. Settings are untouched — they live in localStorage, not the save. */
+  async function restartAdventure(): Promise<void> {
+    await wipeSaves(store, campaign.id);
+    const seed = `saltmere-${Date.now().toString(36)}`;
+    game = Game.begin({ campaign, seed, name: 'Adventurer' });
+    screen.print([
+      line('Adventure restarted.', 'ok'),
+      line(`New world, seed ${seed}.`, 'rule'),
+      line('HELP lists the verbs. Move with n s e w u d.', 'rule'),
+    ]);
+    screen.print(game.describeHere(true));
+    screen.refresh(game);
+    void narrateHere();
   }
 
   async function runSave(verb: 'save' | 'load', label: string): Promise<Line[]> {
