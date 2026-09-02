@@ -19,7 +19,6 @@ import { ruleNumber, ruleStrings } from '../engine/rules';
 import type { NpcRecord, ObjectRecord, RoomRecord } from '../world/types';
 import { heldBy, IN_PLAYER, inObject, inRoom } from '../world/types';
 import type { World } from '../world/world';
-import { renderPlayerMap } from '../world/map';
 import { describeObject, sentenceList, viewRoom } from './describe';
 import type { Effect } from './effects';
 import { playerCarry, playerMaxHp, playerMaxResolve, type PlayerRecord } from './player';
@@ -76,6 +75,8 @@ export interface Reply {
    * to ask. Same read-only, no-effect discipline as `voice` and `appearance`.
    */
   express?: { raw: string; verb?: string | undefined; target?: string | undefined; fallback: Line } | undefined;
+  /** A UI-only request to open the full-floor map overlay. Carries no state. */
+  showMap?: boolean | undefined;
 }
 
 export interface CommandContext {
@@ -916,14 +917,16 @@ function inventory(ctx: CommandContext): Reply {
 const stats = (ctx: CommandContext): Reply => free(sheetLines(ctx));
 
 function mapOf(ctx: CommandContext): Reply {
-  const drawn = renderPlayerMap(ctx.world, ctx.room.id);
+  // The full floor is drawn by the UI overlay (same grid renderer as the
+  // mini-map, larger). The engine only asks for it — a free, stateless query.
   const walked = ctx.world.roomsOf(ctx.room.areaId).filter((room) => room.visited).length;
   const area = ctx.world.areas.get(ctx.room.areaId);
-  return free([
-    line(area?.name ?? ctx.room.areaId, 'ok'),
-    line(drawn || '(nothing walked yet)'),
-    line(`${walked} room${walked === 1 ? '' : 's'} walked here.`, 'rule'),
-  ]);
+  return {
+    lines: [line(`${area?.name ?? ctx.room.areaId}: ${walked} room${walked === 1 ? '' : 's'} walked.`, 'rule')],
+    effects: [],
+    free: true,
+    showMap: true,
+  };
 }
 
 function sheetLines(ctx: CommandContext): Line[] {

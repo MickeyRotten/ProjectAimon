@@ -180,7 +180,9 @@ tables; the engine must produce the same shapes.
   scheme as room description, grounded in what the NPC actually wears/wields
 - Grid map derived from the room graph — CSS squares and connectors, a
   frontier ring of `?` cells for rooms known through a connection but not yet
-  entered, gate markers for ways out, per-floor with a `Saltmere (F1)` label
+  entered, gate markers for ways out, per-floor with a `Saltmere (F1)` label.
+  The mini-map is a small fixed window beside the room; `MAP` opens the whole
+  floor in a dismissible overlay, same renderer, larger, with a legend
 - **Campaigns** — content packs merged over base, importable as one JSON bundle
 - **Saving and loading** — autosave slot plus unlimited named snapshots
 - Settings screen for table tuning and model slots
