@@ -253,6 +253,17 @@ export class World {
   }
 
   /**
+   * The area's own name, written by the same batch that writes its rooms'
+   * permanent descriptions. Same out-of-band prose seam as `writeProse`: the
+   * name is prose, nothing reads it but the player, and it is written once.
+   */
+  writeAreaName(areaId: string, name: string): void {
+    const area = this.areas.get(areaId);
+    if (!area || name.trim().length === 0) return;
+    area.name = name.trim();
+  }
+
+  /**
    * The same out-of-band prose write as `writeProse`, for an NPC's EXAMINE
    * description and the transcript length it was last generated or confirmed
    * unchanged against. `descriptionSeen` is written whenever supplied, even
@@ -346,6 +357,11 @@ export class World {
       lattice: this.lattice,
       stub,
       flags: this.flags,
+      // Adjacency asks what kind of place a reserved cube holds. Stubs are in
+      // `areas` from the moment their gate was made, so ungenerated neighbours
+      // count the same as walked ones — which is the point, since the cube is
+      // taken either way.
+      archetypeOf: (areaId) => this.areas.get(areaId)?.archetype,
     });
 
     this.areas.set(result.area.id, result.area);

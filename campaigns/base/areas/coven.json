@@ -118,8 +118,70 @@
   "gates": {
     "ruin": 35,
     "warren": 30,
-    "town": 35
+    "farmland": 20,
+    "coven": 10
   },
   "tierFloor": 3,
-  "tierCeil": 5
+  "tierCeil": 5,
+  "identity": {
+    "_note": "Rolled once when the area is generated, then fixed forever like its tier. On a miss the area has no identity, which is itself an answer: somewhere nothing of note happens. The narrator is handed it as colour for the room descriptions; nothing mechanical reads it.",
+    "chance": 0.95,
+    "traits": {
+      "_note": "One value rolled per trait, weighted. The traits are this archetype's own questions — a town has a trade and a leader, a ruin has a corpse and a cause of death — so adding one is a table edit, never engine work.",
+      "rite": [
+        [
+          "a debt paid in blood, annually",
+          10
+        ],
+        [
+          "initiation by drowning and revival",
+          8
+        ],
+        [
+          "a bargain older than the house",
+          9
+        ],
+        [
+          "the keeping of something in the cellar",
+          8
+        ]
+      ],
+      "matriarch": [
+        [
+          "the third sister, who does not speak",
+          9
+        ],
+        [
+          "a woman who has been young too long",
+          9
+        ],
+        [
+          "two who rule and one who is owed",
+          7
+        ],
+        [
+          "an empty chair, and rules for it",
+          6
+        ]
+      ],
+      "trouble": [
+        [
+          "the promise comes due",
+          10
+        ],
+        [
+          "an initiate who ran",
+          8
+        ],
+        [
+          "a rival house sending gifts",
+          7
+        ],
+        [
+          "one of their own kept in a cell",
+          7
+        ]
+      ]
+    }
+  }
 }

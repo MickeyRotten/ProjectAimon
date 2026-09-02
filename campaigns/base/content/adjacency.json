@@ -1,0 +1,38 @@
+{
+  "_note": "Which kinds of place may stand next to which. The per-area `gates` tables say what an area opens onto; this says what the world will tolerate having built there, which is a different question — a coven can reach a town in one gate without either table ever naming the other, because a third area put them side by side. Both layers apply: `gates` weights the roll, this re-weights it against what is already on the ground.",
+
+  "radius": 2,
+  "_radiusNote": "Slack, in lattice slots, for counting two cubes as neighbours. The gap between cubes is 1, so 2 means 'touching, or one cube's breathing room apart'. This reads cubes, which is allocation. Distance between rooms is still hop count and always will be.",
+
+  "depthGate": {
+    "_note": "Gates from the Hub, not tiers. An archetype outside its band is never rolled there at all, which is how a coven stays a thing you find rather than a thing you trip over.",
+    "coven": {
+      "minDepth": 3
+    }
+  },
+
+  "affinity": {
+    "_note": "affinity[candidate][neighbour] multiplies the candidate's gate weight for every already-placed neighbour of that kind. 1 is neutral and is the default for any pair not named here, so only real opinions need writing down. 0 forbids outright. The lookup tries the reverse pair too, so each opinion is written once.",
+    "coven": {
+      "town": 0,
+      "farmland": 0.15,
+      "coven": 0,
+      "ruin": 1.5,
+      "warren": 1.3
+    },
+    "town": {
+      "town": 0.4,
+      "farmland": 1.6,
+      "warren": 0.5
+    },
+    "farmland": {
+      "farmland": 1.2,
+      "warren": 0.6,
+      "ruin": 0.8
+    },
+    "warren": {
+      "warren": 1.3,
+      "ruin": 1.4
+    }
+  }
+}

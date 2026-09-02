@@ -111,6 +111,17 @@ export interface RoomTypeDef extends Weighted {
   tags: string[];
 }
 
+/**
+ * The questions this kind of place answers about itself. Each trait rolls one
+ * weighted option; the whole block may miss, and an area with no identity is a
+ * real outcome rather than a failure — somewhere nothing of note happens.
+ */
+export interface AreaIdentityDef {
+  chance: number;
+  /** trait name -> `[value, weight]` rows. */
+  traits: Record<string, [string, number][]>;
+}
+
 export interface AreaDef {
   id: string;
   name: string;
@@ -126,6 +137,7 @@ export interface AreaDef {
   sexOverrideRespects: string[];
   tierFloor: number;
   tierCeil: number;
+  identity?: AreaIdentityDef | undefined;
 }
 
 // ── content/placement.json ──────────────────────────────────────────
@@ -147,6 +159,27 @@ export interface PlacementGuarantees {
 export interface PlacementTable {
   guarantees: PlacementGuarantees;
   [key: string]: PlacementRule | PlacementGuarantees | Json;
+}
+
+// ── content/adjacency.json ──────────────────────────────────────────
+
+export interface DepthGateDef {
+  minDepth?: number | undefined;
+  maxDepth?: number | undefined;
+}
+
+/**
+ * What may be built next to what. `gates` on an area template says what that
+ * area opens onto; this says what the world tolerates standing side by side,
+ * which is the case `gates` cannot see — two areas become neighbours through a
+ * third one's allocation without either naming the other.
+ */
+export interface AdjacencyTable {
+  /** Slack, in lattice slots, for counting two cubes as neighbours. */
+  radius: number;
+  depthGate: Record<string, DepthGateDef>;
+  /** `affinity[candidate][neighbour]` — a weight multiplier. 0 forbids. */
+  affinity: Record<string, Record<string, number>>;
 }
 
 // ── content/items.json ──────────────────────────────────────────────
@@ -220,6 +253,11 @@ export interface MonsterTable {
   roles: MonsterRoleDef[];
   elites: { chance: Record<string, number>; table: EliteDef[] };
   groupSize: { default: [number, number]; byTag: Record<string, [number, number]> };
+  /**
+   * Most creatures one encounter may field, by tier. Optional: a table that
+   * omits it fields whatever the composition asked for, as it always did.
+   */
+  encounterCap?: Record<string, number> | undefined;
   tierGate: { overTierWeight: number };
   sexDefault: SexWeights;
   compositions: { table: CompositionDef[] };
@@ -361,6 +399,7 @@ export interface ResolvedCampaign {
   readonly npcs: NpcTable;
   readonly abilities: AbilityTable;
   readonly placement: PlacementTable;
+  readonly adjacency: AdjacencyTable;
   /** Quest templates, keyed by type. An NPC rolls its work against these. */
   readonly quests: ReadonlyMap<string, QuestTemplate>;
   /** Global, loaded from outside every campaign folder. */

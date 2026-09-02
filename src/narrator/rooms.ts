@@ -113,6 +113,7 @@ export class RoomNarrator {
     const user = fill(template, {
       area: area?.name ?? room.areaId,
       theme: area?.themeTokens.join(', ') || '—',
+      identity: describeIdentity(area?.identity),
       rooms: roster,
     });
 
@@ -126,7 +127,8 @@ export class RoomNarrator {
         temperature: this.settings.temperature,
         maxTokens: Math.max(this.settings.maxTokens, pending.length * 80),
       });
-      const parsed = parseBaseLines(reply, pending.length);
+      const { areaName, rooms: parsed } = parseBaseLines(reply, pending.length);
+      if (areaName) world.writeAreaName(room.areaId, areaName);
       pending.forEach((entry, index) => {
         const written = parsed[index];
         if (written) world.writeProse(entry.id, written);
@@ -278,12 +280,36 @@ function mentions(render: string, words: string[]): boolean {
  * so this reads leniently: it accepts a bare `Name :: desc` line and, failing a
  * separator, takes the first sentence as the name.
  */
-function parseBaseLines(reply: string, count: number): ({ name: string; baseDesc: string } | undefined)[] {
+/**
+ * The area's identity as a few plain lines for the prompt. No identity is not
+ * an absence to paper over — it is the answer, and the prompt is told so.
+ */
+function describeIdentity(identity: Record<string, string> | null | undefined): string {
+  if (!identity) return 'Nothing of note. This is an ordinary place that no story is about.';
+  const rows = Object.entries(identity).filter(([key]) => !key.startsWith('_'));
+  if (rows.length === 0) return 'Nothing of note. This is an ordinary place that no story is about.';
+  return rows.map(([trait, value]) => `- ${trait}: ${value}`).join('\n');
+}
+
+function parseBaseLines(
+  reply: string,
+  count: number,
+): { areaName: string; rooms: ({ name: string; baseDesc: string } | undefined)[] } {
   const out: ({ name: string; baseDesc: string } | undefined)[] = new Array(count).fill(undefined);
   const lines = reply
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+
+  // The area's own name comes first, on its own marked line. It is optional:
+  // a model that skips it leaves the archetype's working name standing, which
+  // is exactly what happened before this line existed.
+  let areaName = '';
+  const head = lines[0]?.match(/^AREA\s*(?:::|[—-])\s*(.+)$/i);
+  if (head?.[1]) {
+    areaName = clean(head[1]);
+    lines.shift();
+  }
 
   let index = 0;
   for (const line of lines) {
@@ -298,5 +324,5 @@ function parseBaseLines(reply: string, count: number): ({ name: string; baseDesc
     }
     index += 1;
   }
-  return out;
+  return { areaName, rooms: out };
 }

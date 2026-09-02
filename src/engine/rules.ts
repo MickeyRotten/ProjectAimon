@@ -139,3 +139,19 @@ export function ruleLookup(rules: JsonObject, path: string, key: string, fallbac
   }
   return value;
 }
+
+/**
+ * The hard tier ceiling for an area at this many gates from the Hub, from
+ * `DEPTH_TIER.tierCeilByDepth`. The match is exact: a depth the table does not
+ * name is uncapped and falls back to `DEPTH_TIER.max`, so the table reads as
+ * "the first N steps out are held down" rather than as a curve of its own.
+ *
+ * It exists because the tier roll's jitter and spike, left alone, made a third
+ * of first areas tier 2 or worse. Both the area roll and the per-room tier read
+ * it, or the room bonus would climb straight back over it.
+ */
+export function depthTierCeil(rules: JsonObject, depth: number): number {
+  const max = ruleNumber(rules, 'DEPTH_TIER.max');
+  const table = ruleNumberMap(rules, 'DEPTH_TIER.tierCeilByDepth', {});
+  return Math.min(max, table[String(depth)] ?? max);
+}

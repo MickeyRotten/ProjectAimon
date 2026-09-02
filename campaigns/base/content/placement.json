@@ -221,5 +221,102 @@
     "_lightNote": "Q6=B: no guarantee. Dark areas are a supply problem you solve before entering.",
     "maxHostileRoomFraction": 0.5,
     "_slackNote": "Roughly a third of rooms should hold nothing mechanical — that is where atmosphere lives. The cap stops a top-up filling a small area with fights."
+  },
+  "wealth": {
+    "_note": "An area's whole worth, budgeted rather than rolled room by room. Independent per-room rolls have no ceiling: a run of lucky chances put something valuable in every room, and one unlucky chest roll could produce a masterwork heirloom plate worth more than the rest of the world put together. So containers are counted, their contents are drawn from a value band rather than the whole item table, and coin is one purse for the area rather than a fresh roll per pile.",
+    "containersPerArea": [
+      2,
+      4
+    ],
+    "_containerNote": "Chests, corpses and anything else whose fixture sets the container flag, counted together. This is the gamified part: a container is a known number of chances at something good, so finding one means something. The low end is a floor topped up the same way hostiles and loot rooms are.",
+    "bands": {
+      "_note": "priceRange filters which item bases may be drawn, in base gold BEFORE quality and affixes. Those still multiply on top — a masterwork heirloom is roughly 27x its base — so a band sets what kind of thing is found, not a hard cap on what it ends up worth. That is deliberate: the point of a chest is that it might hold something remarkable. The cap that matters is the number of containers, not the ceiling on any one of them. qualityBias replaces the loot tier's own bias for the roll, so a high band is both a better thing and a better example of it.",
+      "low": {
+        "priceRange": [
+          0,
+          20
+        ],
+        "qualityBias": 0
+      },
+      "medium": {
+        "priceRange": [
+          15,
+          45
+        ],
+        "qualityBias": 6
+      },
+      "high": {
+        "priceRange": [
+          35,
+          120
+        ],
+        "qualityBias": 14
+      },
+      "ultra": {
+        "priceRange": [
+          80,
+          99999
+        ],
+        "qualityBias": 30
+      }
+    },
+    "bandByTier": {
+      "_note": "Weights per container, by the tier the room fights at. Ultra climbs with difficulty and is never quite zero — the deep room that might hold the good thing is the reason to walk into it.",
+      "1": {
+        "low": 62,
+        "medium": 30,
+        "high": 7,
+        "ultra": 1
+      },
+      "2": {
+        "low": 48,
+        "medium": 34,
+        "high": 15,
+        "ultra": 3
+      },
+      "3": {
+        "low": 34,
+        "medium": 36,
+        "high": 24,
+        "ultra": 6
+      },
+      "4": {
+        "low": 24,
+        "medium": 34,
+        "high": 32,
+        "ultra": 10
+      },
+      "5": {
+        "low": 16,
+        "medium": 30,
+        "high": 38,
+        "ultra": 16
+      }
+    },
+    "looseItemBand": "low",
+    "_looseNote": "Items lying about a room are pinned to the low band so containers are where value lives. A room can still be worth searching; it is not worth looting.",
+    "goldBudgetByTier": {
+      "_note": "One purse for the whole area, spent down by gold piles and by any purse that rolls as loot. When it runs out, later coin is whatever is left, and a spill with nothing behind it is simply not made.",
+      "1": [
+        30,
+        90
+      ],
+      "2": [
+        70,
+        190
+      ],
+      "3": [
+        150,
+        380
+      ],
+      "4": [
+        260,
+        620
+      ],
+      "5": [
+        400,
+        950
+      ]
+    }
   }
 }

@@ -152,6 +152,15 @@ export interface AreaRecord {
   depth: number;
   /** Rolled once at generation and never changed, so backtracking is safe. */
   tier: number;
+  /**
+   * What this place is about — a town's trade and who runs it, a ruin's corpse
+   * and cause of death. Rolled once with the tier and fixed just as hard.
+   *
+   * `null` is a real answer, not a missing one: an area whose identity is that
+   * nothing of note happens there. Only the narrator reads this; no rule does.
+   * An old save has it `undefined`, so every reader must tolerate that too.
+   */
+  identity?: Record<string, string> | null | undefined;
   cube: Cube;
   generated: boolean;
   entryRoomId: string | null;

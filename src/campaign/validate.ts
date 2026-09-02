@@ -347,10 +347,67 @@ export function validateCampaign(
     }
   }
 
+  // ── adjacency ─────────────────────────────────────────────────────
+
+  const adjacency = campaign.adjacency;
+  if (adjacency) {
+    const at = 'content/adjacency.json';
+    if (typeof adjacency.radius !== 'number' || adjacency.radius < 0) {
+      error(`${at}.radius`, 'expected a slot count of zero or more');
+    }
+
+    for (const [id, gate] of Object.entries(adjacency.depthGate ?? {})) {
+      if (!campaign.areas.has(id)) error(`${at}.depthGate.${id}`, `no area archetype "${id}"`);
+      const lo = gate.minDepth;
+      const hi = gate.maxDepth;
+      if (lo !== undefined && hi !== undefined && lo > hi) {
+        error(`${at}.depthGate.${id}`, `minDepth ${lo} is above maxDepth ${hi}`);
+      }
+    }
+
+    for (const [candidate, row] of Object.entries(adjacency.affinity ?? {})) {
+      if (!campaign.areas.has(candidate)) {
+        error(`${at}.affinity.${candidate}`, `no area archetype "${candidate}"`);
+        continue;
+      }
+      for (const [neighbour, weight] of Object.entries(row)) {
+        const pair = `${at}.affinity.${candidate}.${neighbour}`;
+        if (!campaign.areas.has(neighbour)) {
+          error(pair, `no area archetype "${neighbour}"`);
+          continue;
+        }
+        if (typeof weight !== 'number' || weight < 0) {
+          error(pair, 'expected a weight multiplier of zero or more');
+          continue;
+        }
+        // The lookup falls back to the reverse pair, so writing both is
+        // allowed but writing both differently means one of them is dead.
+        const mirror = adjacency.affinity[neighbour]?.[candidate];
+        if (candidate !== neighbour && typeof mirror === 'number' && mirror !== weight) {
+          warn(
+            pair,
+            `says ${weight} but ${neighbour}.${candidate} says ${mirror} — the first one found wins, so one of the two never applies`,
+          );
+        }
+      }
+    }
+
+    // An archetype nothing can gate to and nothing can stand beside is
+    // unreachable, which is how the coven sat unused for the whole project.
+    for (const [id] of campaign.areas) {
+      const reachable =
+        manifest.hub?.gates?.some((gate) => gate.archetype === id) ||
+        [...campaign.areas.values()].some((area) => (area.gates ?? {})[id] !== undefined);
+      if (!reachable) warn(`areas/${id}.json`, 'no gate table names it, so it can never be reached');
+    }
+  }
+
   // ── placement ─────────────────────────────────────────────────────
 
   for (const [key, rule] of Object.entries(campaign.placement ?? {})) {
-    if (key.startsWith('_') || key === 'guarantees') continue;
+    // `guarantees` and `wealth` are the two blocks that shape the whole pass
+    // rather than placing anything, so neither is a rule with a chance.
+    if (key.startsWith('_') || key === 'guarantees' || key === 'wealth') continue;
     const at = `content/placement.json.${key}`;
     const value = rule as {
       chance?: unknown;
@@ -388,6 +445,63 @@ export function validateCampaign(
       if (!(value.keyBand in bands)) {
         error(`${at}.keyBand`, `no distance band "${value.keyBand}" in rules.json`);
       }
+    }
+  }
+
+  // ── the wealth budget ─────────────────────────────────────────────
+
+  const wealth = (campaign.placement as unknown as Record<string, unknown>)['wealth'] as
+    | Record<string, unknown>
+    | undefined;
+  if (wealth) {
+    const at = 'content/placement.json.wealth';
+    const range = (path: string, value: unknown): void => {
+      if (
+        !Array.isArray(value) ||
+        typeof value[0] !== 'number' ||
+        typeof value[1] !== 'number' ||
+        value[0] > value[1]
+      ) {
+        error(path, 'expected [min, max]');
+      }
+    };
+    range(`${at}.containersPerArea`, wealth['containersPerArea']);
+
+    const bands = (wealth['bands'] ?? {}) as Record<string, unknown>;
+    const bandNames = new Set<string>();
+    for (const [name, band] of Object.entries(bands)) {
+      if (name.startsWith('_')) continue;
+      bandNames.add(name);
+      range(`${at}.bands.${name}.priceRange`, (band as Record<string, unknown>)['priceRange']);
+      if (typeof (band as Record<string, unknown>)['qualityBias'] !== 'number') {
+        error(`${at}.bands.${name}.qualityBias`, 'expected a number');
+      }
+    }
+    if (bandNames.size === 0) error(`${at}.bands`, 'at least one value band');
+
+    // A weight naming a band that does not exist is a container that silently
+    // rolls unbanded — the exact class of bug the tag vocabulary exists to stop.
+    for (const [tier, row] of Object.entries((wealth['bandByTier'] ?? {}) as Record<string, unknown>)) {
+      if (tier.startsWith('_')) continue;
+      for (const [name, w] of Object.entries(row as Record<string, unknown>)) {
+        if (name.startsWith('_')) continue;
+        if (!bandNames.has(name)) error(`${at}.bandByTier.${tier}.${name}`, `no value band "${name}"`);
+        if (typeof w !== 'number' || w < 0) {
+          error(`${at}.bandByTier.${tier}.${name}`, 'expected a weight of zero or more');
+        }
+      }
+    }
+
+    const loose = wealth['looseItemBand'];
+    if (typeof loose === 'string' && !bandNames.has(loose)) {
+      error(`${at}.looseItemBand`, `no value band "${loose}"`);
+    }
+
+    for (const [tier, row] of Object.entries(
+      (wealth['goldBudgetByTier'] ?? {}) as Record<string, unknown>,
+    )) {
+      if (tier.startsWith('_')) continue;
+      range(`${at}.goldBudgetByTier.${tier}`, row);
     }
   }
 
@@ -667,13 +781,18 @@ const ALLOWED_MODS = new Set([
   'priceMult',
 ]);
 
-/** `self.hp<N` in the closed list matches `self.hp<40` in a gambit. */
+/**
+ * `self.hp<N` in the closed list matches `self.hp<40` in a gambit, and also
+ * `self.hp<40%` — `N` covers a flat threshold and a percentage of the
+ * combatant's own maximum alike, so the closed list stays five entries long
+ * rather than ten.
+ */
 function matchesCondition(when: string, conditions: readonly string[]): boolean {
   if (!when) return false;
   return conditions.some((pattern) => {
     const source = pattern
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/N/g, '-?\\d+')
+      .replace(/N/g, '-?\\d+%?')
       .replace(/X/g, '[A-Za-z_][A-Za-z0-9_]*');
     return new RegExp(`^${source}$`).test(when);
   });

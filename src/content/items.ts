@@ -33,8 +33,22 @@ export interface ItemOptions {
    * the starter kit is a list of base ids, not a list of kinds.
    */
   baseId?: string | undefined;
+  /**
+   * A value band from `placement.wealth.bands`, when the caller is spending
+   * against an area's wealth budget rather than rolling free. It narrows the
+   * pool by base price and takes over the quality bias, which is how a chest
+   * can be worth opening without any single roll being able to produce a
+   * masterwork heirloom plate.
+   */
+  band?: ValueBand | undefined;
   id: string;
   location: Location;
+}
+
+/** One row of `placement.wealth.bands`. */
+export interface ValueBand {
+  priceRange: [number, number];
+  qualityBias: number;
 }
 
 /** The generated shape, before it is written into an `ObjectRecord`. */
@@ -89,10 +103,10 @@ export function rollItem(options: ItemOptions): ItemRoll | undefined {
     : wanted
       ? campaign.items.bases.filter((base) => base.kind === wanted)
       : campaign.items.bases;
-  const base = rng.maybeWeighted(pool);
+  const base = rng.maybeWeighted(inBand(campaign, pool, options.band));
   if (!base) return undefined;
 
-  const quality = rollQuality(campaign, rng, options.tier);
+  const quality = rollQuality(campaign, rng, options.tier, options.band);
   // Affixes filter on the base's kind and the quality's tags, which is why
   // Reinforced only lands on armour and Hooded only on lights.
   const filterTags = [base.kind, ...quality.tags];
@@ -137,13 +151,38 @@ export function rollItem(options: ItemOptions): ItemRoll | undefined {
  * added once per step up the quality list, so a bias of zero leaves the table
  * exactly as authored and a large one makes masterwork reachable deep in.
  */
-function rollQuality(campaign: ResolvedCampaign, rng: Rng, tier: number): QualityDef {
-  const bias = lootTierValue(campaign, tier, 'qualityBias') ?? 0;
+function rollQuality(
+  campaign: ResolvedCampaign,
+  rng: Rng,
+  tier: number,
+  band?: ValueBand | undefined,
+): QualityDef {
+  const bias = band ? band.qualityBias : (lootTierValue(campaign, tier, 'qualityBias') ?? 0);
   const biased = campaign.items.qualities.map((quality, step) => ({
     ...quality,
     w: Math.max(0, (quality.w ?? 1) + bias * step),
   }));
   return rng.weighted(biased);
+}
+
+/**
+ * Narrow a pool to the bases whose price sits in the band. A band that matches
+ * nothing is ignored rather than obeyed: an empty pool would mean no item at
+ * all, and a slightly-too-cheap thing in a chest is a tuning problem, while a
+ * chest that generates nothing is a bug.
+ */
+function inBand(
+  campaign: ResolvedCampaign,
+  pool: readonly ItemBaseDef[],
+  band: ValueBand | undefined,
+): ItemBaseDef[] {
+  if (!band) return [...pool];
+  const [lo, hi] = band.priceRange;
+  const fits = pool.filter((base) => {
+    const price = basePrice(campaign, base);
+    return price >= lo && price <= hi;
+  });
+  return fits.length > 0 ? fits : [...pool];
 }
 
 /** Coin for a purse or a spill of it, from the tier's `goldRange`. */
@@ -274,6 +313,20 @@ export function itemValues(
     values[key] = value;
   }
   return values;
+}
+
+/**
+ * What a base is worth before quality and affixes touch it — the same lookup
+ * `itemValues` makes, asked of a base rather than of a made item, so a value
+ * band can filter the pool before anything is rolled. No price is restated
+ * here; it goes through `priceOf` exactly as a finished item's does.
+ */
+export function basePrice(campaign: ResolvedCampaign, base: ItemBaseDef): number {
+  const spine =
+    (ruleAt(campaign.rules, `WEAPON_TABLE.${base.id}`) as JsonObject | undefined) ??
+    (ruleAt(campaign.rules, `ARMOUR_TABLE.${base.id}`) as JsonObject | undefined) ??
+    {};
+  return priceOf(campaign, base, spine, 1, {});
 }
 
 function priceOf(

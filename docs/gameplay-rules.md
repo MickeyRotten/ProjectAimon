@@ -32,7 +32,14 @@ placement.
 | `SKILL_GROWTH` | Rate and cap for weapon, approach and armour skills |
 | `DEPLETION_RATES` | How fast light burns and other resources drain |
 | `DISTANCE_BANDS` | Hop ranges behind near / quite near / far |
+| `DEPTH_TIER` | Tier by gates from the Hub — including `tierCeilByDepth`, the ceiling on the first steps out |
 | `DEFEAT` | What a defeat costs — see Defeat below |
+
+Two more live in the content tables rather than in `rules.json`, because they are
+content and not rules: `monsters.statCurve` (every combat number a creature has,
+by tier, including the `hpMult` / `resolveMult` that scale HP and Resolve without
+touching the other four attributes) and `monsters.encounterCap` (the most
+creatures one encounter may field at a tier).
 
 ---
 
@@ -360,6 +367,23 @@ Eamon's table also had a 1% *kill self*. **Deliberately dropped** — losing a
 trained character to a 1-in-2,500 roll is not defensible in a generated world.
 
 ---
+
+### Encounter size is difficulty
+
+Every living hostile in the room acts every round — no initiative, no action
+economy, no cap. So **the number of creatures is the difficulty**, more than any
+of their stats: at tier 1 a pack of three out-damages a starting character about
+three to one however weak each one is, and no amount of lowering HP fixes it.
+
+`monsters.encounterCap` bounds the total per tier. It trims the composition
+rather than replacing it, so a warband is still a warband — just a smaller one
+near the Hub.
+
+Enemy gambit thresholds may be written flat (`self.hp<40`) or as a percentage of
+that combatant's own maximum (`self.hp<40%`). **Prefer the percentage.** Every
+threshold in the base table was flat, and a tier-1 creature has around 18 max HP
+— so it sat permanently under all of them, and its leaders summoned every round
+while its wretches fled on round one, whatever the fight was doing.
 
 ### Combat flow
 

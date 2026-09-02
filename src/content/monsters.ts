@@ -80,10 +80,17 @@ export function rollEncounter(options: EncounterOptions): Encounter | undefined 
 
   const creatures: NpcRecord[] = [];
   const perBase = new Map<string, number>();
+  const cap = encounterCap(campaign, options.tier);
 
-  /** Add up to `wanted` of a base, never more than taxonomy allows in one room. */
+  /**
+   * Add up to `wanted` of a base, never more than taxonomy allows in one room
+   * and never past the tier's cap on the whole encounter. The cap is checked
+   * last so a composition that has already filled the room simply contributes
+   * nothing further, rather than the parts being rebalanced.
+   */
   const add = (rolled: BaseRoll, wanted: number, elite: boolean): void => {
-    const count = allowedCount(campaign, rolled.base, wanted, perBase.get(rolled.base.id) ?? 0);
+    const allowed = allowedCount(campaign, rolled.base, wanted, perBase.get(rolled.base.id) ?? 0);
+    const count = Math.max(0, Math.min(allowed, cap - creatures.length));
     for (let i = 0; i < count; i++) {
       creatures.push(buildCreature(options, rolled, i === 0 && elite));
     }
@@ -231,8 +238,10 @@ function buildCreature(
   }
 
   // Taxonomy is a lookup, not a field: `armoured` is worth armour wherever it
-  // appears, whether it came from the base, the role or the elite roll.
-  let hpMult = 1;
+  // appears, whether it came from the base, the role or the elite roll. The
+  // curve's own multiplier is the starting point, so `frail` at tier 1 stacks
+  // on top of the tier's discount rather than replacing it.
+  let hpMult = numberAt(curve, 'hpMult', 1);
   for (const tag of tags) {
     const taxonomy = ruleAt(rules, `TAXONOMY.${tag}`) as JsonObject | undefined;
     if (!taxonomy) continue;
@@ -263,7 +272,10 @@ function buildCreature(
   );
   const gambits = role.gambits ?? role.id;
   const maxHp = Math.max(1, Math.round(deriveHp(rules, stats.toughness) * hpMult));
-  const maxResolve = deriveResolve(rules, stats.willpower);
+  const maxResolve = Math.max(
+    1,
+    Math.round(deriveResolve(rules, stats.willpower) * numberAt(curve, 'resolveMult', 1)),
+  );
   const friendliness = rollFriendliness(campaign, rng, tags);
 
   return {
@@ -358,6 +370,26 @@ function statCurve(campaign: ResolvedCampaign, tier: number): JsonObject {
   const last = keys[keys.length - 1] ?? first;
   const clamped = Math.min(Math.max(tier, first), last);
   return (campaign.monsters.statCurve[String(clamped)] ?? {}) as JsonObject;
+}
+
+/**
+ * How many creatures one encounter may field at this tier, clamped to the
+ * authored keys the way the stat curve is. A table that says nothing means no
+ * cap, so a campaign that omits it behaves exactly as before.
+ */
+function encounterCap(campaign: ResolvedCampaign, tier: number): number {
+  const table = (campaign.monsters as { encounterCap?: JsonObject }).encounterCap;
+  if (!table) return Number.POSITIVE_INFINITY;
+  const keys = Object.keys(table)
+    .filter((key) => !key.startsWith('_'))
+    .map(Number)
+    .filter((key) => Number.isFinite(key))
+    .sort((a, b) => a - b);
+  const first = keys[0];
+  if (first === undefined) return Number.POSITIVE_INFINITY;
+  const last = keys[keys.length - 1] as number;
+  const clamped = Math.min(Math.max(tier, first), last);
+  return numberAt(table, String(clamped), Number.POSITIVE_INFINITY);
 }
 
 const monsterSpread = (campaign: ResolvedCampaign): number => {

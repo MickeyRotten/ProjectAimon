@@ -186,7 +186,7 @@ let hostiles = 0, loot = 0, people = 0;
 rooms.forEach(r => {
   const out = [];
   for (const [key, p] of Object.entries(place)) {
-    if (key.startsWith('_') || key === 'guarantees') continue;
+    if (key.startsWith('_') || key === 'guarantees' || key === 'wealth') continue;
     if (p.requires && !has(r.tags, p.requires)) continue;
     if (rnd() > p.chance) continue;
     if (key === 'hostile') { const e = genEncounter(areaId, r.tags, a.tier, a);

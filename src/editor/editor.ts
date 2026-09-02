@@ -35,6 +35,7 @@ const FILES: FileEntry[] = [
   { path: `${BASE}/areas/town.json`, label: 'town', category: 'Areas' },
   { path: `${BASE}/areas/warren.json`, label: 'warren', category: 'Areas' },
   { path: `${BASE}/content/abilities.json`, label: 'abilities', category: 'Content' },
+  { path: `${BASE}/content/adjacency.json`, label: 'adjacency', category: 'Content' },
   { path: `${BASE}/content/items.json`, label: 'items', category: 'Content' },
   { path: `${BASE}/content/monsters.json`, label: 'monsters', category: 'Content' },
   { path: `${BASE}/content/npcs.json`, label: 'npcs', category: 'Content' },

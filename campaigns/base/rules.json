@@ -375,6 +375,11 @@
     "spikeChance": 0.05,
     "spikeBonus": 2,
     "max": 5,
+    "tierCeilByDepth": {
+      "1": 1,
+      "2": 2
+    },
+    "_ceilNote": "A ceiling on the first gates out, because jitter and the spike otherwise made a third of first areas tier 2+ and one in eleven tier 3+ — an unwinnable walk for a fresh character. Depths past the last key are uncapped and the curve resumes. It clamps the ROOM tier too, so roomDepthBonus and the guaranteed deep elite cannot punch through it.",
     "roomDepthBonus": {
       "near": 0,
       "quiteNear": 0,

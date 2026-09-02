@@ -114,6 +114,7 @@
     "self.hp<N", "self.resolve<N", "ally.hp<N", "target.hp<N", "target.resolve<N",
     "target.primer==X", "round==N", "allies>N", "always"
   ],
+  "_thresholdNote": "A threshold may be flat (40) or a percentage of that combatant's own maximum (40%). Prefer the percentage: a tier-1 creature has around 18 max HP, so every flat threshold below is one it never climbs above — its leader summoned every round and its wretches fled on round one, whatever the fight was actually doing.",
 
   "gambitsByRole": {
     "_note": "Ordered, first match wins. This REPLACES the hardcoded behaviour list — flees_low is now a gambit line, not engine code.",
@@ -123,7 +124,7 @@
       { "when": "always",                 "use": "attack" }
     ],
     "brute": [
-      { "when": "self.hp<40",                "use": "guarded_stance" },
+      { "when": "self.hp<40%",               "use": "guarded_stance" },
       { "when": "target.primer==off_balance","use": "fury_strike" },
       { "when": "round==1",                  "use": "trip" },
       { "when": "always",                    "use": "attack" }
@@ -131,19 +132,19 @@
     "lurker": [
       { "when": "round==1",             "use": "mark" },
       { "when": "target.primer==marked","use": "exploit" },
-      { "when": "self.hp<30",           "use": "flee" },
+      { "when": "self.hp<30%",          "use": "flee" },
       { "when": "always",               "use": "attack" }
     ],
     "leader": [
-      { "when": "ally.hp<40",             "use": "bind_wound" },
+      { "when": "ally.hp<40%",            "use": "bind_wound" },
       { "when": "allies>2",               "use": "rally" },
-      { "when": "self.hp<50",             "use": "call_help" },
+      { "when": "self.hp<50%",            "use": "call_help" },
       { "when": "target.primer==rattled", "use": "browbeat" },
       { "when": "always",                 "use": "jeer" }
     ],
     "wretch": [
-      { "when": "self.hp<50", "use": "flee" },
-      { "when": "always",     "use": "attack" }
+      { "when": "self.hp<50%", "use": "flee" },
+      { "when": "always",      "use": "attack" }
     ]
   }
 }

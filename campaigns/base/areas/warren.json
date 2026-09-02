@@ -122,12 +122,74 @@
   "gates": {
     "warren": 40,
     "ruin": 30,
-    "farmland": 30
+    "farmland": 30,
+    "coven": 10
   },
   "sexOverride": null,
   "sexOverrideRespects": [
     "none"
   ],
   "tierFloor": 2,
-  "tierCeil": 5
+  "tierCeil": 5,
+  "identity": {
+    "_note": "Rolled once when the area is generated, then fixed forever like its tier. On a miss the area has no identity, which is itself an answer: somewhere nothing of note happens. The narrator is handed it as colour for the room descriptions; nothing mechanical reads it.",
+    "chance": 0.8,
+    "traits": {
+      "_note": "One value rolled per trait, weighted. The traits are this archetype's own questions — a town has a trade and a leader, a ruin has a corpse and a cause of death — so adding one is a table edit, never engine work.",
+      "whoDug": [
+        [
+          "miners, chasing a seam that ran out",
+          10
+        ],
+        [
+          "something that was not using tools",
+          9
+        ],
+        [
+          "a siege works never filled in",
+          7
+        ],
+        [
+          "an older road, now roofed over",
+          8
+        ]
+      ],
+      "whatLives": [
+        [
+          "things that hunt by sound",
+          10
+        ],
+        [
+          "a colony that farms its own fungus",
+          8
+        ],
+        [
+          "one old thing and its leavings",
+          7
+        ],
+        [
+          "nothing, which is worse",
+          6
+        ]
+      ],
+      "trouble": [
+        [
+          "water rising a hand's breadth a year",
+          9
+        ],
+        [
+          "air that goes bad in the deep galleries",
+          8
+        ],
+        [
+          "a collapse that sealed people in",
+          7
+        ],
+        [
+          "a toll taken by whatever holds the middle",
+          6
+        ]
+      ]
+    }
+  }
 }

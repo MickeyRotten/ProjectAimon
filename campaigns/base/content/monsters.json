@@ -1,12 +1,14 @@
 {
   "_note": "Monsters generate as: base + role + optional elite prefix. Stats derive from area tier, never authored per monster. Taxonomy tags drive Presence resistance via TAXONOMY in rules.json.",
   "statCurve": {
-    "_note": "Attribute mean by tier; each rolls tier-mean +/- 3. HP = toughness x 2, Resolve = willpower x 2.",
+    "_note": "Attribute mean by tier; each rolls tier-mean +/- 3. HP = toughness x 2, Resolve = willpower x 2. hpMult and resolveMult then scale those two tracks alone, and default to 1 — they exist because `mean` drives all six attributes, so lowering it to shorten a fight would also gut accuracy, evasion and presence, which is a different creature rather than a weaker one.",
     "1": {
       "mean": 9,
       "damage": "1d4",
       "reduction": 0,
-      "penetration": 0
+      "penetration": 0,
+      "hpMult": 0.75,
+      "resolveMult": 0.75
     },
     "2": {
       "mean": 12,
@@ -535,6 +537,14 @@
         1
       ]
     }
+  },
+  "encounterCap": {
+    "_note": "The most creatures one encounter may field, by the tier it fights at. Every hostile in the room acts every round, so the count IS the difficulty: a pack of four at tier 1 out-damages a fresh character three to one however weak each one is. The cap trims the composition rather than changing it, so a warband is still a warband, just a smaller one.",
+    "1": 2,
+    "2": 3,
+    "3": 4,
+    "4": 5,
+    "5": 6
   },
   "tierGate": {
     "_note": "A base may appear if base.tier <= area.tier + 1. Over-tier spawns are rarer.",

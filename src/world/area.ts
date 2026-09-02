@@ -22,7 +22,14 @@
 import type { JsonObject } from '../campaign/merge';
 import type { AreaDef, ResolvedCampaign, RoomTypeDef } from '../campaign/types';
 import type { Rng } from '../engine/rng';
-import { ruleArray, ruleNumber, ruleObject, ruleRange, ruleWeightedPairs } from '../engine/rules';
+import {
+  depthTierCeil,
+  ruleArray,
+  ruleNumber,
+  ruleObject,
+  ruleRange,
+  ruleWeightedPairs,
+} from '../engine/rules';
 import { matches } from '../engine/tags';
 import { layoutArea, roomyEntry, weaveChords } from './layout';
 import { placeContents } from './placement';
@@ -80,6 +87,12 @@ export interface GenerateOptions {
   stub: AreaRecord;
   /** World flags, which spawn upgrades and conditional stats read. */
   flags?: ReadonlySet<string> | undefined;
+  /**
+   * What kind of place an already-reserved area is, for the adjacency rules.
+   * `World` backs it with its own area map. Omitted, adjacency still applies
+   * its depth gates but sees no neighbours.
+   */
+  archetypeOf?: ((areaId: string) => string | undefined) | undefined;
 }
 
 /**
@@ -98,7 +111,35 @@ export function rollTier(rules: JsonObject, areaDef: AreaDef, depth: number, rng
   const jitter = rng.weighted(ruleWeightedPairs(rules, 'DEPTH_TIER.jitter'));
   tier += Number(jitter.value);
   if (rng.chance(spikeChance)) tier += spikeBonus;
-  return Math.max(areaDef.tierFloor, Math.min(areaDef.tierCeil, Math.min(max, tier)));
+
+  // The depth ceiling holds the first gates out down; the archetype's own floor
+  // still wins over it, because a coven is a coven wherever it turns up.
+  const ceil = Math.min(areaDef.tierCeil, max, depthTierCeil(rules, depth));
+  return Math.max(areaDef.tierFloor, Math.min(ceil, tier));
+}
+
+/**
+ * What this place is about, rolled once and then as fixed as its tier.
+ *
+ * The whole block can miss, and that is deliberate: an area with no identity
+ * is somewhere nothing of note happens, which a world needs as much as it
+ * needs the coven with a debt coming due. A trait whose table is empty is
+ * skipped rather than defaulted, so a campaign can delete one by emptying it.
+ */
+export function rollIdentity(rng: Rng, areaDef: AreaDef): Record<string, string> | null {
+  const def = areaDef.identity;
+  if (!def || !rng.chance(def.chance)) return null;
+
+  const identity: Record<string, string> = {};
+  for (const [trait, rows] of Object.entries(def.traits ?? {})) {
+    if (trait.startsWith('_') || !Array.isArray(rows)) continue;
+    const options = rows
+      .filter((row): row is [string, number] => Array.isArray(row) && typeof row[0] === 'string')
+      .map(([value, w]) => ({ value, w: typeof w === 'number' ? w : 1 }));
+    const picked = rng.maybeWeighted(options);
+    if (picked) identity[trait] = picked.value;
+  }
+  return Object.keys(identity).length > 0 ? identity : null;
 }
 
 /** A globally unique area id: the archetype plus a run tag. */
@@ -139,6 +180,7 @@ export function reserveArea(options: {
       themeTokens: [],
       depth: options.depth,
       tier: 0,
+      identity: null,
       cube: allocation.cube,
       generated: false,
       entryRoomId: null,
@@ -159,6 +201,7 @@ export function generateArea(options: GenerateOptions): GenerationResult {
   const shape = rollShape(rng, areaDef, notes);
   const tier = rollTier(rules, areaDef, stub.depth, rng);
   const themeTokens = rng.sample(areaDef.themeTokens, 2);
+  const identity = rollIdentity(rng, areaDef);
 
   // Four ways out of a slot in a flat area, six where the cube has depth —
   // and fewer than that for the entry room, which sits on the cube's face.
@@ -202,6 +245,7 @@ export function generateArea(options: GenerateOptions): GenerationResult {
     shape,
     tier,
     themeTokens,
+    identity,
     cube: lattice.cubeOf(stub.id) ?? stub.cube,
     generated: true,
     entryCoord,
@@ -249,7 +293,17 @@ export function generateArea(options: GenerateOptions): GenerationResult {
     notes.push(`${layout.looseEdges.length} connection(s) dropped as undrawable`);
   }
 
-  const gates = rollGates({ campaign, rng, lattice, area, rooms, edges, graph: kept, areaDef });
+  const gates = rollGates({
+    campaign,
+    rng,
+    lattice,
+    area,
+    rooms,
+    edges,
+    graph: kept,
+    areaDef,
+    archetypeOf: options.archetypeOf,
+  });
   edges.push(...gates.edges);
   notes.push(...gates.notes);
 
@@ -326,6 +380,95 @@ function rollRoomType(rng: Rng, rules: JsonObject, areaDef: AreaDef, degree: num
 }
 
 /**
+ * Choose what kind of place lies behind a gate.
+ *
+ * Two layers, and both apply. The area's own `gates` table weights the roll —
+ * what this kind of place opens onto. The adjacency table then re-weights it
+ * against what is already standing near the cube the candidate would take, and
+ * against how far from the Hub this is. That second layer is the one `gates`
+ * cannot express: two areas become neighbours through a third one's allocation
+ * without either table ever naming the other.
+ *
+ * Every candidate is scored once and picked once. Deliberately not a
+ * roll-and-reject loop: rejection burns the candidate room, and a room that
+ * burns its gate is a dead end — the world invariant that most areas lead
+ * onward somewhere is worth more than a perfectly obeyed affinity table. So if
+ * every candidate scores zero, the unfiltered roll stands, with a note.
+ */
+function pickArchetype(options: {
+  campaign: ResolvedCampaign;
+  rng: Rng;
+  lattice: WorldLattice;
+  targets: { id: string; w: number }[];
+  depth: number;
+  gateCoord: Coord;
+  gateDir: Direction;
+  archetypeOf: (areaId: string) => string | undefined;
+  notes: string[];
+}): string | undefined {
+  const { campaign, rng, lattice, depth, archetypeOf, notes } = options;
+  const adjacency = campaign.adjacency;
+
+  const known = options.targets.filter((target) => campaign.areas.has(target.id));
+  for (const target of options.targets) {
+    if (!campaign.areas.has(target.id)) {
+      notes.push(`gate table names "${target.id}", which no area defines`);
+    }
+  }
+  if (known.length === 0) return undefined;
+
+  const scored = known.map((target) => {
+    const gate = adjacency?.depthGate?.[target.id];
+    if (gate && (depth < (gate.minDepth ?? -Infinity) || depth > (gate.maxDepth ?? Infinity))) {
+      return { ...target, w: 0 };
+    }
+    if (!adjacency?.affinity) return target;
+
+    // Try the choice on: the cube depends on the archetype, so what it would
+    // stand next to cannot be known until the archetype is proposed.
+    const areaDef = campaign.areas.get(target.id) as AreaDef;
+    const probe = lattice.probe({
+      areaId: `probe:${target.id}`,
+      archetype: target.id,
+      maxRooms: areaDef.size[1],
+      gateCoord: options.gateCoord,
+      gateDir: options.gateDir,
+    });
+
+    let w = target.w;
+    for (const areaId of lattice.neighboursNear(probe.cube, adjacency.radius)) {
+      const neighbour = archetypeOf(areaId);
+      if (!neighbour) continue;
+      w *= affinityBetween(adjacency, target.id, neighbour);
+      if (w === 0) break;
+    }
+    return { ...target, w };
+  });
+
+  const allowed = scored.filter((target) => target.w > 0);
+  if (allowed.length === 0) {
+    notes.push('no area kind was welcome here, so the gate table rolled unfiltered');
+    return rng.weighted(known).id;
+  }
+  return rng.weighted(allowed).id;
+}
+
+/**
+ * How welcome `candidate` is beside `neighbour`. The reverse pair counts too,
+ * so an opinion only has to be written down once; an unnamed pair is neutral.
+ */
+function affinityBetween(
+  adjacency: { affinity: Record<string, Record<string, number>> },
+  candidate: string,
+  neighbour: string,
+): number {
+  const forward = adjacency.affinity[candidate]?.[neighbour];
+  if (typeof forward === 'number') return forward;
+  const reverse = adjacency.affinity[neighbour]?.[candidate];
+  return typeof reverse === 'number' ? reverse : 1;
+}
+
+/**
  * Roll the ways out. Each gate reserves the cube behind it immediately — that
  * reservation is the whole reason coordinates came back, and it is what makes
  * a `Distant` quest objective placeable before the area exists.
@@ -339,12 +482,23 @@ function rollGates(options: {
   edges: EdgeRecord[];
   graph: Graph;
   areaDef: AreaDef;
+  /** What kind of place an already-reserved area is. Adjacency reads it. */
+  archetypeOf?: ((areaId: string) => string | undefined) | undefined;
 }): { edges: EdgeRecord[]; stubs: AreaRecord[]; notes: string[] } {
   const { campaign, rng, lattice, area, rooms, edges, graph, areaDef } = options;
   const rules = campaign.rules;
   const notes: string[] = [];
   const gateEdges: EdgeRecord[] = [];
   const stubs: AreaRecord[] = [];
+
+  // Adjacency asks what kind of place a neighbouring cube holds. Areas the
+  // world already knows about come from the caller; the stubs this pass is
+  // reserving right now are not there yet, so they are chained on the front —
+  // otherwise the second gate out of a room would happily put a coven beside
+  // the town the first gate just reserved.
+  const local = new Map<string, string>();
+  const archetypeOf = (areaId: string): string | undefined =>
+    local.get(areaId) ?? options.archetypeOf?.(areaId);
 
   const targets = Object.entries(areaDef.gates ?? {})
     .filter(([id]) => !id.startsWith('_'))
@@ -391,11 +545,19 @@ function rollGates(options: {
     const dir = rng.maybePick(outward.length > 0 ? outward : free);
     if (!dir) continue;
 
-    const archetype = rng.weighted(targets).id;
-    if (!campaign.areas.has(archetype)) {
-      notes.push(`gate table names "${archetype}", which no area defines`);
-      continue;
-    }
+    const archetype = pickArchetype({
+      campaign,
+      rng,
+      lattice,
+      targets,
+      depth: area.depth + 1,
+      gateCoord: room,
+      gateDir: dir,
+      archetypeOf,
+      notes,
+    });
+    if (!archetype) continue;
+
     const { stub, longRoad } = reserveArea({
       campaign,
       rng,
@@ -408,6 +570,7 @@ function rollGates(options: {
     if (longRoad) notes.push(`${stub.id} could not sit next door — long road from ${room.id}`);
 
     stubs.push(stub);
+    local.set(stub.id, archetype);
     dirsOf(usedDirs, room.id).add(dir);
     gatesPerRoom.set(room.id, (gatesPerRoom.get(room.id) ?? 0) + 1);
     gateEdges.push({

@@ -27,10 +27,10 @@
 import type { Json, JsonObject } from '../campaign/merge';
 import type { AreaDef, PlacementRule, ResolvedCampaign } from '../campaign/types';
 import type { Rng } from '../engine/rng';
-import { generateItem, rollGold } from '../content/items';
+import { generateItem, rollGold, type ValueBand } from '../content/items';
 import { rollEncounter } from '../content/monsters';
 import { generateNpc } from '../content/npcs';
-import { ruleAt, ruleNumber, ruleObject } from '../engine/rules';
+import { depthTierCeil, ruleAt, ruleNumber, ruleObject } from '../engine/rules';
 import { matches } from '../engine/tags';
 import {
   inObject,
@@ -106,8 +106,17 @@ export function placeContents(options: PlacementOptions): PlacementResult {
   const lootRooms = new Set<string>();
   const doorsOnEdge = new Set<string>();
 
+  // The area's worth, decided once and then spent down. Rolled off the area's
+  // own tier rather than any room's, because it is the area's budget.
+  const wealth = wealthTable(campaign);
+  const budget = {
+    containers: rngRange(rng, wealth['containersPerArea'], Number.MAX_SAFE_INTEGER),
+    gold: rngRange(rng, tieredRange(wealth, 'goldBudgetByTier', area.tier), Number.MAX_SAFE_INTEGER),
+  };
+
   const context: RollContext = {
     ...options,
+    budget,
     objects,
     npcs,
     quests,
@@ -131,6 +140,7 @@ export function placeContents(options: PlacementOptions): PlacementResult {
       if (!matches(room.tags, rule.requires)) continue;
       if (!rng.chance(rule.chance)) continue;
       if (key === 'hostile' && hostileRooms.size >= maxHostileRooms) continue;
+      if (isContainerRule(rule) && budget.containers <= 0) continue;
       place(context, key, rule, room);
     }
   }
@@ -154,6 +164,23 @@ export function placeContents(options: PlacementOptions): PlacementResult {
   for (const room of eligible(context, lootRule, (candidate) => !lootRooms.has(candidate.id))) {
     if (lootRooms.size >= wantLoot) break;
     place(context, 'loot', lootRule, room);
+  }
+
+  // Containers have a floor as well as a ceiling, for the same reason hostiles
+  // and loot rooms do: an area with nothing to open is an area with no reason
+  // to walk to the end of it.
+  const wantContainers = rangeLow(wealth['containersPerArea']);
+  const containerRule = ruleFor(campaign, 'container');
+  const containersMade = (): number =>
+    objects.filter((object) => object.flags.container === true).length;
+  for (const room of eligible(context, containerRule, () => true)) {
+    if (budget.containers <= 0 || containersMade() >= wantContainers) break;
+    place(context, 'container', containerRule, room);
+  }
+  if (containersMade() < wantContainers) {
+    notes.push(
+      `only ${containersMade()} of ${wantContainers} containers — no other room's tags allow one`,
+    );
   }
 
   const wantNpcs = numberAt(guarantees, 'minNpcs', 0);
@@ -224,6 +251,14 @@ interface RollContext extends PlacementOptions {
   lootRooms: Set<string>;
   doorsOnEdge: Set<string>;
   maxPerRoom: number;
+  /**
+   * The area's wealth, budgeted rather than rolled per room. `containers` is
+   * how many chests, corpses and the like the area may still make; `gold` is
+   * the coin left in the whole area's purse. Both count down as they are spent,
+   * which is the only thing that stops a run of lucky per-room rolls making one
+   * area worth more than the rest of the world.
+   */
+  budget: { containers: number; gold: number };
 }
 
 function place(
@@ -303,16 +338,21 @@ function place(
       rng,
       tier,
       kind: (rule as { itemKind?: string }).itemKind,
+      // Loose items are pinned low so containers are where value lives. A room
+      // stays worth searching without being worth looting.
+      band: looseBand(campaign),
       id: context.nextObjectId(),
       location: here,
     });
     if (!item) return;
+    spendGold(context, item);
     context.objects.push(item);
     if (item.flags.takeable) context.lootRooms.add(room.id);
     return;
   }
 
   const object = buildFixture(context, fixture, here, tier);
+  if (object.flags.container === true) context.budget.containers -= 1;
   context.objects.push(object);
 
   // Whatever the fixture holds goes inside it, pointing at the fixture rather
@@ -320,15 +360,21 @@ function place(
   const rolls = rule.lootRolls;
   if (rolls) {
     const count = rng.int(rolls[0], rolls[1]);
+    // One band per container, not per item: a chest is one chance at something
+    // good, which is what makes finding one mean anything. The band is rolled
+    // against the room's tier, so the deep room is the one worth reaching.
+    const band = rollBand(context, tier);
     for (let i = 0; i < count; i++) {
       const item = generateItem({
         campaign,
         rng,
         tier,
+        band,
         id: context.nextObjectId(),
         location: inObject(object.id),
       });
       if (!item) continue;
+      spendGold(context, item);
       context.objects.push(item);
       context.lootRooms.add(room.id);
     }
@@ -364,9 +410,101 @@ function buildFixture(
     condition: 100,
     burnRemaining: 0,
   };
-  if (fixture.gold) object.gold = rollGold(context.campaign, rng, tier);
+  if (fixture.gold) object.gold = drawGold(context, rollGold(context.campaign, rng, tier));
   return object;
 }
+
+// ── the wealth budget ───────────────────────────────────────────────────
+
+/**
+ * An area's worth is budgeted, not rolled room by room. Independent per-room
+ * chances have no ceiling: a lucky run put something valuable in every room,
+ * and one chest could roll a masterwork heirloom plate worth more than every
+ * other thing in the world put together. Containers are counted, their contents
+ * are drawn from a value band, and coin is one purse for the area.
+ *
+ * None of the numbers live here — `placement.wealth` owns all of them.
+ */
+const wealthTable = (campaign: ResolvedCampaign): JsonObject =>
+  ((campaign.placement as unknown as JsonObject)['wealth'] ?? {}) as JsonObject;
+
+/** Take coin from the area's purse, never more than is left in it. */
+function drawGold(context: RollContext, wanted: number): number {
+  const drawn = Math.max(0, Math.min(wanted, context.budget.gold));
+  context.budget.gold -= drawn;
+  return drawn;
+}
+
+/** A purse rolled as loot spends the same budget a spill of coin does. */
+function spendGold(context: RollContext, item: ObjectRecord): void {
+  if (typeof item.gold !== 'number' || item.gold <= 0) return;
+  item.gold = drawGold(context, item.gold);
+}
+
+/** Whether a rule builds something that can be opened, and so costs a container. */
+const isContainerRule = (rule: PlacementRule): boolean =>
+  (rule as { fixture?: FixtureDef }).fixture?.flags?.container === true;
+
+/** The band loose room items are pinned to, if the table names one. */
+function looseBand(campaign: ResolvedCampaign): ValueBand | undefined {
+  const wealth = wealthTable(campaign);
+  const name = wealth['looseItemBand'];
+  return typeof name === 'string' ? bandNamed(wealth, name) : undefined;
+}
+
+/** One band for a container, weighted by the tier the room fights at. */
+function rollBand(context: RollContext, tier: number): ValueBand | undefined {
+  const wealth = wealthTable(context.campaign);
+  const weights = tieredEntry(wealth, 'bandByTier', tier);
+  if (!weights) return undefined;
+  const options = Object.entries(weights)
+    .filter(([name, w]) => !name.startsWith('_') && typeof w === 'number')
+    .map(([name, w]) => ({ name, w: w as number }));
+  const picked = context.rng.maybeWeighted(options);
+  return picked ? bandNamed(wealth, picked.name) : undefined;
+}
+
+function bandNamed(wealth: JsonObject, name: string): ValueBand | undefined {
+  const band = (wealth['bands'] as JsonObject | undefined)?.[name] as JsonObject | undefined;
+  if (!band) return undefined;
+  const range = band['priceRange'];
+  if (!Array.isArray(range) || typeof range[0] !== 'number' || typeof range[1] !== 'number') {
+    return undefined;
+  }
+  return { priceRange: [range[0], range[1]], qualityBias: numberAt(band, 'qualityBias', 0) };
+}
+
+/**
+ * A `{ "1": ..., "2": ... }` table read at a tier, clamped to the keys it
+ * actually authors — the same shape and the same clamping as `lootTiers`.
+ */
+function tieredEntry(table: JsonObject, key: string, tier: number): JsonObject | undefined {
+  const rows = (table[key] ?? {}) as JsonObject;
+  const keys = Object.keys(rows)
+    .filter((name) => !name.startsWith('_'))
+    .map(Number)
+    .filter((name) => Number.isFinite(name))
+    .sort((a, b) => a - b);
+  const first = keys[0];
+  if (first === undefined) return undefined;
+  const last = keys[keys.length - 1] as number;
+  const clamped = Math.min(Math.max(tier, first), last);
+  return rows[String(clamped)] as JsonObject | undefined;
+}
+
+const tieredRange = (table: JsonObject, key: string, tier: number): Json | undefined =>
+  tieredEntry(table, key, tier) as Json | undefined;
+
+/** `[min, max]` rolled, or the fallback when the table says nothing. */
+function rngRange(rng: Rng, range: Json | undefined, fallback: number): number {
+  if (!Array.isArray(range) || typeof range[0] !== 'number' || typeof range[1] !== 'number') {
+    return fallback;
+  }
+  return rng.int(range[0], range[1]);
+}
+
+const rangeLow = (range: Json | undefined): number =>
+  Array.isArray(range) && typeof range[0] === 'number' ? range[0] : 0;
 
 /**
  * Hang a door on one of the room's edges and put its key somewhere at the
@@ -472,7 +610,13 @@ function tierIn(context: RollContext, room: RoomRecord): number {
     if (typeof lo !== 'number' || typeof hi !== 'number') continue;
     if (hops >= lo && hops <= hi) bonus = numberAt(bonuses, name, 0);
   }
-  const max = ruleNumber(rules, 'DEPTH_TIER.max');
+  // The area's depth ceiling binds here too. Without it the far-room bonus
+  // walked the first area back up to tier 2 in exactly the rooms that also
+  // carry the guaranteed elite.
+  const max = Math.min(
+    ruleNumber(rules, 'DEPTH_TIER.max'),
+    depthTierCeil(rules, context.area.depth),
+  );
   return Math.max(1, Math.min(max, context.area.tier + bonus));
 }
 

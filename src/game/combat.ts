@@ -41,6 +41,7 @@ import { inRoom } from '../world/types';
 import type { World } from '../world/world';
 import { line, type CommandContext, type Line } from './commands';
 import type { CombatOp, Effect } from './effects';
+import { playerMaxHp, playerMaxResolve } from './player';
 import { matchPhrase } from './scope';
 
 // ── the volatile session ──────────────────────────────────────────────
@@ -917,19 +918,42 @@ function pickEnemyAbility(ctx: CombatContext, npc: NpcRecord): string {
   return 'attack';
 }
 
+/**
+ * A gambit threshold written `40%` is read against the combatant's own maximum;
+ * a bare `40` is the flat number it always was. The percentage form exists
+ * because every threshold in the base table was flat, and a tier-1 creature
+ * with 18 max HP sits permanently under all of them — so its leader summoned
+ * every round and its wretches fled on round one, whatever the fight was doing.
+ */
+const under = (current: number, max: number, threshold: string): boolean =>
+  threshold.endsWith('%')
+    ? current < (max * Number(threshold.slice(0, -1))) / 100
+    : current < Number(threshold);
+
 /** Evaluate one gambit condition against the live fight. First match wins. */
 function gambitHolds(ctx: CombatContext, npc: NpcRecord, when: string): boolean {
   if (when === 'always') return true;
   const hostiles = hostilesIn(ctx.world, ctx.room.id);
 
-  let m = when.match(/^self\.(hp|resolve)<(\d+)$/);
-  if (m) return (m[1] === 'hp' ? npc.hp : npc.resolve) < Number(m[2]);
+  let m = when.match(/^self\.(hp|resolve)<(\d+%?)$/);
+  if (m) {
+    return m[1] === 'hp'
+      ? under(npc.hp, npc.maxHp, m[2] as string)
+      : under(npc.resolve, npc.maxResolve, m[2] as string);
+  }
 
-  m = when.match(/^target\.(hp|resolve)<(\d+)$/);
-  if (m) return (m[1] === 'hp' ? ctx.player.hp : ctx.player.resolve) < Number(m[2]);
+  m = when.match(/^target\.(hp|resolve)<(\d+%?)$/);
+  if (m) {
+    return m[1] === 'hp'
+      ? under(ctx.player.hp, playerMaxHp(ctx.campaign, ctx.player), m[2] as string)
+      : under(ctx.player.resolve, playerMaxResolve(ctx.campaign, ctx.player), m[2] as string);
+  }
 
-  m = when.match(/^ally\.hp<(\d+)$/);
-  if (m) return hostiles.some((other) => other.id !== npc.id && other.hp < Number(m![1]));
+  m = when.match(/^ally\.hp<(\d+%?)$/);
+  if (m) {
+    const threshold = m[1] as string;
+    return hostiles.some((other) => other.id !== npc.id && under(other.hp, other.maxHp, threshold));
+  }
 
   m = when.match(/^target\.primer==(\w+)$/);
   if (m) return (ctx.combat.primer[PLAYER] ?? '') === m[1];

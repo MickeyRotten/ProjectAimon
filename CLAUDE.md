@@ -145,7 +145,7 @@ rest is read on demand.
 | [docs/narration-and-input.md](docs/narration-and-input.md) | Input tiers, parser, turn loop, world clock, companions, descriptions | Touching the parser, the turn loop or any LLM call |
 | [docs/decisions-and-history.md](docs/decisions-and-history.md) | Settled decisions, superseded rules, port manifest, attribution | Wondering why something is the way it is |
 
-Runtime data lives in `campaigns/base/` — fourteen JSON files, loaded at boot.
+Runtime data lives in `campaigns/base/` — twenty JSON files, loaded at boot.
 `tools/sample-generate.mjs` is a reference generator that runs against the real
 tables; the engine must produce the same shapes.
 
@@ -158,6 +158,13 @@ tables; the engine must produce the same shapes.
   expression
 - **World turn** — clock, light burning down, pursuers moving, event deck firing
 - **Area generation on entry** — tables, tags, weighted rolls, graph shapes
+- **Area identity** — a handful of rolled traits per archetype (a town's trade
+  and who runs it, a ruin's corpse and cause of death), or none at all, which is
+  itself an answer. Narrator-facing only; nothing mechanical reads it
+- **Area wealth as a budget** — a container count and one gold purse per area,
+  container contents drawn from a value band, so an area has a ceiling
+- **Rule-driven adjacency** — a gate table for what a place opens onto, plus an
+  affinity matrix and depth gates for what may be built beside what
 - **Micro-quests** — six templates, distance bands, one objective each
 - **Companions** — standing ladder, cap of four, engine-owned recruitment
 - Inventory (generous carry limit)

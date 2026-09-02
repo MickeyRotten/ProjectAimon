@@ -21,6 +21,7 @@ import { bundledSource, readGlobal, type TableSource } from './source';
 import { validateCampaign, type ValidationReport } from './validate';
 import type {
   AbilityTable,
+  AdjacencyTable,
   AreaDef,
   CampaignManifest,
   ItemTable,
@@ -45,6 +46,7 @@ const CORE_FILES = [
   'content/npcs.json',
   'content/abilities.json',
   'content/placement.json',
+  'content/adjacency.json',
 ] as const;
 
 /** Loaded from `data/`, never from a campaign. */
@@ -191,6 +193,7 @@ export async function loadCampaign(options: LoadOptions = {}): Promise<LoadedCam
     npcs: strip<NpcTable>('content/npcs.json'),
     abilities: strip<AbilityTable>('content/abilities.json'),
     placement: withoutNotes(files.get('content/placement.json') as Json) as unknown as PlacementTable,
+    adjacency: strip<AdjacencyTable>('content/adjacency.json'),
     quests,
     verbs: withoutNotes(globals.get('verbs.json') as Json) as unknown as VerbTable,
     prompts,

@@ -127,5 +127,98 @@
     "none"
   ],
   "tierFloor": 1,
-  "tierCeil": 4
+  "tierCeil": 4,
+  "identity": {
+    "_note": "Rolled once when the area is generated, then fixed forever like its tier. On a miss the area has no identity, which is itself an answer: somewhere nothing of note happens. The narrator is handed it as colour for the room descriptions; nothing mechanical reads it.",
+    "chance": 0.8,
+    "traits": {
+      "_note": "One value rolled per trait, weighted. The traits are this archetype's own questions — a town has a trade and a leader, a ruin has a corpse and a cause of death — so adding one is a table edit, never engine work.",
+      "trade": [
+        [
+          "a salt road toll",
+          10
+        ],
+        [
+          "wool and fulling",
+          10
+        ],
+        [
+          "a river ferry",
+          8
+        ],
+        [
+          "horse dealing",
+          8
+        ],
+        [
+          "charcoal and iron",
+          8
+        ],
+        [
+          "a grain market",
+          10
+        ],
+        [
+          "tanning, and the smell of it",
+          6
+        ],
+        [
+          "smuggled goods nobody names",
+          5
+        ]
+      ],
+      "leader": [
+        [
+          "a bailiff who bought the post",
+          10
+        ],
+        [
+          "a widow who owns the mill and the debt on it",
+          8
+        ],
+        [
+          "a council of four that agrees on nothing",
+          8
+        ],
+        [
+          "an absent lord's steward",
+          10
+        ],
+        [
+          "the priest, in all but name",
+          6
+        ],
+        [
+          "whoever the garrison sergeant favours",
+          6
+        ]
+      ],
+      "trouble": [
+        [
+          "a tithe nobody can pay",
+          9
+        ],
+        [
+          "a killing still unanswered",
+          7
+        ],
+        [
+          "two families and one well",
+          7
+        ],
+        [
+          "the road tax doubled at midsummer",
+          8
+        ],
+        [
+          "strangers arriving and not leaving",
+          6
+        ],
+        [
+          "nothing, and everyone is waiting",
+          5
+        ]
+      ]
+    }
+  }
 }

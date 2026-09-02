@@ -95,11 +95,12 @@ means changing a number.**
 ```jsonc
 // content/placement.json — what appears in a room, and how often
 {
-  "container": { "chance": 0.30, "requires": ["indoor"] },
-  "hostile":   { "chance": 0.20, "requires": ["dark|wild"] },
-  "npc":       { "chance": 0.25, "requires": ["dwelling|path"] },
-  "loot":      { "chance": 0.15 },
-  "curiosity": { "chance": 0.20, "requires": ["landmark"] }
+  "container": { "chance": 0.30, "requires": ["indoor|storage|grave"], "lootRolls": [1, 2] },
+  "hostile":   { "chance": 0.22, "requires": ["!hearth", "!shrine"] },
+  "npc":       { "chance": 0.20, "requires": ["dwelling|market|path|cell|hearth"] },
+  "loot":      { "chance": 0.16, "requires": ["!path"] },
+  "curiosity": { "chance": 0.18, "requires": ["landmark|shrine|ruin|vantage"] }
+  // plus `guarantees` (floors and ceilings) and `wealth` (the area budget)
 }
 ```
 
@@ -248,6 +249,43 @@ attempts it takes the nearest free cube and logs a long road.
 `Distant` quest band work, which had been an open question since quests could not
 name a room that did not exist.
 
+### Which kind of place goes where
+
+Area kind was a flat weighted roll off the source area's `gates` table. That
+table is a real adjacency rule and it stays — it says what a kind of place opens
+onto. But it cannot see the case that actually matters: **two areas become
+neighbours through a third one's allocation**, without either table ever naming
+the other. So a coven could end up sharing a wall with a town however the gate
+weights were tuned. (It could not, in fact, because no gate table named `coven`
+at all and it never spawned — the rule held by accident.)
+
+`content/adjacency.json` adds the spatial layer:
+
+```
+radius     — slack, in lattice slots, for counting two cubes as neighbours
+depthGate  — archetype -> { minDepth, maxDepth }, in gates from the Hub
+affinity   — affinity[candidate][neighbour], a weight multiplier. 0 forbids.
+```
+
+Both layers apply. The gate table weights the roll; every candidate is then
+probed — `WorldLattice.probe` runs the allocation walk **without reserving
+anything**, because the cube depends on the archetype and so what it would stand
+beside cannot be known until the archetype is proposed — and its weight is
+multiplied by its affinity with every kind already standing near that cube. An
+unnamed pair is neutral; the lookup tries the reverse pair too, so an opinion is
+written once.
+
+**Scored once, picked once — never roll-and-reject.** A rejection loop would
+burn the candidate room, and a room that burns its gate is a dead end. If every
+candidate scores zero the unfiltered roll stands and a note is logged: the
+invariant that most areas lead onward is worth more than a perfectly obeyed
+affinity table.
+
+The Hub's two gates stay hand-authored in `campaign.json` and skip all of it.
+
+Measured over 20 seeds × 12 areas: `coven` beside `town` 4 → **0**, `town`
+beside `town` 49 → 18, `farmland` beside `town` 132 → 204.
+
 ### Distant quests reserve a coordinate
 
 1. Quest rolls `Distant`
@@ -323,7 +361,8 @@ One deterministic pass, no LLM, on first entry. Takes a few milliseconds.
 0. **Depth** = the source area's depth + 1 (the Hub is 0), stored. The **cube was
    already reserved** when the gate was created.
 1. **Archetype** from the gate's `gateArchetype`
-2. **Roll size** from the archetype's range, and a **graph shape**
+2. **Roll size** from the archetype's range, a **graph shape**, a **tier**, two
+   **theme tokens**, and an **identity**
 3. **Build the room graph** — connections first, then place rooms into free
    slots inside the area's cube. Adjacency stays edge-defined; the coordinate is
    a slot, not a distance. Any coordinate reserved by a `Distant` quest must
@@ -339,6 +378,39 @@ That is what makes the world stick.
 
 Generating whole also means the quest system has a real graph to aim at the
 moment a quest is taken.
+
+### Area identity — what the place is about
+
+Two theme tokens were the whole of an area's character, and every generated town
+was called "Crossroads Town". An area now also rolls an **identity**: a handful
+of named traits, each one weighted option out of that archetype's own table.
+
+```jsonc
+// areas/town.json
+"identity": {
+  "chance": 0.8,
+  "traits": {
+    "trade":   [["a salt road toll", 10], ["wool and fulling", 10], ...],
+    "leader":  [["a bailiff who bought the post", 10], ...],
+    "trouble": [["a tithe nobody can pay", 9], ...]
+  }
+}
+```
+
+The traits are the archetype's own questions — a town has a trade and someone
+running it, a ruin has a corpse and a cause of death, a coven has a rite and a
+matriarch. Adding one is a table edit.
+
+**The whole block can miss, and that is the point.** `identity: null` is a real
+answer: somewhere nothing of note happens. A world where every place has a story
+has no stories in it. The prompt is told so explicitly rather than being left to
+invent one.
+
+Rolled once at generation and fixed exactly as hard as the tier. **Nothing
+mechanical reads it** — it goes to the narrator as colour for the permanent room
+descriptions, and the same batch call now also names the area, so a town is "The
+Salt Road Reach" rather than the archetype's label. No extra call: one line at
+the top of a reply that was already being made.
 
 ### Graph shapes
 
@@ -455,8 +527,18 @@ Hub**, in steps, with jitter so the curve is not a straight line.
 tier = base + floor(areaDepth / step)
      + jitter   (-1 15% · 0 55% · +1 25% · +2 5%)
      + spike    (5% chance of +2)
-clamped to the archetype's tierFloor..tierCeil, and to DEPTH_TIER.max
+clamped to the archetype's tierFloor..tierCeil, to DEPTH_TIER.max,
+and to DEPTH_TIER.tierCeilByDepth for the first gates out
 ```
+
+**`tierCeilByDepth` is a ceiling on the shallows.** Jitter and the spike between
+them made a third of first areas tier 2 or worse and one in eleven tier 3 — a
+walk out of the Hub a fresh character could not survive. The table names a hard
+ceiling per depth for the first steps only; past its last key the curve resumes
+untouched. The **room** tier reads it too, or `roomDepthBonus` and the guaranteed
+deep-room elite would climb straight back over it. The archetype's own
+`tierFloor` still wins, because a coven is a coven wherever it turns up — which
+is why a coven is also depth-gated out of the shallows entirely.
 
 **Rolled once at generation and stored.** An area never changes tier, so
 backtracking through somewhere you cleared is always safe — the same rule that
@@ -708,6 +790,32 @@ filter. Then `guarantees` tops up:
 minHostiles: 3    minLootRooms: 2    minNpcs: 1
 lightSourceIfDarkArea: true          maxHostilesPerRoom: 1
 ```
+
+### Wealth is budgeted, not rolled
+
+Per-room rolls are independent, and independent rolls have no ceiling. A lucky
+run put something valuable in every room; a single chest roll could produce a
+masterwork heirloom plate worth about seven thousand gold, more than the rest of
+the world put together. `placement.wealth` replaces that with a budget the area
+spends down:
+
+```
+containersPerArea: [2, 4]     — chests, corpses, anything openable, counted together
+bands: low | medium | high | ultra   — a priceRange over item bases, plus a quality bias
+bandByTier                    — one band rolled per container; ultra climbs with difficulty
+looseItemBand: "low"          — items lying in a room are pinned cheap
+goldBudgetByTier: [min, max]  — one purse for the whole area, drawn down by every spill
+```
+
+The gamified part is the container count: a container is a known number of
+chances at something good, so **finding one means something**, and a room is
+worth searching without being worth looting. The band filters *which bases* may
+be drawn — quality and affixes still multiply on top, deliberately, because the
+point of a chest is that it might hold something remarkable. The cap that
+matters is how many containers exist, not the ceiling on any one of them.
+
+Measured over 96 generated areas: containers per area 11 → 4 at worst, total
+area worth 3508 → 1749 at worst, priciest single item 2340 → 1080.
 
 ### Fixtures — the vocabulary of things that are not items
 

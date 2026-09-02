@@ -109,6 +109,21 @@ export class WorldLattice {
    * the nearest free cube and the crossing is logged as a long road.
    */
   allocate(request: AllocationRequest): Allocation {
+    const allocation = this.probe(request);
+    this.cubes.set(request.areaId, allocation.cube);
+    return allocation;
+  }
+
+  /**
+   * Where `allocate` *would* put this area, without reserving anything.
+   *
+   * Adjacency rules need to know what a candidate archetype would end up
+   * standing next to, and the archetype is what decides the cube's Z span and
+   * offset — so the question cannot be answered before the choice is made. This
+   * lets the choice be tried on. It is the same walk `allocate` does, and
+   * `allocate` is now written in terms of it, so the two can never drift.
+   */
+  probe(request: AllocationRequest): Allocation {
     const size = this.sizeFor(request.archetype, request.maxRooms);
     const gap = ruleNumber(this.rules, 'WORLD.cubeSizing.gap');
     const maxSlides = ruleNumber(this.rules, 'WORLD.allocation.maxSlideAttempts');
@@ -133,14 +148,29 @@ export class WorldLattice {
       };
       const cube = this.cubeAround(anchor, request.gateDir, size);
       if (this.isFree(cube, request.areaId, gap) && this.inBounds(cube)) {
-        this.cubes.set(request.areaId, cube);
         return { cube, entryCoord: this.faceSlot(cube, anchor, request.gateDir), slid: slide, longRoad: false };
       }
     }
 
     const cube = this.nearestFreeCube(wanted, size, request.areaId, gap);
-    this.cubes.set(request.areaId, cube);
     return { cube, entryCoord: this.faceSlot(cube, wanted, request.gateDir), slid: maxSlides, longRoad: true };
+  }
+
+  /**
+   * Every area already reserved whose cube sits within `slack` of this one.
+   *
+   * This reads cubes, which is allocation, not distance — the standing rule
+   * that hops are the only measure of how far apart two rooms are is untouched.
+   * Nothing here reaches a player; it only decides what may be built beside
+   * what.
+   */
+  neighboursNear(cube: Cube, slack: number, exceptAreaId?: string): string[] {
+    const out: string[] = [];
+    for (const [areaId, other] of this.cubes) {
+      if (areaId === exceptAreaId) continue;
+      if (cubesOverlap(cube, other, slack)) out.push(areaId);
+    }
+    return out;
   }
 
   /**
