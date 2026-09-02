@@ -264,7 +264,8 @@ export function roomLines(ctx: CommandContext, full: boolean): Line[] {
   const lines = [line(view.name, 'ok')];
   if (full || view.dark) lines.push(line(view.desc));
   if (view.contents.length > 0) lines.push(line(`Here: ${sentenceList(view.contents)}.`));
-  if (view.exits.length > 0) lines.push(line(`Exits: ${view.exits.join(' · ')}`, 'rule'));
+  // Exits are shown on the map now (connectors, plus '?' for a way not yet
+  // walked), so the log no longer restates them each turn.
   return lines;
 }
 

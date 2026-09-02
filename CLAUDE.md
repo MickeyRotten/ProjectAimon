@@ -168,7 +168,9 @@ tables; the engine must produce the same shapes.
   single router call decides command vs. attempt vs. speech
 - NPC appearance on EXAMINE: LLM-narrated physique and outfit, same two-layer
   scheme as room description, grounded in what the NPC actually wears/wields
-- ASCII map derived from the room graph
+- Grid map derived from the room graph — CSS squares and connectors, a
+  frontier ring of `?` cells for rooms known through a connection but not yet
+  entered, gate markers for ways out, per-floor with a `Saltmere (F1)` label
 - **Campaigns** — content packs merged over base, importable as one JSON bundle
 - **Saving and loading** — autosave slot plus unlimited named snapshots
 - Settings screen for table tuning and model slots
@@ -277,8 +279,14 @@ deleted. Consumables and companions-in-combat stay out; they land after.
 - Whether areas should ever connect back to each other, or only to the Hub. A
   web is more explorable; a wheel is much easier to reason about. Cube allocation
   supports either, but a web will collide more often and lean on the slide rule.
-- Whether to build the world map now that cubes make it trivial, or leave the
-  player with only local orientation.
+- ~~Whether to build the world map now that cubes make it trivial, or leave the
+  player with only local orientation.~~ **Answered: local, but richer.** The
+  mini-map is a small fixed window on the player's own floor showing walked
+  rooms, the ring of `?` rooms one step past them, and gate markers — no full
+  survey. This **reverses the old "no seen-but-not-entered state" rule** in
+  `src/world/map.ts`, deliberately, so the map is a navigation tool rather than
+  only a record of where the player has been. With connections on the map, the
+  per-turn `Exits:` line in the log is gone.
 - ~~Whether `Distant` band quests should force early generation of that area.~~
   **Answered by the world lattice**: the cube is reserved at gate creation, so a
   coordinate can be named before the area exists. Generation stays deferred.

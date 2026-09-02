@@ -194,7 +194,24 @@ async function boot(): Promise<void> {
         screen.print([result.appearance.fallback]);
       }
     }
-    void narrateHere();
+    // Crossing a gate into a new area holds the reveal behind a loader until
+    // the area's prose is written, so the player is briefly at the threshold
+    // rather than dropped into blank rooms. Every other move reveals at once.
+    if (result.enteredArea && narrator) void enterArea();
+    else void narrateHere();
+  }
+
+  /**
+   * The "Generating new area" beat. The area's structure is already generated
+   * (that happened synchronously on the gate crossing); this waits only on its
+   * prose. Input locks for the wait via `track`, and the closing `refresh`
+   * reveals the room whether the prose landed (shown by `setRoomProse`) or the
+   * call failed (falls back to the structural text), so the loader never sticks.
+   */
+  async function enterArea(): Promise<void> {
+    screen.setRoomPending(game.room.id, 'Generating new area');
+    await track(narrateHere());
+    screen.refresh(game);
   }
 
   /**

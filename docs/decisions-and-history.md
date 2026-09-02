@@ -222,6 +222,34 @@ whether the world under the prose is worth walking.
 
 ---
 
+## What building the grid map settled
+
+### The map gained a "seen but not entered" state — on purpose
+
+`src/world/map.ts` used to say there was no glyph for a room known through a
+connection but not yet walked, "because there is no such state." The DOM grid
+map reverses that: a **frontier** cell (a dimmed `?`) is drawn for every
+unvisited room that borders a walked one, and a **gate** marker for every way
+out of the area. The reason is the reversal's whole point — the map should be a
+navigation tool, telling the player where they *can* go, not only a record of
+where they have been. It is still one ring only (neighbours of walked rooms),
+so it hints without spoiling the pre-generated area, and still the player's own
+floor only — another Z level is its own map.
+
+### Exits left the log
+
+Once the map draws connections, the per-turn `Exits:` line was pure repetition,
+so `roomLines` no longer prints it. Map cells carry `aria-label`s so a screen
+reader is not left blind to the exits the line used to name.
+
+### Crossing a gate has a threshold beat
+
+Area **structure** generates synchronously on the gate crossing, so there is
+nothing to wait on there; the area's **prose** is the slow part. When a narrator
+is present, the reveal is held behind a "Generating new area" loader (input
+locked) until that prose lands — a presentational hold, no new game state, so
+rule 1's two write points are untouched. With no key it reveals at once.
+
 ---
 
 ## Port manifest — harvesting Project Loom
