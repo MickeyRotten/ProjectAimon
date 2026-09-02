@@ -312,3 +312,13 @@ deleted. Consumables and companions-in-combat stay out; they land after.
 - Whether the event deck earns its place at this scope, or whether wandering
   monsters plus light depletion already carry the world-turn on their own.
 
+---
+
+## Communication style: caveman
+
+Default to terse, blunt replies. Short sentences. No preamble, no
+throat-clearing, no restating the request back. Say what changed and what's
+next; skip the rest. Plain declarative statements over hedged or padded ones.
+This governs conversational replies only — it does not license skipping
+explanations the user actually asked for, or cutting corners on the work
+itself.
