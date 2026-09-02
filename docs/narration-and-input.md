@@ -1,6 +1,6 @@
 # Narration and input
 
-*The three input tiers, the parser, the turn loop, the world clock, companions, room descriptions, structured output.*
+*The three input tiers, conversation, the parser, the turn loop, the world clock, companions, room descriptions, structured output.*
 
 *Part of Project Aimon. Root spec: [CLAUDE.md](../CLAUDE.md)*
 
@@ -12,7 +12,9 @@
 What stops the game dissolving is that the world is rigid — geography makes things
 unreachable, resources deplete, and the narrator owns nothing.
 
-Every input falls into one of three tiers. The engine decides which.
+Every input falls into one of three tiers. The engine decides which. Standing
+in a conversation changes how that decision is made and what the bottom of the
+ladder does — see [Conversation](#conversation) below.
 
 **Latency is two calls and stays two calls.** Classification then narration runs
 around 2.3 seconds if both use a full-sized model. The fix is a **tiny model with
@@ -73,6 +75,101 @@ the game punishes you for talking like a person.
 
 No roll, no state change, no cost. Just prose. This should exist and should be
 free — not every sentence needs to be a move.
+
+
+---
+
+## Conversation
+
+Standing in front of a person changes what typing means. The three tiers above
+still decide everything, but *which* of them a line lands in, and what the
+bottom of the ladder does when it lands nowhere, both change while a
+conversation is open.
+
+### What a conversation is
+
+One pointer — who the player is talking to, the room it started in, and the turn
+it opened — written the same way everything else is, by an effect applied at a
+write point. It is opened by `talk`, `ask`, `tell` and `say`, and it closes when
+
+- the player leaves the room,
+- a fight starts,
+- the person dies, flees or surrenders,
+- the player says a farewell (`bye`, `farewell`, `goodbye`), or
+- the player addresses somebody else, which opens on them instead.
+
+There is no idle timer. A turn count is a poor clock for this — the same
+argument as for NPC appearance below — and the five conditions above already
+cover every way a conversation actually ends.
+
+Reading it is stricter than writing it: the stored pointer is checked against
+the world as it now stands, so a partner who has died or been walked away from
+is not a partner, whatever the pointer still says. Stored state says who; the
+check says whether they are still there to answer.
+
+### The header line fires once
+
+`talk to Marda` prints *"Marda turns to hear you out."* — a beat worth having
+when you walk up to someone. Printing it before every line of a five-line
+exchange turns one conversation into five cold approaches, so it is emitted on
+the turn the conversation opens and never again. Continuing an open
+conversation prints no mechanical line at all: the placeholder and the spoken
+reply are the whole turn.
+
+### One router call, not two
+
+The terminal of the ladder changes while a conversation is open. Free text
+aimed at a person is usually *speech*, and speech deserves an answer rather
+than Tier 3's bare echo — but the reply is an LLM call, and the budget above is
+two calls a turn and stays two. Paying for `toCommand`, then `classify`, then
+the voice call is three.
+
+So inside a conversation those first two collapse into **one router call** that
+answers all of "command, attempt, or just talking?", leaving the second call
+for the narrator:
+
+```
+Tier 1 parser                    (free, always first, unchanged)
+  └ miss → converse router       (one call)
+              ├ command  → re-enter the parser, run it as Tier 1
+              ├ attempt  → legalAttempt, then Tier 2
+              └ speech   → the partner answers                (second call)
+```
+
+Every validation is the one that already existed. A routed command re-enters
+`parse()` and is discarded if the grammar refuses it; a routed attempt goes
+through `legalAttempt`, which checks the target against the exact scope list
+that was sent. Anything malformed, invalid, or unclassifiable falls to speech —
+being unable to work out what someone said is not a reason to refuse to answer
+them.
+
+Tier 1 still runs first. The parser is what handles everything needing no prose
+— walking out, checking the map, drawing a weapon — and being mid-conversation
+never takes those away. That is the balance the tiers are for: the parser
+supports what does not need generation, and generation covers the rest.
+
+### Conversational intent that is really a command
+
+*"What are you selling?"* is a mechanical request wearing prose clothes, and the
+router is what turns it into `LIST`. The handler reads the vendor's stock the
+way everything else reads what a person holds — a query over `location` — and
+prices it from the item tables, skipping their own worn gear and anything the
+rules say vendors refuse.
+
+Ask someone who sells nothing and nothing mechanical happens, which is the
+honest answer. The question still reaches them, so they answer it in their own
+words rather than the scene going dead on a refusal.
+
+**Vendors hold no stock yet.** Nothing places objects at `npc:<id>` during
+generation, so this path currently always takes its empty branch and the
+visible answer is the in-character reply. The priced list turns on unchanged
+the day a stock roller lands.
+
+### A conversation is not free time
+
+Speech spends a turn. The clock runs, light burns down, and anything hunting
+the player keeps moving while they stand there talking — the same cost `talk`
+has always had. Only Tier 3, which is not addressed to anyone, stays free.
 
 
 ---
@@ -455,13 +552,16 @@ truth rather than by forbidding it the subject.
 
 ## NPC appearance — one description, rechecked on history
 
-The narrator's fourth job: `EXAMINE <npc>` prints the mechanical name/persona/
-disposition lines exactly as before — engine text, always available, no key
-required — then an appearance line follows. Unlike room description, this is
-**not** a two-layer scheme: there is one stored `description` per NPC, and
-what triggers a regeneration is a judgment call over what has been narrated
-since it was last checked, not a deterministic content signature. Room
-description is unaffected by any of this — see above.
+The narrator's fourth job: `EXAMINE <npc>` prints the mechanical name and
+hostile/friendly lines immediately, then waits on one appearance line, which
+replaces the old mechanical persona sentence rather than following it —
+showing both would mean the player reads a throwaway procedural line and
+then the real prose right after it, every single time. Unlike room
+description, this is **not** a two-layer scheme: there is one stored
+`description` per NPC, and what triggers a regeneration is a judgment call
+over what has been narrated since it was last checked, not a deterministic
+content signature. Room description is unaffected by any of this — see
+above.
 
 ### Generated once, rechecked, never blindly regenerated
 
@@ -524,16 +624,29 @@ equipment beyond it — the identical rule `room-render.md` applies to room
 contents. Physique and mood are otherwise invented freely, the same latitude
 a room's `baseDesc` has.
 
-### Non-blocking, with a placeholder marking the wait
+### The one follow-up that blocks input
 
-EXAMINE's mechanical lines print immediately; the appearance line is a
-fire-and-forget follow-up, same as NPC voicing and Tier 2 outcome prose. All
-three now print a dim `"…"` placeholder the moment the call starts, swapped
-for the real line (or dropped, on failure or staleness) once it settles —
-`Screen.printPending`, `src/ui/screen.ts`. Input is never locked for this;
-only Tier 2/3 command *resolution* locks input. Without a placeholder the
-mechanical reply looked finished while more prose was still arriving, which
-read as nothing having happened at all.
+NPC voicing and Tier 2 outcome prose are cosmetic follow-ups: the mechanical
+reply already stands as a complete answer, so they print a dim `"…."`
+placeholder (`Screen.printPending`, `src/ui/screen.ts`) and resolve later
+without locking input — a network stall never freezes the input box, and a
+late line is simply dropped if the player has moved on.
+
+Appearance is different, because it **replaces** the persona line rather
+than supplementing it: if it printed nothing while in flight, EXAMINE would
+read as having failed. `main.ts`'s `handle()` wraps its follow-up in the
+same `track()` helper Tier 2/3 resolution uses, so input locks for its
+duration — same as any command still being resolved. Without this, typing
+EXAMINE again before the first call landed would find `description` still
+empty and fire a second, redundant generation call racing the first.
+
+Locking only costs anything when a real call is made. A free hit (nothing
+changed since the last check) resolves in the same tick, so the lock is
+imperceptible; only first generation and a real recheck are slow enough to
+notice, and both are exactly the cases worth waiting for. On failure or no
+narrator at all, the pending line resolves to `fallback` — the mechanical
+persona line, carried on `Reply.appearance` as data rather than printed
+eagerly — so EXAMINE never reads as having produced nothing.
 
 
 ---

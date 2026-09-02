@@ -50,13 +50,13 @@ describe('the reported session', () => {
   it('examine marda describes her', () => {
     const game = Game.begin({ campaign, seed: 'bug-report', name: 'Vess', archetype: 'freebooter' });
     marda(game);
-    const text = game
-      .submit('examine marda')
-      .lines.map((l) => l.text)
-      .join('\n');
+    const result = game.submit('examine marda');
+    const text = result.lines.map((l) => l.text).join('\n');
     expect(text).toContain('Marda');
-    expect(text).toContain('quartermaster');
     expect(text).toContain('no harm');
+    // The persona line is no longer printed eagerly — it rides along as the
+    // fallback main.ts shows only when there's no narrator to ask instead.
+    expect(result.appearance?.fallback.text).toContain('quartermaster');
   });
 
   it('talk to marda no longer answers "Talk what?"', () => {
@@ -66,6 +66,23 @@ describe('the reported session', () => {
     const text = result.lines.map((l) => l.text).join('\n');
     expect(text).not.toContain('Talk what?');
     expect(result.voice).toEqual({ npcId: 'marda', topic: '' });
+  });
+
+  it('a continued conversation still prints something with no narrator to ask', () => {
+    const game = Game.begin({ campaign, seed: 'bug-report', name: 'Vess', archetype: 'freebooter' });
+    marda(game);
+
+    // Opening prints the header outright. Continuing suppresses it and leans
+    // on the voiced reply — which does not exist without a key, so the header
+    // rides along as the fallback main.ts prints instead. Either way the turn
+    // is never silent.
+    const opened = game.submit('talk to marda');
+    expect(opened.lines.map((l) => l.text)).toContain('Marda turns to hear you out.');
+    expect(opened.voice?.fallback).toBeUndefined();
+
+    const continued = game.submit('talk to marda');
+    expect(continued.lines.map((l) => l.text)).not.toContain('Marda turns to hear you out.');
+    expect(continued.voice?.fallback?.text).toBe('Marda turns to hear you out.');
   });
 
   it('i say hi to marda no longer answers "I does not take an object" — i alone still works', () => {

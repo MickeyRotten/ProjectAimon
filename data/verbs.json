@@ -73,6 +73,7 @@
     { "id": "tell",     "words": ["tell"],    "patterns": ["VNPN"],
       "note": "Also how a companion is commanded: TELL <companion> TO <action>." },
     { "id": "say",      "words": ["say"],     "patterns": ["VN","VNPN"] },
+    { "id": "farewell", "words": ["bye","farewell","goodbye"], "patterns": ["V","VN"] },
 
     { "id": "attack",   "words": ["attack","hit","kill","fight"], "patterns": ["V","VN","VNPN"],
       "note": "Bare ATTACK in a fight swings at the nearest foe; ATTACK <foe> names one." },
@@ -103,5 +104,5 @@
   "allWord": "all",
   "exceptWords": ["except","but"],
 
-  "_count": "62 verbs. Adding one means adding a system — be reluctant."
+  "_count": "63 verbs. Adding one means adding a system — be reluctant."
 }

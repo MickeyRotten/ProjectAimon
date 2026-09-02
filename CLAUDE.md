@@ -18,16 +18,39 @@ translator that re-enters the deterministic parser once before falling to a
 Tier 2 classifier (engine-validated, engine-picks-the-effect) and then to
 free Tier 3 expression; `talk`/`ask`/`tell`/`say` hand off to a voiced NPC
 reply; a Tier 2 outcome gets a narrated line alongside its roll. **Part
-three** — `EXAMINE <npc>` now follows its mechanical persona line with a
-physique-and-outfit render on the same two-layer scheme as room description,
-lazily generated on an NPC's first EXAMINE rather than batched, since most
-NPCs are never looked at closely. Every path still degrades to the bare
-engine text with no key, exactly as room description does. Every
-fire-and-forget narration follow-up (voicing, outcome prose, NPC appearance)
-now shows a dim "…" placeholder while its call is in flight, swapped for the
-real line once it lands, so the mechanical reply never reads as finished
-while more prose is still coming — never blocking input, which stays locked
-only for Tier 2/3 command resolution.
+three** — `EXAMINE <npc>` prints its mechanical name/hostile-flag lines, then
+waits on a single appearance line that *replaces* the old mechanical persona
+sentence rather than following it: generated once on an NPC's first EXAMINE
+(from tags, persona, role and current gear) and, on every later EXAMINE,
+rechecked against what the game transcript has recorded since — not
+regenerated on a gear-signature change, and not on turn count, since EXAMINE
+itself costs a turn and a turn-based clock can't tell two back-to-back
+examines apart from a real gap. Every path still degrades to the bare
+persona line with no key, exactly as before, just carried as a fallback
+rather than printed eagerly. Voicing and outcome prose stay fire-and-forget,
+each showing a dim "…" placeholder while its call is in flight, swapped for
+the real line once it lands, without locking input. NPC appearance is the
+one exception: because its placeholder *is* the answer rather than a
+supplement to one already on screen, `handle()` locks input for its
+duration the same way Tier 2/3 resolution does. **Part four** — sustained
+conversation, which moves dialogue further onto the narrator and off the
+parser. Talking opens a conversation: one pointer at who is being spoken to,
+opened by `talk`/`ask`/`tell`/`say` through a `converse` effect and closed by
+walking out, a fight, the person leaving, a farewell (`bye`), or addressing
+somebody else. The "turns to hear you out" line fires on the turn it opens
+and never again, so an exchange reads as one conversation rather than five
+cold approaches. While one is open the ladder's first two calls collapse into
+a single **router** — command, Tier 2 attempt, or speech — which keeps the
+budget at two calls a turn while making speech the terminal instead of Tier
+3's bare echo, so anything said to a person gets an answer. The router is
+also what turns *"what are you selling?"* into `LIST`; ask someone who sells
+nothing and nothing mechanical happens, but they still answer in character.
+Every validation is the old one — a routed command re-enters `parse()`, a
+routed attempt goes through `legalAttempt` — and anything unclassifiable
+falls to speech rather than to an error. The tier ladder now lives in
+`src/game/ladder.ts` rather than inline at the edge, so it is testable.
+Vendors hold no stock yet, so the wares path always takes its empty branch
+today; the priced list turns on unchanged the day a stock roller lands.
 
 ---
 
@@ -140,6 +163,9 @@ tables; the engine must produce the same shapes.
 - Repair, training, hiring, and the Hub-return consumable — the gold sinks
 - Attribute growth via rare items and a Hub trainer
 - Dialogue: LLM voices NPCs, code owns every number
+- **Conversation** — one partner at a time, opened by the talk verbs and closed
+  by leaving, a fight, a farewell or addressing someone else; while open, a
+  single router call decides command vs. attempt vs. speech
 - NPC appearance on EXAMINE: LLM-narrated physique and outfit, same two-layer
   scheme as room description, grounded in what the NPC actually wears/wields
 - ASCII map derived from the room graph

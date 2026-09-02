@@ -16,7 +16,8 @@ import './app.css';
 import { loadCampaign } from './campaign/loader';
 import { formatReport } from './campaign/validate';
 import { line, type Line } from './game/commands';
-import { Game, type TurnResult } from './game/game';
+import { Game } from './game/game';
+import { stepThrough } from './game/ladder';
 import {
   AUTOSAVE_ID,
   browserSaveStore,
@@ -26,7 +27,6 @@ import {
   snapshotId,
   type SaveStore,
 } from './game/save';
-import { legalAttempt } from './game/tier2';
 import { mountScreen, type PendingLine, type Screen } from './ui/screen';
 import { mountSettings } from './ui/settings';
 import { openRouterClient } from './narrator/llm';
@@ -158,7 +158,9 @@ async function boot(): Promise<void> {
     // Step 2, then step 3: the ladder only ever runs outside combat, and
     // `plan()` is called exactly once — calling it twice would silently drop
     // a pending disambiguation answer the second time.
-    const result = game.inCombat() ? game.submit(raw) : await track(stepThrough(raw));
+    const result = game.inCombat()
+      ? game.submit(raw)
+      : await track(stepThrough({ game, translator, verbs: campaign.verbs, rules: campaign.rules }, raw));
 
     screen.print(result.lines);
     screen.refresh(game);
@@ -171,37 +173,34 @@ async function boot(): Promise<void> {
     // in flight, so the mechanical reply never reads as the finished answer
     // when narration is still coming — only shown when there's a narrator to
     // actually ask, so a no-key game never prints a "…" that never resolves.
-    if (result.voice && voices) {
-      void narrateVoice(raw, result.voice, screen.printPending(line('…', 'rule')));
+    if (result.voice) {
+      if (voices) void narrateVoice(raw, result.voice, screen.printPending(line('…', 'rule')));
+      // No narrator to answer: some voiced turns carry the mechanical line
+      // they replaced, so a keyless game never gets a turn with no output.
+      else if (result.voice.fallback) screen.print([result.voice.fallback]);
     } else if (result.tier2 && outcome) {
       void narrateOutcome(raw, result.lines, result.tier2, screen.printPending(line('…', 'rule')));
     }
-    if (result.appearance && npcAppearance) {
-      void narrateAppearance(result.appearance, screen.printPending(line('…', 'rule')));
+    // Appearance is the one follow-up worth blocking on: it replaces the
+    // mechanical persona line rather than supplementing it, so showing
+    // nothing there while narration is in flight would read as EXAMINE
+    // having failed. Locking input for its duration keeps a second EXAMINE
+    // from racing the first (and firing a duplicate generation call) while
+    // the description is still being written.
+    if (result.appearance) {
+      if (npcAppearance) {
+        void track(narrateAppearance(result.appearance, screen.printPending(line('…', 'rule'))));
+      } else {
+        screen.print([result.appearance.fallback]);
+      }
     }
     void narrateHere();
   }
 
-  /** Step 3: on a Tier 1 miss, try the translator, then Tier 2, then Tier 3. */
-  async function stepThrough(raw: string): Promise<TurnResult> {
-    const plan = game.plan(raw);
-    if (plan.kind !== 'unparsed' || !translator) return game.respond(raw, plan);
-
-    const ctx = game.context();
-    const roomId = game.room.id;
-
-    const translated = await translator.toCommand(raw, roomId, ctx.scope, campaign.verbs);
-    if (translated) return game.run(raw, translated);
-
-    const classified = await translator.classify(raw, roomId, ctx.scope);
-    const attempt = classified ? legalAttempt(campaign.rules, ctx.scope, classified) : undefined;
-    if (attempt) return game.resolveTier2(raw, attempt);
-
-    return game.tier3(raw);
-  }
-
   /**
-   * The NPC's spoken reply to `talk`, `ask`, `tell` or `say`. Fire-and-forget
+   * The NPC's spoken reply — to `talk`, `ask`, `tell`, `say`, or to anything
+   * said to the person the player is already mid-conversation with.
+   * Fire-and-forget
    * from `handle()`, so the player is free to type on before this resolves —
    * drop the reply if they've left the room by the time it lands, the same
    * staleness guard `narrateHere` uses, so a late line never turns up out of
@@ -229,23 +228,25 @@ async function boot(): Promise<void> {
   }
 
   /**
-   * A physique/outfit line for an NPC just EXAMINEd. Fire-and-forget, same
-   * staleness guard as `narrateVoice` and `narrateHere`: dropped if the NPC
-   * is no longer in scope by the time it lands.
+   * The appearance line for an NPC just EXAMINEd, in place of the mechanical
+   * persona line. `handle()` blocks input for this one (see there for why),
+   * so unlike voicing/outcome it can safely resolve to `target.fallback`
+   * rather than clearing to nothing — there is no risk of it landing after
+   * the player has moved on to unrelated input, only after they've moved
+   * rooms, which the staleness guard below still catches.
    */
-  async function narrateAppearance(target: { npcId: string }, pending: PendingLine): Promise<void> {
-    if (!npcAppearance) return pending.clear();
+  async function narrateAppearance(target: { npcId: string; fallback: Line }, pending: PendingLine): Promise<void> {
+    if (!npcAppearance) return pending.resolve(target.fallback);
     const npc = game.world.npcs.get(target.npcId);
     if (!npc) return pending.clear();
     const roomId = game.room.id;
     try {
       const prose = await npcAppearance.describeAppearance(game.world, npc, game.transcript);
-      if (!prose) return pending.clear();
       if (game.room.id !== roomId) return pending.clear(); // moved while we waited
-      pending.resolve(line(prose));
+      pending.resolve(prose ? line(prose) : target.fallback);
     } catch {
-      // A failure here never breaks play; the persona line already stands.
-      pending.clear();
+      if (game.room.id !== roomId) return pending.clear();
+      pending.resolve(target.fallback);
     }
   }
 

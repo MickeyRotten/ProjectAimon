@@ -71,6 +71,11 @@ export function ruleArray(rules: JsonObject, path: string, fallback?: Json[]): J
   return value;
 }
 
+/** The string members of a rules array — `DEFEAT.lose`, `VENDORS.refusesTags`. */
+export function ruleStrings(rules: JsonObject, path: string): string[] {
+  return ruleArray(rules, path).filter((entry): entry is string => typeof entry === 'string');
+}
+
 export function ruleObject(rules: JsonObject, path: string, fallback?: JsonObject): JsonObject {
   const value = required(rules, path, fallback);
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {

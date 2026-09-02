@@ -18,9 +18,9 @@
 import type { ResolvedCampaign } from '../campaign/types';
 import { parse, type Command, type ParseFailure } from '../engine/parser';
 import { Rng } from '../engine/rng';
-import { ruleArray, ruleNumber, ruleString } from '../engine/rules';
+import { ruleNumber, ruleString, ruleStrings } from '../engine/rules';
 import { objectiveComplete, type QuestCheckContext } from '../world/quests';
-import type { ObjectRecord, RoomRecord } from '../world/types';
+import type { NpcRecord, ObjectRecord, RoomRecord } from '../world/types';
 import { IN_PLAYER, inObject, inRoom } from '../world/types';
 import { World, type WorldSnapshot } from '../world/world';
 import {
@@ -55,6 +55,20 @@ export interface TranscriptEntry {
   output: string;
 }
 
+/**
+ * The person the player is currently talking to. Opened by `talk`/`ask`/
+ * `tell`/`say`, closed by walking out, a fight, a farewell, or the NPC
+ * leaving. Two things read it: the talk handlers, which print the "turns to
+ * hear you out" line only when one is being opened, and the ladder, whose
+ * terminal becomes a voiced reply rather than Tier 3's bare echo while one is
+ * open.
+ */
+export interface Conversation {
+  npcId: string;
+  roomId: string;
+  openedTurn: number;
+}
+
 export interface GameSnapshot {
   /** Bumped only when the shape changes in a way a loader must know about. */
   version: 1;
@@ -66,6 +80,12 @@ export interface GameSnapshot {
   transcript: TranscriptEntry[];
   /** The live fight, if any. Born and dies with an encounter. */
   combat?: CombatState;
+  /**
+   * The open conversation, if any. Optional like `combat`, so a save written
+   * before conversations existed loads as "nobody is being talked to" rather
+   * than needing a version bump.
+   */
+  conversation?: Conversation;
 }
 
 export interface BeginOptions {
@@ -80,12 +100,20 @@ export interface TurnResult {
   turn: number;
   /** True when the world half ran — i.e. the input cost a turn. */
   spent: boolean;
-  /** Set when a handler named someone to voice. main.ts asks the narrator after. */
-  voice?: { npcId: string; topic: string } | undefined;
+  /**
+   * Set when a handler named someone to voice. main.ts asks the narrator
+   * after; `fallback`, when present, is what to print instead when there is
+   * no narrator to ask and the reply was the whole turn.
+   */
+  voice?: { npcId: string; topic: string; fallback?: Line | undefined } | undefined;
   /** Set only by `resolveTier2` — the edge's cue to narrate this outcome, and what it was. */
   tier2?: 'success' | 'failure' | undefined;
-  /** Set when EXAMINE landed on an NPC. main.ts asks the narrator for a physique/outfit line. */
-  appearance?: { npcId: string } | undefined;
+  /**
+   * Set when EXAMINE landed on an NPC. main.ts asks the narrator for an
+   * appearance line; `fallback` is the mechanical persona line, shown only
+   * if there's no narrator to ask or the ask fails.
+   */
+  appearance?: { npcId: string; fallback: Line } | undefined;
 }
 
 /**
@@ -106,6 +134,8 @@ export class Game {
   readonly transcript: TranscriptEntry[] = [];
   /** The live combat session. Inactive until something turns hostile. */
   combat: CombatState = emptyCombat();
+  /** Who the player is talking to, if anyone. Written only at a write point. */
+  private conversation: Conversation | undefined;
   /** Counts combat turns, so each rolls its own seeded `(turn, action)` stream. */
   private combatSeq = 0;
   /** Set by a defeat during the world half, read out as narration after. */
@@ -155,6 +185,7 @@ export class Game {
     };
     // A dead fight is not worth saving; a live one rides along with the world.
     if (this.combat.active) snapshot.combat = structuredClone(this.combat);
+    if (this.conversation) snapshot.conversation = structuredClone(this.conversation);
     return snapshot;
   }
 
@@ -170,6 +201,7 @@ export class Game {
     game.turn = snapshot.turn;
     game.transcript.push(...structuredClone(snapshot.transcript));
     if (snapshot.combat) game.combat = structuredClone(snapshot.combat);
+    if (snapshot.conversation) game.conversation = structuredClone(snapshot.conversation);
     return game;
   }
 
@@ -184,6 +216,7 @@ export class Game {
   context(): CommandContext {
     const room = this.room;
     const dark = isDark(this.world, room);
+    const partner = this.partner();
     return {
       campaign: this.campaign,
       world: this.world,
@@ -192,7 +225,28 @@ export class Game {
       dark,
       scope: scopeOf({ world: this.world, room, dark, playerName: this.player.name }),
       turn: this.turn,
+      // The validated view, not the raw pointer, so a handler and the ladder
+      // never disagree about whether a conversation is still live.
+      conversation: partner ? { npcId: partner.id } : undefined,
     };
+  }
+
+  /**
+   * The person the player is mid-conversation with, or nobody.
+   *
+   * The stored pointer is only half the answer: it is checked here against the
+   * world as it now stands, so a partner who has died, fled or been left behind
+   * in another room can never be voiced, even if some path forgot to close the
+   * conversation. Stored state says who; this says whether they are still
+   * there to answer.
+   */
+  partner(): NpcRecord | undefined {
+    const open = this.conversation;
+    if (!open) return undefined;
+    if (open.roomId !== this.player.roomId) return undefined;
+    const npc = this.world.npcs.get(open.npcId);
+    if (!npc || npc.defeated || npc.hostile || npc.location !== inRoom(this.player.roomId)) return undefined;
+    return npc;
   }
 
   /** The room description as the player would see it now. */
@@ -300,6 +354,24 @@ export class Game {
   }
 
   /**
+   * The terminal of the ladder while a conversation is open: not a canonical
+   * command, not a legal Tier 2 attempt, so it is something the player said to
+   * the person in front of them. The engine decides nothing about it — this
+   * only names who answers, exactly as `talk` does, and the narrator writes
+   * the reply.
+   *
+   * Unlike `tier3` it spends a turn, so a conversation is not free time: the
+   * clock runs, light burns and anything hunting the player keeps moving while
+   * they stand there talking.
+   */
+  speakTo(raw: string, npcId: string): TurnResult {
+    const lines: Line[] = [line(raw, 'echo')];
+    lines.push(...this.worldHalf());
+    lines.push(...this.maybeBeginCombat());
+    return this.finish(raw, lines, true, { voice: { npcId, topic: '' } });
+  }
+
+  /**
    * Tier 2 — a validated attempt only; `legalAttempt` in tier2.ts is what
    * validates. Resolution rolls and picks the effect the same way any other
    * handler would, then lands at this file's one write point like every
@@ -358,7 +430,8 @@ export class Game {
   private maybeBeginCombat(): Line[] {
     if (this.combat.active) return [];
     if (hostilesIn(this.world, this.player.roomId).length === 0) return [];
-    this.apply([{ kind: 'combat', op: { t: 'begin' } }]);
+    // A fight takes over the loop, so nobody is being talked to any more.
+    this.apply([{ kind: 'combat', op: { t: 'begin' } }, { kind: 'converse', op: { t: 'close' } }]);
     return engageLines(this.combatContext());
   }
 
@@ -440,12 +513,15 @@ export class Game {
       switch (effect.kind) {
         case 'movePlayer':
           this.player.roomId = effect.roomId;
+          // You cannot keep talking to someone you have walked away from.
+          this.conversation = undefined;
           break;
         case 'enterGate': {
           // Generation happens here and nowhere else: an area is generated
           // once, on the turn someone walks into it, and never again.
           const area = this.world.enterGate(effect.edgeId);
           if (area.entryRoomId) this.player.roomId = area.entryRoomId;
+          this.conversation = undefined;
           break;
         }
         case 'moveObject':
@@ -548,8 +624,19 @@ export class Game {
             combatReduce(this.combat, effect.op);
           }
           break;
+        case 'converse':
+          this.conversation =
+            effect.op.t === 'open'
+              ? { npcId: effect.op.npcId, roomId: this.player.roomId, openedTurn: this.turn }
+              : undefined;
+          break;
       }
     }
+  }
+
+  /** Drop the open conversation if `id` is the one the player was talking to. */
+  private endConversationWith(id: string): void {
+    if (this.conversation?.npcId === id) this.conversation = undefined;
   }
 
   // ── combat state writes ───────────────────────────────────────────
@@ -561,6 +648,7 @@ export class Game {
     npc.hp = 0;
     npc.hostile = false;
     npc.defeated = true;
+    this.endConversationWith(id);
     // Its held gear falls where it stood. Killing pays; routing does not.
     for (const object of this.world.contentsOf(`npc:${id}`).objects) {
       this.world.moveTo(object.id, inRoom(this.player.roomId));
@@ -578,6 +666,9 @@ export class Game {
     npc.resolve = 0;
     npc.hostile = false;
     npc.broke = outcome;
+    // Fled or surrendered, they are no longer someone mid-conversation with
+    // you; a creature won over is met fresh rather than resumed.
+    this.endConversationWith(id);
     if (outcome === 'flee') {
       npc.location = null; // gone, taking what it carried
     } else if (outcome === 'surrender') {
@@ -632,6 +723,7 @@ export class Game {
     this.player.hp = playerMaxHp(this.campaign, this.player);
     this.player.resolve = playerMaxResolve(this.campaign, this.player);
     this.combat = emptyCombat();
+    this.conversation = undefined;
 
     const kitBases = ruleStrings(rules, 'DEFEAT.hubStarterKit');
     const rng = this.world.combatRng(`defeat:${this.turn}:${victorId}`);
@@ -867,7 +959,3 @@ export const carriedObjects = (game: Game): ObjectRecord[] =>
 
 export const objectsHere = (game: Game): ObjectRecord[] =>
   game.world.contentsOf(inRoom(game.player.roomId)).objects;
-
-/** The string members of a rules array — `DEFEAT.lose`, the starter kit list. */
-const ruleStrings = (rules: Parameters<typeof ruleArray>[0], path: string): string[] =>
-  ruleArray(rules, path).filter((entry): entry is string => typeof entry === 'string');

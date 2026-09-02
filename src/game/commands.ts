@@ -15,9 +15,9 @@
 import type { ResolvedCampaign } from '../campaign/types';
 import { itemValues } from '../content/items';
 import type { Command, FailureCode, Phrase } from '../engine/parser';
-import { ruleNumber } from '../engine/rules';
-import type { ObjectRecord, RoomRecord } from '../world/types';
-import { IN_PLAYER, inObject, inRoom } from '../world/types';
+import { ruleNumber, ruleStrings } from '../engine/rules';
+import type { NpcRecord, ObjectRecord, RoomRecord } from '../world/types';
+import { heldBy, IN_PLAYER, inObject, inRoom } from '../world/types';
 import type { World } from '../world/world';
 import { renderPlayerMap } from '../world/map';
 import { describeObject, sentenceList, viewRoom } from './describe';
@@ -53,14 +53,22 @@ export interface Reply {
    * ask the narrator to voice, and about what. No prose ever feeds back into
    * state, so this is read-only for the narrator — it is never validated,
    * never applied, and carries no effect of its own.
+   *
+   * `fallback` is what to print when there is no narrator to ask and the
+   * reply *was* the whole turn — continuing a conversation, or a question
+   * answered only in character. Carried as data rather than printed eagerly,
+   * the same way `appearance` does it, so a no-key game is never left with a
+   * silent turn but a narrated one is never given both.
    */
-  voice?: { npcId: string; topic: string } | undefined;
+  voice?: { npcId: string; topic: string; fallback?: Line | undefined } | undefined;
   /**
    * Set when EXAMINE lands on an NPC. Tells the edge (main.ts) which NPC to
-   * ask the narrator for a physique/outfit line, printed after the persona
-   * line that already stands. Same read-only, no-effect discipline as `voice`.
+   * ask the narrator for an appearance line, in place of the mechanical
+   * persona line — `fallback` carries that persona line as data rather than
+   * printing it, so it only ever appears if there is no narrator to ask, or
+   * the ask fails. Same read-only, no-effect discipline as `voice`.
    */
-  appearance?: { npcId: string } | undefined;
+  appearance?: { npcId: string; fallback: Line } | undefined;
 }
 
 export interface CommandContext {
@@ -71,6 +79,12 @@ export interface CommandContext {
   dark: boolean;
   scope: ScopeEntry[];
   turn: number;
+  /**
+   * Who the player is already talking to, if anyone. Read-only here: the talk
+   * handlers use it to decide whether they are opening a conversation or
+   * continuing one, and only the `converse` effect ever changes it.
+   */
+  conversation?: { npcId: string } | undefined;
   /** The answer to a pending "which one?", replayed with the same command. */
   forced?: ScopeEntry | undefined;
 }
@@ -103,7 +117,6 @@ const NOT_YET: Record<string, string> = {
   show: 'Trading items lands with the shop.',
   buy: 'The shop opens once there is a reason to spend.',
   sell: 'The shop opens once there is a reason to spend.',
-  list: 'The shop opens once there is a reason to spend.',
   deposit: 'The bank opens with the shop.',
   withdraw: 'The bank opens with the shop.',
   repair: 'Repair opens with the shop.',
@@ -153,6 +166,10 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       return askOrTell(ctx, command);
     case 'say':
       return sayTo(ctx, command);
+    case 'farewell':
+      return farewell(ctx);
+    case 'list':
+      return wares(ctx, command);
     case 'attack':
       return attackOutOfCombat(ctx);
     case 'flee':
@@ -270,12 +287,14 @@ function examine(ctx: CommandContext, command: Command): Reply {
     return {
       lines: [
         line(npc.name, 'ok'),
-        line(npc.persona || `${npc.role || 'someone'} out of ${npc.baseId}.`),
         line(npc.hostile ? 'It means you harm.' : 'It means you no harm.', npc.hostile ? 'warn' : 'plain'),
       ],
       effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
       free: false,
-      appearance: { npcId: npc.id },
+      appearance: {
+        npcId: npc.id,
+        fallback: line(npc.persona || `${npc.role || 'someone'} out of ${npc.baseId}.`),
+      },
     };
   }
 
@@ -583,11 +602,37 @@ function useOutOfCombat(ctx: CommandContext, command: Command): Reply {
 // ── quests ──────────────────────────────────────────────────────────
 
 /**
- * Talk to someone. Until the narrator voices people at step 7, the only thing
- * a conversation resolves is quest work: an NPC with an offer hands it over,
- * one whose work is unfinished says so, and everyone else waits for the
- * narrator. The numbers — which band, which room — are the engine's, placed by
- * the `acceptQuest` effect at the write point; the lead is read out after.
+ * Opening a conversation with someone, or continuing the one already open.
+ *
+ * The header line is the whole point of the distinction: greeting a person is
+ * worth a beat, but printing "turns to hear you out" before every single line
+ * of a five-line exchange reads as five separate cold approaches rather than
+ * one conversation. So it fires on the turn the conversation opens and never
+ * again, and the `converse` effect that opens it is what the ladder later
+ * reads to route free speech to this person.
+ */
+function addressing(ctx: CommandContext, npc: NpcRecord, topic: string): Reply {
+  const opening = ctx.conversation?.npcId !== npc.id;
+  const header = line(`${npc.name} turns to hear you out.`, 'rule');
+  const effects: Effect[] = [{ kind: 'pronoun', ref: 'it', id: npc.id }];
+  if (opening) effects.push({ kind: 'converse', op: { t: 'open', npcId: npc.id } });
+  return {
+    lines: opening ? [header] : [],
+    effects,
+    free: false,
+    // With no narrator, a continued turn has nothing else to show, so the
+    // header stands in — which is exactly how a keyless game read before
+    // conversations existed.
+    voice: { npcId: npc.id, topic, ...(opening ? {} : { fallback: header }) },
+  };
+}
+
+/**
+ * Talk to someone. Quest work is the one thing a conversation still resolves
+ * mechanically: an NPC with an offer hands it over, one whose work is
+ * unfinished says so, and everything else is the narrator's. The numbers —
+ * which band, which room — are the engine's, placed by the `acceptQuest`
+ * effect at the write point; the lead is read out after.
  */
 function talk(ctx: CommandContext, command: Command): Reply {
   const found = resolve(ctx, command.object);
@@ -619,12 +664,7 @@ function talk(ctx: CommandContext, command: Command): Reply {
       free: false,
     };
   }
-  return {
-    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
-    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
-    free: false,
-    voice: { npcId: npc.id, topic: '' },
-  };
+  return addressing(ctx, npc, '');
 }
 
 /**
@@ -641,13 +681,7 @@ function askOrTell(ctx: CommandContext, command: Command): Reply {
     const verb = command.verb === 'ask' ? 'asking' : 'telling';
     return blocked(`There is no ${verb} the ${found.entry.name} anything.`, 'WRONG_VERB');
   }
-  const topic = command.indirect?.words.join(' ') ?? '';
-  return {
-    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
-    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
-    free: false,
-    voice: { npcId: npc.id, topic },
-  };
+  return addressing(ctx, npc, command.indirect?.words.join(' ') ?? '');
 }
 
 /**
@@ -665,13 +699,110 @@ function sayTo(ctx: CommandContext, command: Command): Reply {
   if (!npc) {
     return blocked(`There is no saying anything to the ${found.entry.name}.`, 'WRONG_VERB');
   }
-  const topic = command.object?.words.join(' ') ?? '';
+  return addressing(ctx, npc, command.object?.words.join(' ') ?? '');
+}
+
+/** Break off the conversation. Nothing else about the world changes. */
+function farewell(ctx: CommandContext): Reply {
+  const open = ctx.conversation?.npcId;
+  const npc = open ? ctx.scope.find((entry) => entry.id === open)?.npc : undefined;
+  if (!npc) return say('You are not talking to anyone.', 'rule');
   return {
-    lines: [line(`${npc.name} turns to hear you out.`, 'rule')],
-    effects: [{ kind: 'pronoun', ref: 'it', id: npc.id }],
+    lines: [line(`You take your leave of ${npc.name}.`, 'rule')],
+    effects: [{ kind: 'converse', op: { t: 'close' } }],
     free: false,
-    voice: { npcId: npc.id, topic },
   };
+}
+
+/**
+ * What a merchant has for sale — the mechanical half of "what are you
+ * selling?", which the conversation router rewrites into this command.
+ *
+ * Stock is a query over `location`, like everything else a person holds, and
+ * the prices are the ones EXAMINE already reads out of the item tables. Worn
+ * gear is not stock, and neither is anything the rules say vendors refuse.
+ *
+ * Ask someone who is not a vendor and nothing mechanical happens, exactly as
+ * asking a beggar for their stall would go — but the question still reaches
+ * them, so they answer it in their own words rather than the scene going dead.
+ */
+function wares(ctx: CommandContext, command: Command): Reply {
+  const npc = waresTarget(ctx, command);
+  if ('reply' in npc) return npc.reply;
+  const person = npc.npc;
+
+  if (!person.isVendor) {
+    return {
+      lines: [],
+      effects: [],
+      free: false,
+      voice: {
+        npcId: person.id,
+        topic: 'what they have for sale',
+        fallback: line(`${person.name} has nothing to sell.`, 'rule'),
+      },
+    };
+  }
+
+  const refused = ruleStrings(ctx.campaign.rules, 'VENDORS.refusesTags');
+  const stock = ctx.world
+    .contentsOf(heldBy(person.id))
+    .objects.filter((object) => !object.flags.worn && !object.flags.untradable)
+    .filter((object) => !object.tags.some((tag) => refused.includes(tag)));
+
+  if (stock.length === 0) {
+    return {
+      lines: [line(`${person.name} has nothing to sell just now.`, 'rule')],
+      effects: [{ kind: 'pronoun', ref: 'it', id: person.id }],
+      free: false,
+      voice: { npcId: person.id, topic: 'what they have for sale' },
+    };
+  }
+
+  const lines = [line(`${person.name} deals in:`, 'ok')];
+  for (const object of stock) {
+    const price = Math.max(1, Math.round((itemValues(ctx.campaign, object)['price'] ?? 0) * person.priceModifier));
+    lines.push(line(`  ${describeObject(ctx.world, object)} — ${price} gold`, 'plain'));
+  }
+  return {
+    lines,
+    effects: [{ kind: 'pronoun', ref: 'it', id: person.id }],
+    free: false,
+  };
+}
+
+/**
+ * Who is being asked. Named outright if the player named someone; otherwise
+ * whoever they are already talking to, and failing that the one merchant in
+ * the room — but never a guess between two of them.
+ */
+function waresTarget(ctx: CommandContext, command: Command): { npc: NpcRecord } | { reply: Reply } {
+  if (command.object) {
+    const found = resolve(ctx, command.object);
+    if ('reply' in found) return found;
+    const npc = found.entry.npc;
+    if (!npc) return { reply: blocked(`The ${found.entry.name} is not selling anything.`, 'WRONG_VERB') };
+    return { npc };
+  }
+  const open = ctx.conversation?.npcId;
+  const partner = open ? ctx.scope.find((entry) => entry.id === open)?.npc : undefined;
+  if (partner) return { npc: partner };
+
+  const vendors = ctx.scope.filter((entry) => entry.npc?.isVendor && !entry.npc.defeated);
+  const only = vendors.length === 1 ? vendors[0]?.npc : undefined;
+  if (only) return { npc: only };
+  if (vendors.length > 1) {
+    return {
+      reply: {
+        lines: [line(`Ask whom: ${sentenceList(vendors.map((entry) => entry.name))}?`)],
+        effects: [],
+        free: true,
+        failure: 'AMBIGUOUS',
+        question: { candidateIds: vendors.map((entry) => entry.id) },
+      },
+    };
+  }
+  return { reply: blocked('There is no one here selling anything.', 'NOT_IN_SCOPE') };
 }
 
 /**

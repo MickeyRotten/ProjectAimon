@@ -32,6 +32,15 @@ export type CombatOp =
   | { t: 'threat'; who: string; delta: number }
   | { t: 'sense'; id: string };
 
+/**
+ * A change to the open conversation. Like `CombatOp` this is bookkeeping — who
+ * the player is talking to, and whether anyone is — so it is grouped under one
+ * effect rather than spreading kinds across the union. Opening is what makes
+ * the "turns to hear you out" line fire once rather than every turn, and what
+ * routes later free text to that person instead of into Tier 3's echo.
+ */
+export type ConverseOp = { t: 'open'; npcId: string } | { t: 'close' };
+
 export type Effect =
   | { kind: 'movePlayer'; roomId: string }
   /** Walk through an ungenerated gate. Generation happens on apply, once. */
@@ -74,4 +83,6 @@ export type Effect =
   /** The player is beaten — the corpse run. `victorId` keeps their goods. */
   | { kind: 'defeatPlayer'; victorId: string; by: string }
   /** A change to the volatile combat session. */
-  | { kind: 'combat'; op: CombatOp };
+  | { kind: 'combat'; op: CombatOp }
+  /** A change to the open conversation — who is being talked to, or nobody. */
+  | { kind: 'converse'; op: ConverseOp };
