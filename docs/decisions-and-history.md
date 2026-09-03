@@ -6,6 +6,49 @@
 
 ---
 
+## The Designer tool's boundary: ingredients, never outcomes
+
+Settled while brainstorming TODO.md task 4 (a Game Designer's tool), before any
+of it was built. Recorded here because the reasoning governs every feature
+request that will ever be aimed at that tool, not just the first one.
+
+**Ingredients are the tables. Outcomes are what the procedural engine rolls
+from them.** A room-type weight, a price band, a tag list, a persona part, a
+new row added to any content table — ingredient. A specific generated room, a
+specific monster instance, a specific loot drop, a specific NPC placed in a
+specific slot — outcome. The engine already keeps these separate: every
+table in `campaigns/base/` is authored once, and every actual thing in a save
+is a procedural roll against it, made at generation time and then frozen (see
+*Area generation*, [world-and-generation.md](world-and-generation.md)). The
+Designer tool gets full visibility and control over ingredients. Outcomes stay
+the engine's job, deliberately — **surprise and discovery are the point of
+generating rather than authoring**, and a tool that lets someone hand-place a
+specific outcome is a tool for authoring a world, not for tuning the odds one
+gets built from.
+
+**The scope test for any feature aimed at the tool: does this set a
+probability, or does this place a specific thing?** The first is always in
+scope — a weight slider, a new item base, a new room type, a rewritten
+prompt line. The second is a hard no unless decided otherwise, deliberately,
+later — "make sure this exact chest always holds the good sword," "hand-place
+this NPC in this room," a layout template author picking specific monsters
+for a specific slot rather than a weighted pool for it.
+
+**This is also what clears the tool against the closed "no world editor / no
+in-app campaign editing" decision in CLAUDE.md's "Not in v1" list, rather than
+merely narrowing it.** That decision exists because the predecessor project
+built a tool for authoring specific worlds — a map painter placing actual
+rooms, an LLM "Creator" writing actual content — and that was a month of
+tooling before a minute of play, the stated cause of the predecessor's death
+(see *The correction this document was rebuilt around*, CLAUDE.md). A tool
+that only edits ingredient tables is not that tool. It is a friendlier
+interface onto an authoring model CLAUDE.md already endorses: "tuning a number
+in a JSON file is the authoring interface." Rule 11 still asks for an explicit
+yes before task 4 is built — this settles *what* gets built if it is, not
+whether it gets built at all.
+
+---
+
 ## Audit decisions — settled
 
 Sixteen gaps found in a design audit, all now decided. Recorded here because the
