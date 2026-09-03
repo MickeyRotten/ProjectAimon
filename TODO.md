@@ -120,6 +120,21 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
    **RESEARCH & BRAINSTORM (task not started — no code changed).**
 
+   **Guiding principle, settled in conversation and recorded in
+   decisions-and-history.md: the Designer tool edits ingredients, never
+   outcomes.** Ingredients are the tables — weights, price bands, tag lists,
+   persona parts, and new rows added to any of them. Outcomes are what the
+   procedural engine rolls from those tables at generation time — a specific
+   generated room, a specific monster instance, a specific loot drop, a
+   specific NPC placed in a specific slot. The tool gets full visibility and
+   control over the first; the second stays the engine's job, on purpose,
+   because surprise and discovery are the point of generating rather than
+   authoring. The scope test for any feature request aimed at this tool:
+   *does this set a probability, or does this place a specific thing?* The
+   first is always in scope. The second is a hard no unless decided
+   otherwise, deliberately, later. This is also what clears the closed-list
+   collision below rather than just narrowing it — see that entry for why.
+
    **This collides with a closed decision, so it needs a yes before anything is
    built.** CLAUDE.md's "Not in v1" list names *"a world editor"* and *"in-app
    campaign editing"* by name, and the correction section at the top of the
