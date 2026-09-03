@@ -52,16 +52,59 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    headless-Chromium smoke of the live UI (loads clean, datalist populated,
    typing a bad tag raises inline badge + sidebar error, no console errors).
 
-   **Still deferred, on purpose (the parts that need a decision or are bigger):**
-   the **high-risk automation** — an auto-solver / auto-rebalancer /
-   auto-rename-everywhere — is untouched; per the research below and rule 11 it
-   needs a narrow, reversible, previewable spec before any of it is built (e.g.
-   "rename this tag" = find-every-use + diff + one confirm, never a general
-   solver). Schema-aware pickers are today limited to tag fields (the most
-   typo-prone); closed-list dropdowns for the other closed vocabularies (gambit
-   `when`, quest `place`/`completedBy`/rewards, ability `type`) are a natural
-   next increment on the same seam. Task 4B (layout templates + visual canvas)
-   remains sequenced after this, as it was always meant to be.
+   **UPDATE — the "natural next increment" named below has now landed too.**
+   Closed-list dropdowns cover every remaining closed vocabulary, so the
+   pickers are no longer tag-only:
+
+   - **Fields are addressed by path, not by key name.** The tag pickers keyed
+     off the JSON key (`tags`, `requires`, `kind`), which works for tags
+     because those words mean "a tag" wherever they appear — but `type`,
+     `use`, `when`, `place` and `kind` are ordinary words meaning different
+     things in different files. `fixture.kind` in placement is an object tag;
+     `objective.kind` in a quest is the quest's own type and not a tag at all,
+     and the old heuristic was offering tags for it. `src/editor/pickers.ts`
+     registers each field by the validator's own path string, through a tiny
+     glob (`*` = one segment, `#` = one array index, so
+     `content/abilities.json.gambitsByRole.*#.when`). The key-name rule stays
+     as the fallback for tags; the registry overrides it where it was wrong.
+   - **Ten vocabularies, all of them ones the engine already closes**: quest
+     `objective.place`, `objective.completedBy` and `rewards[]`; ability
+     `type` and `applies`; gambit `when` and `use`; area `shapes[]`; hub gate
+     `dir`, `fromRoom` and `archetype`; `gatewayArchetypes[]`; and
+     `startingArea`. The fixed ones read the engine's own constants
+     (`PLACE_KINDS`, `SHAPES`, `ALL_DIRECTIONS`); the rest read the *live,
+     unsaved* files, so an ability added in one tab is offered in the gambit
+     tab immediately, with no save in between.
+   - **A closed list becomes a `<select>`, so the invalid value is not
+     typeable** — which is the whole point. But a value already on disk that
+     is *not* in the list is still shown, offered as its own option and
+     flagged red, never silently swapped for a legal one: substituting would
+     hide the exact mistake the validator is complaining about.
+   - **`gambit.when` is the one that is not a dropdown, deliberately.** Its
+     vocabulary is patterns (`self.hp<N`, `target.primer==X`), so the valid
+     set is infinite and a closed list would be a lie. It gets an assisted
+     text input over its own datalist of the templates, each labelled with
+     what to replace.
+   - **`startingArea` accepts the literal `hub`, and only it does.** The
+     smoke test caught this: a plain archetype list there flags the base
+     campaign's own correct value as invalid — a false alarm being worse than
+     no picker at all. It has its own vocabulary; the gate and gateway fields
+     keep the strict one, matching `validate.ts` exactly.
+
+   Verified: 412 tests pass (38 files) including
+   `tests/editor-pickers.test.ts` (12 tests: the glob, every registered path,
+   the `objective.kind` override, and a pass over the real base tables
+   asserting each claimed path exists and its value is in the list claimed
+   for it), typecheck clean, and a headless-Chromium sweep confirming every
+   dropdown carries the right options and current value — and that **no file
+   in the base campaign shows a single false "not allowed" flag** on any tab.
+
+   **Still deferred, on purpose:** the **high-risk automation** — an
+   auto-solver / auto-rebalancer / auto-rename-everywhere — is untouched; per
+   the research below and rule 11 it needs a narrow, reversible, previewable
+   spec before any of it is built (e.g. "rename this tag" = find-every-use +
+   diff + one confirm, never a general solver). Task 2 (layout templates +
+   visual canvas) remains sequenced after this, as it was always meant to be.
 
    **RESEARCH & BRAINSTORM (original notes below — kept for the reasoning).**
 
