@@ -233,3 +233,168 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    new shape, just not with a purpose-built tag+description row editor).
 
 ---
+---
+11. [ ] SPIKE: **Engine changes required by TODO_EDITOR.md task 2 (layout
+    templates + the visual layout canvas).** Research only — no code changed.
+    Task 2 is written from the editor's side; this is the same feature costed
+    from the engine's side, because most of the work is here, not in the tool.
+    The editor cannot draw a layout the generator has no way to read.
+
+    **What task 2 actually asks the engine for**, in engine terms: an authored
+    topology as an alternative to a rolled one; a named slot per node; a
+    per-slot room-type pool; and the wealth budget scoped by slot as well as
+    by tier.
+
+    ### A. A slot is a generalisation of something that already exists
+
+    Today a node can be exactly two special things, both hardcoded as booleans
+    in `RoomRoleOptions` (`src/world/area.ts`): `isEntry` (node 0) and
+    `isCentre` (the `hub` shape's node 1, via `hubCentreNode()` in
+    `src/world/shapes.ts`). Each narrows the room-type pool through its own
+    rules path — `WORLD.entry.roomRequires` and
+    `WORLD.shapes.hub.centreRequires`.
+
+    **Those are already slots.** The change is to replace the two booleans with
+    one `slot?: string` and make the two existing narrows the first two rows of
+    a general slot table, rather than bolting a third mechanism beside them. If
+    this lands any other way, the engine ends up with three ways to say "this
+    node is special," which is the shape of the bloat the project keeps cutting.
+
+    ### B. Per-slot room-type pools
+
+    `rollRoomType()` (`src/world/area.ts:379`) rolls the archetype's whole
+    `roomTypes` table, then narrows. A slot needs its own weighted pool,
+    falling back to the archetype's when it has none — matching the
+    "degrades to an unfiltered roll" convention used by every filter in the
+    codebase (`WORLD.roomTypeFit`, `WORLD.entry.roomRequires`,
+    `WORLD.gates.roomRequires`).
+
+    **The ordering matters and is not obvious.** A slot pool is a *different*
+    pool, not a narrower one, so it must still pass through
+    `WORLD.roomTypeFit` afterwards — otherwise a slot pool containing a
+    `dead-end` type puts one on a junction, and the degree/tag agreement that
+    `roomTypeFit` exists to enforce is silently gone. Order should be: slot
+    pool (or archetype pool) -> `roomTypeFit` -> any slot `requires[]`.
+
+    ### C. An authored-topology path into graph building — the big one
+
+    `buildGraph()` (`src/world/shapes.ts:128`) dispatches to one of four
+    generative builders through a closed `BUILDERS` record, each with the
+    signature `(rng, rules, n, options)`. There is **no** seam for a supplied
+    graph, and a template is not a fifth shape: shapes are rolled from
+    `areaDef.shapes[]` and take no template argument.
+
+    The honest shape is a sibling path, not a fifth builder: `AreaDef` gains an
+    optional weighted `layouts` table, and `generateArea()` either picks a
+    layout *or* rolls a shape, supplying the graph directly in the first case.
+
+    **Unresolved, and it blocks the work:** `roomCount` is rolled from
+    `areaDef.size` (`area.ts:201`), but a template's node count is fixed. Either
+    a template pins the area's room count (simple, and a template *is* a
+    topology so the size roll arguably does not apply), or templates need
+    optional nodes. Recommend the first and say so in the schema; the second is
+    a second generator.
+
+    ### D. Author coordinates, not just edges — and export the structural checks
+
+    Task 2 says "visually create layouts on a grid, and draw connections."
+    Drawing on a grid means the author places nodes at coordinates, which is
+    strictly more than a graph: it is a graph *plus* an embedding. Taking the
+    coordinates is the recommended framing, because it makes two of the three
+    structural limits impossible to violate by construction:
+
+    - **Degree cap.** Four ways out of a slot in a flat area, six where the
+      cube has depth (`area.ts:210`). The entry is capped tighter still, by
+      `sidesInside(cube, entryCoord)`, because it sits on the cube's face.
+    - **Parity.** The lattice is bipartite, so an **odd cycle can never be
+      embedded at all**. `shapes.ts` records this as the cause of "every single
+      `loop` failure" during development. It is the error case task 2 does
+      *not* name, and a hand-drawn layout hits it exactly as easily as the
+      over-connected room it does name.
+    - **Connectedness.**
+
+    None of these are rules values — they are properties of a 3-D grid.
+
+    **The gap:** `shapes.ts` exports `isConnected`, `isBridge`,
+    `nonBridgeEdges`, `degrees`, `neighbourLists` and `hopsFrom`, but **no
+    parity check and no single "can this be embedded" predicate**. The editor
+    needs exactly that check live while the author draws. It must be one
+    exported function with three callers — the canvas, `validateCampaign` at
+    load, and generation — the same way the editor already reuses
+    `validateCampaign` rather than reimplementing it. Written twice, the two
+    copies drift and the tool starts blessing layouts the generator rejects.
+
+    **One check the editor cannot have:** the tighter entry-node cap depends on
+    where the entry lands in the cube, which is not known until layout. The
+    canvas can enforce the general cap, parity and connectedness; the entry cap
+    stays a generation-time check. Worth stating so the tool does not promise it.
+
+    ### E. Fixed layouts vs. the `Distant` quest reservation — a real conflict
+
+    `layoutArea()` (`src/world/layout.ts:396`) calls `stretchToDepth()` to
+    lengthen a branch until it reaches a coordinate a `Distant` quest objective
+    reserved before the area existed. **A fixed authored layout cannot
+    stretch.** Something has to give, and the machinery for it already exists:
+    `LayoutResult.unfilledReservations` is the "promised and could not be kept"
+    channel, and the quest system re-places whatever was counting on it. So the
+    answer is probably "a fixed layout releases the reservation, with a note"
+    — but it is a decision, not a detail, and it should be written down before
+    the canvas ships and starts producing layouts that quietly cost quests
+    their objectives.
+
+    Related: cube sizing currently derives from `areaDef.size[1]`
+    (`lattice.grow(...)`). A template has a fixed bounding box, which has to
+    feed cube allocation instead, or the layout will not fit the cube reserved
+    for it.
+
+    ### F. Wealth scoped by slot — and the ordering trap
+
+    `placement.wealth` scopes budgets by area **tier** only: `bandByTier`,
+    `goldBudgetByTier`, `containersPerArea` (`src/world/placement.ts:111-115`).
+    Adding a slot axis is one more axis on an existing mechanism, not a new
+    one — that part is cheap.
+
+    **The trap is that the budget is spent down in room order.** The placement
+    loop walks `for (const room of rooms)` and draws from a single shared purse
+    (`drawGold`, `placement.ts:432`). So "the boss slot always rolls the ultra
+    band" does not work by weighting alone: a boss room late in the list finds
+    the purse already empty. A slot-scoped budget needs either a reserved
+    allocation taken off the top before the general loop, or the loop ordered
+    by slot priority. Either is fine; neither is free, and picking neither
+    means the feature appears to work and quietly does not.
+
+    ### G. Schema, validation, and what has to persist
+
+    - `AreaDef` (`src/campaign/types.ts:125`) gains `layouts`. Note that a
+      template is array-shaped (nodes, edges), so per rule 9 it merges
+      wholesale in a campaign override rather than key-by-key — a campaign
+      tweaking one node replaces the template.
+    - `validateCampaign` needs new checks: every room type a slot pool names
+      exists; every slot a layout names has a pool or falls back; the template
+      passes the structural predicate from **D**; its bounding box fits the
+      cube it would get. These are what the editor surfaces live, so they are
+      the same work as the canvas's error panel.
+    - **Does the slot persist onto `RoomRecord`?** Placement runs inside
+      `generateArea()` (`area.ts:319`), generation-time only, so wealth does
+      not need it afterwards. But rule 10 forbids regenerating on load, so
+      anything *later* that wants to know a room's slot — narrator prose, a
+      future respawn, an editor "show me this area's layout" view — can only
+      have it if it was written into the save at generation. Cheap now
+      (one string field on `RoomRecord`, `src/world/types.ts:179`), and not
+      retrofittable onto worlds already generated. Recommend adding it.
+
+    ### Sequencing and scope risk
+
+    Split this in two and do them in order. **The data half** — slots, per-slot
+    pools, slot-scoped budget, a template read from JSON — is a genuine
+    extension of mechanisms that already exist, and is testable headless with
+    no UI at all. **The canvas half** is new work and is the piece CLAUDE.md's
+    correction section names by name ("map painter"), so it should not start
+    until the engine can already read a hand-written template JSON and generate
+    from it. Building the canvas first means authoring a format nothing
+    consumes yet.
+
+    Keep the template to **topology + per-slot type weights + budget scoping**.
+    A slot naming a specific NPC, monster or item is the ingredients/outcomes
+    line from `docs/decisions-and-history.md` being crossed, and breaks the
+    "tables, tags, probability" model the design was rebuilt around.

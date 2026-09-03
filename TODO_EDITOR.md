@@ -289,6 +289,17 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    since they're the same class of "this will fail to generate" mistake and
    the validation code already exists.
 
+   **The engine side of this task is now costed separately, in TODO.md task
+   11.** Most of the work is there, not in the tool: the generator has no seam
+   for an authored topology, no notion of a named slot beyond the two
+   hardcoded ones, no per-slot room-type pool, no slot axis on the wealth
+   budget, and — the one that bites the canvas directly — no exported
+   "can this graph be embedded" predicate for the tool to validate against
+   while the author draws. Read task 11 before starting this one; it also
+   names three decisions (fixed room count, what a fixed layout does to a
+   `Distant` reservation, and whether the slot persists onto `RoomRecord`)
+   that have to be settled before either half is built.
+
    **Sequencing and scope risk.** This is close in shape to the abandoned
    "map painter" CLAUDE.md's correction section calls out by name, so keep it
    narrow: a layout template should describe *topology + per-slot type
