@@ -570,13 +570,23 @@
         4000
       ],
       "z": [
-        -40,
-        40
-      ]
+        -4000,
+        4000
+      ],
+      "_zNote": "The world descends without a floor. Z is as wide as X/Y so an open descent never runs out of Rungs; a bounded campaign is a rules change, not an engine one."
     },
     "cubeSizing": {
       "slotsPerRoom": 1.4,
       "_slotNote": "40% slack. Sized to the room count so the map stays a filled shape and no filler rooms are needed to make space look right.",
+      "footprintRatioByArchetype": {
+        "_note": "Footprint w:h. 1 is a square; higher is long and thin. Replaces the old ceil(sqrt(slots)) square, which was the geometric root of the claustrophobia. A long farmland Rung and a squarish town Rung read differently the moment you walk them.",
+        "farmland": 1.6,
+        "ruin": 1.3,
+        "coven": 1.2,
+        "town": 1,
+        "warren": 1,
+        "default": 1
+      },
       "zSpanByArchetype": {
         "warren": 3,
         "ruin": 2,
@@ -584,19 +594,18 @@
       },
       "gap": 1
     },
-    "allocation": {
-      "strategy": "adjacentToSourceInGateDirection",
-      "zOffsetByArchetype": {
-        "warren": -2,
-        "ruin": 0,
-        "farmland": 0,
-        "town": 0,
-        "coven": 0
+    "descent": {
+      "_note": "The world runs downward in Rungs — one area per floor, reached only by descending. These are the load-bearing tunables of that shape.",
+      "descentsPerRung": 1,
+      "_descentNote": "How many ways down each Rung offers. One makes finding the stairs the hunt; several trade tension for freedom. The Hub always offers exactly one.",
+      "teleporterEveryNRungs": 3,
+      "_teleporterNote": "A teleporter is placed on every nth Rung, unlocked by finding it. It sets how long a delve is, how costly the return trip, and how punishing death is — because the corpse run walks back from the Hub and a teleporter shortens that walk. Descending must NEVER require finding one.",
+      "teleporterRoom": {
+        "_note": "The teleporter is a universal room type, structurally assigned rather than rolled off any archetype's own roomTypes table — the same way node 0 is always the entry and node 1 is always the hub's centre. A weighted roll can fail to place one; this can't.",
+        "tags": ["landmark", "safe", "teleporter"],
+        "glyph": "◈"
       },
-      "onCollision": "slideOutwardAlongGateAxis",
-      "maxSlideAttempts": 60,
-      "onExhausted": "placeAtNearestFreeCubeAndLogLongRoad",
-      "entryRoomRule": "The entry room MUST occupy the slot immediately adjacent to the incoming gate coordinate, so a one-hop crossing is one lattice step."
+      "entryRoomRule": "The entry room lands on the new cube's top face, nearest the descending gate's column. The descent is an edge, not a lattice step, so the two rooms need not be one coordinate apart; the map draws it as a stair, per floor."
     },
     "entry": {
       "_note": "The entry room is always graph node 0 — where the player lands crossing a gate into a freshly generated area. It should never be someone's private interior.",
@@ -631,13 +640,9 @@
       }
     },
     "gates": {
-      "_note": "Ways out of a generated area. A gate's cube is reserved the moment the gate is made, before the area behind it exists — that is what lets a Distant quest name a coordinate nobody has walked to yet.",
-      "perArea": [
-        1,
-        3
-      ],
+      "_note": "The ways down out of a Rung. Every gate descends to the next Rung; how many a Rung has is WORLD.descent.descentsPerRung. A gate's cube is reserved the moment the gate is made, before the area behind it exists — that is what lets a Distant quest name a coordinate nobody has walked to yet.",
       "minHopsFromEntry": 2,
-      "_hopNote": "A gate in the entry room's face would let the player skip the area entirely.",
+      "_hopNote": "The stairs down are never in the entry room's face, or the player would skip the Rung entirely.",
       "roomRequires": [
         "!safe"
       ],

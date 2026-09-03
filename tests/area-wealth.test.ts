@@ -128,9 +128,85 @@ describe('the wealth budget', () => {
     expect(checked).toBeGreaterThan(20);
   });
 
+  it('rewards a dead end over a through-room, at the value that lives in containers', () => {
+    // The complaint this answers: depth used to price in danger via tier but
+    // never reward, so a branch that dead-ended was a coin flip on whether the
+    // walk was worth it. A room's own tier already varies with depth and
+    // jitter, so this compares dead ends against through-rooms in aggregate
+    // across many areas rather than tier-matching pairs — the shift is applied
+    // per container regardless of tier, so it should show up in the average
+    // however the sample's tiers happen to fall.
+    const isDeadEnd = (world: World, roomId: string, entryRoomId: string | null): boolean => {
+      if (roomId === entryRoomId) return false;
+      return world.exitsOf(roomId).filter((exit) => exit.toRoomId !== null).length <= 1;
+    };
+    const containerValue = (world: World, roomId: string): number | undefined => {
+      const containers = world.objectsIn(roomId).filter((object) => object.flags.container === true);
+      if (containers.length === 0) return undefined;
+      return containers.reduce(
+        (sum, container) =>
+          sum +
+          world
+            .contentsOfObject(container.id)
+            .reduce((s, item) => s + (itemValues(campaign, item)['price'] ?? 0), 0),
+        0,
+      );
+    };
+
+    let deadEndTotal = 0;
+    let deadEndCount = 0;
+    let throughTotal = 0;
+    let throughCount = 0;
+    // A larger sample than the file's other tests: the shift is one tier's
+    // worth of band weights, not a hard cap, so the average needs enough
+    // rooms behind it to separate a real effect from seed-to-seed noise.
+    for (const world of worlds(60, 10)) {
+      for (const area of generated(world)) {
+        for (const room of world.roomsOf(area.id)) {
+          // The teleporter is structurally forced (WORLD.descent.teleporterRoom)
+          // and tagged safe, which excludes it from hostile placement but not
+          // from containers — a third category with its own placement
+          // behaviour, not the ordinary dead-end/through-room split this test
+          // means to isolate.
+          if (room.type === 'teleporter') continue;
+          const value = containerValue(world, room.id);
+          if (value === undefined) continue;
+          if (isDeadEnd(world, room.id, area.entryRoomId)) {
+            deadEndTotal += value;
+            deadEndCount++;
+          } else {
+            throughTotal += value;
+            throughCount++;
+          }
+        }
+      }
+    }
+
+    expect(deadEndCount).toBeGreaterThan(15);
+    expect(throughCount).toBeGreaterThan(15);
+    expect(deadEndTotal / deadEndCount).toBeGreaterThan(throughTotal / throughCount);
+  });
+
   it('holds the total worth of an area to something a shop could absorb', () => {
     // The number that prompted this: one chest could roll a masterwork heirloom
-    // plate worth 7000 gold, which is more than the rest of the world.
+    // plate worth 7000 gold, which is more than the rest of the world. The
+    // ceiling scales with tier the same way the gold purse itself does — flat
+    // would either choke off a deep area's legitimately larger budget or, sized
+    // for the deep end, let a shallow area's total worth roam far past what a
+    // fresh character should ever find. Six Rungs down is now reliably tier
+    // 3-4 under the stack (one descent per Rung, so exploring N areas always
+    // means N floors down, not a branching spread of shallow ones), where the
+    // old topology's branching kept a same-sized sample mostly shallow.
+    const budgets = wealth['goldBudgetByTier'] as Record<string, number[]>;
+    const tiers = Object.keys(budgets).filter((k) => !k.startsWith('_')).map(Number);
+    const ceilingFor = (tier: number): number => {
+      const key = String(Math.min(Math.max(tier, Math.min(...tiers)), Math.max(...tiers)));
+      const goldMax = (budgets[key] as number[])[1] as number;
+      // 8x the tier's own gold-purse ceiling: comfortable headroom over what
+      // the sample actually rolls at every tier, while still landing well
+      // short of the 7000 that prompted the budget system in the first place.
+      return goldMax * 8;
+    };
     let checked = 0;
     for (const world of sample) {
       for (const area of generated(world)) {
@@ -139,7 +215,7 @@ describe('the wealth budget', () => {
           (sum, o) => sum + (o.gold ?? 0) + (itemValues(campaign, o)['price'] ?? 0),
           0,
         );
-        expect(worth, `${area.id}`).toBeLessThan(2500);
+        expect(worth, `${area.id} at tier ${area.tier}`).toBeLessThan(ceilingFor(area.tier));
       }
     }
     expect(checked).toBeGreaterThan(20);

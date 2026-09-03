@@ -409,3 +409,24 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    85 rows across 14 categories, `operators` correctly not offered as one,
    collision refused, rename flagged, Revert recovering, the delete guard
    listing and cancelling, add-tag landing its own inline error badge.
+
+---
+4. [x] ITERATE: TODO.md task 11 (the vertical world — Rungs) changed several
+   table shapes: `content/adjacency.json` lost `radius`/`affinity` (the
+   affinity matrix is retired — no two Rungs ever share a Z level, so
+   "beside" cannot happen any more; only `depthGate` remains). `rules.json`
+   gained `WORLD.cubeSizing.footprintRatioByArchetype`, a `WORLD.descent`
+   block (`descentsPerRung`, `teleporterEveryNRungs`, `teleporterRoom`), and
+   lost `WORLD.allocation` (the slide/collision tunables). `placement.json`
+   gained `wealth.deadEndBandShift` and `hostile.requires` gained `!safe`.
+   `data/verbs.json` gained a 64th verb, `recall`.
+
+   **No editor code needs to change.** Every one of these files renders
+   through the generic schema-aware path `TODO_EDITOR.md` task 1 built —
+   nothing in `editor.ts`/`validation.ts` names `radius`, `affinity`,
+   `footprintRatioByArchetype`, `descent`, `deadEndBandShift`, or any verb
+   id specifically; the file registry entries (`editor.ts:80,92,99`) are
+   just a path/label/category triple each. A removed or added key inside an
+   already-generic object just changes what the object renderer draws rows
+   for, live validation included, same as `rules.json`'s existing sprawl of
+   nested blocks always has.

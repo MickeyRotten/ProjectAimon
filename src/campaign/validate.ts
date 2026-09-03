@@ -361,10 +361,6 @@ export function validateCampaign(
   const adjacency = campaign.adjacency;
   if (adjacency) {
     const at = 'content/adjacency.json';
-    if (typeof adjacency.radius !== 'number' || adjacency.radius < 0) {
-      error(`${at}.radius`, 'expected a slot count of zero or more');
-    }
-
     for (const [id, gate] of Object.entries(adjacency.depthGate ?? {})) {
       if (!campaign.areas.has(id)) error(`${at}.depthGate.${id}`, `no area archetype "${id}"`);
       const lo = gate.minDepth;
@@ -374,34 +370,7 @@ export function validateCampaign(
       }
     }
 
-    for (const [candidate, row] of Object.entries(adjacency.affinity ?? {})) {
-      if (!campaign.areas.has(candidate)) {
-        error(`${at}.affinity.${candidate}`, `no area archetype "${candidate}"`);
-        continue;
-      }
-      for (const [neighbour, weight] of Object.entries(row)) {
-        const pair = `${at}.affinity.${candidate}.${neighbour}`;
-        if (!campaign.areas.has(neighbour)) {
-          error(pair, `no area archetype "${neighbour}"`);
-          continue;
-        }
-        if (typeof weight !== 'number' || weight < 0) {
-          error(pair, 'expected a weight multiplier of zero or more');
-          continue;
-        }
-        // The lookup falls back to the reverse pair, so writing both is
-        // allowed but writing both differently means one of them is dead.
-        const mirror = adjacency.affinity[neighbour]?.[candidate];
-        if (candidate !== neighbour && typeof mirror === 'number' && mirror !== weight) {
-          warn(
-            pair,
-            `says ${weight} but ${neighbour}.${candidate} says ${mirror} — the first one found wins, so one of the two never applies`,
-          );
-        }
-      }
-    }
-
-    // An archetype nothing can gate to and nothing can stand beside is
+    // An archetype nothing can gate to is
     // unreachable, which is how the coven sat unused for the whole project.
     for (const [id] of campaign.areas) {
       const reachable =

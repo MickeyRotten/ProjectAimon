@@ -90,6 +90,9 @@
     { "id": "train",    "words": ["train","practise","practice"], "patterns": ["VN"], "hubOnly": true },
     { "id": "hire",     "words": ["hire","recruit"], "patterns": ["VN"], "hubOnly": true },
 
+    { "id": "recall",   "words": ["recall"], "patterns": ["V","VN"], "hubOnly": true,
+      "note": "RECALL alone lists unlocked teleporters; RECALL <place> travels to one. Never a way to skip descending — only a way back to a floor already found." },
+
     { "id": "dismiss",  "words": ["dismiss"], "patterns": ["VN"] },
     { "id": "bench",    "words": ["bench"],   "patterns": ["VN"] },
 
@@ -109,5 +112,5 @@
   "allWord": "all",
   "exceptWords": ["except","but"],
 
-  "_count": "63 verbs. Adding one means adding a system — be reluctant."
+  "_count": "64 verbs. Adding one means adding a system — be reluctant."
 }

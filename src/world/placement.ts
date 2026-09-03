@@ -362,8 +362,9 @@ function place(
     const count = rng.int(rolls[0], rolls[1]);
     // One band per container, not per item: a chest is one chance at something
     // good, which is what makes finding one mean anything. The band is rolled
-    // against the room's tier, so the deep room is the one worth reaching.
-    const band = rollBand(context, tier);
+    // against the room's tier, so the deep room is the one worth reaching —
+    // and against whether it is a dead end, so a side trail's promise is real.
+    const band = rollBand(context, tier, room);
     for (let i = 0; i < count; i++) {
       const item = generateItem({
         campaign,
@@ -452,16 +453,42 @@ function looseBand(campaign: ResolvedCampaign): ValueBand | undefined {
   return typeof name === 'string' ? bandNamed(wealth, name) : undefined;
 }
 
-/** One band for a container, weighted by the tier the room fights at. */
-function rollBand(context: RollContext, tier: number): ValueBand | undefined {
+/**
+ * One band for a container, weighted by the tier the room fights at — and
+ * bumped further when the room is a dead end, so reward follows *position* as
+ * well as danger. Depth already prices in danger via the room's own tier;
+ * without this, a branch that ends in a dead end was a coin flip on whether
+ * the walk was worth it, which teaches the player to stop reading the map.
+ * The bump reuses `bandByTier`'s own escalating table — `tieredEntry` clamps
+ * to whatever tiers it actually defines, so a dead end at the top tier simply
+ * clamps back to that tier's own (already-best) weights rather than erroring.
+ */
+function rollBand(context: RollContext, tier: number, room: RoomRecord): ValueBand | undefined {
   const wealth = wealthTable(context.campaign);
-  const weights = tieredEntry(wealth, 'bandByTier', tier);
+  const shift = isDeadEnd(context, room) ? numberAt(wealth, 'deadEndBandShift', 0) : 0;
+  const weights = tieredEntry(wealth, 'bandByTier', tier + shift);
   if (!weights) return undefined;
   const options = Object.entries(weights)
     .filter(([name, w]) => !name.startsWith('_') && typeof w === 'number')
     .map(([name, w]) => ({ name, w: w as number }));
   const picked = context.rng.maybeWeighted(options);
   return picked ? bandNamed(wealth, picked.name) : undefined;
+}
+
+/**
+ * A room whose only intra-area connection is the one it was reached by — the
+ * end of a branch, not a room the path runs through. Gates do not count: they
+ * lead on to the next Rung, so a gate room continues the world rather than
+ * ending it. The entry room is never a dead end either, however few edges a
+ * tiny area gives it — walking further is the trail being rewarded, not the
+ * room the player already stood in when the area generated.
+ */
+function isDeadEnd(context: RollContext, room: RoomRecord): boolean {
+  if (room.id === context.area.entryRoomId) return false;
+  const degree = context.edges.filter(
+    (edge) => edge.roomB !== null && (edge.roomA === room.id || edge.roomB === room.id),
+  ).length;
+  return degree <= 1;
 }
 
 function bandNamed(wealth: JsonObject, name: string): ValueBand | undefined {

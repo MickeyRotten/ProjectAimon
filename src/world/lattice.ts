@@ -1,26 +1,30 @@
 /**
  * The world lattice — one X/Y/Z coordinate space for the whole campaign.
  *
- * Areas are allocated non-overlapping cubes inside it, and **a cube is
- * reserved when a gate is created, not when the area behind it is generated.**
- * That ordering is the point: it is what lets a `Distant` quest name a
- * coordinate inside an area that is still nothing but a gate stub.
+ * The world runs **downward, in Rungs**. Each area is one Rung, and each Rung
+ * owns a whole plane of Z all to itself: a newly allocated cube is placed
+ * strictly *below* every cube already reserved. Because no two areas ever share
+ * a Z level, two cubes can never overlap however their X/Y footprints fall —
+ * which is why the old collision subsystem (probe, slide, nearest-free-cube) is
+ * gone. Allocation is now a single downward step.
+ *
+ * A cube is still **reserved when a gate is created, not when the area behind
+ * it is generated.** That ordering is the point: it is what lets a `Distant`
+ * quest name a coordinate inside an area that is still nothing but a gate stub.
  *
  * The one rule that must never bend: **coordinates are identity and
  * allocation only.** Distance is hop count along edges. The moment anything
  * measures euclidean distance between two rooms, the filler-corridor problem
  * the coordinates were once removed for is back.
  *
- * Every number here — slack, gap, z offsets, slide attempts, bounds — is read
- * from `rules.json` at call time. None of them is written down twice.
+ * Every number here — slack, gap, footprint ratio, bounds — is read from
+ * `rules.json` at call time. None of them is written down twice.
  */
 
 import type { JsonObject } from '../campaign/merge';
-import { ruleLookup, ruleNumber, ruleNumberMap, ruleRange } from '../engine/rules';
+import { ruleLookup, ruleNumber, ruleRange } from '../engine/rules';
 import {
-  cubeContains,
   cubesOverlap,
-  DIRECTIONS,
   type Coord,
   type Cube,
   type Direction,
@@ -46,14 +50,18 @@ export interface AllocationRequest {
 export interface Allocation {
   cube: Cube;
   /**
-   * Where the entry room must go: the slot on the incoming face nearest the
-   * gate. A one-hop crossing then costs one lattice step, and the crossing
-   * reads as a step rather than a journey.
+   * Where the entry room lands: the slot on the cube's top face (its highest Z)
+   * nearest the descending gate's X/Y. The descent itself is an edge, not a
+   * lattice step, so the two rooms need not be one coordinate apart — the map
+   * draws the crossing as a stair, per floor.
    */
   entryCoord: Coord;
-  /** Slots the cube was pushed along the gate axis to dodge a neighbour. */
+  /**
+   * Retained for callers that logged a "slide". A Rung never slides, so this is
+   * always 0; kept so the shape does not churn across the reframe.
+   */
   slid: number;
-  /** True when sliding failed and the area went wherever there was room. */
+  /** A Rung always sits directly below its parent, so never a long road. */
   longRoad: boolean;
 }
 
@@ -83,94 +91,84 @@ export class WorldLattice {
   /**
    * Cube dimensions for a room count.
    *
-   *   slots     = ceil(rooms x slotsPerRoom)
-   *   footprint = ceil(sqrt(slots))
-   *   zSpan     = by archetype
+   *   slots  = ceil(rooms x slotsPerRoom)
+   *   ratio  = footprint w:h by archetype (1 = square)
+   *   h      = ceil(sqrt(slots / ratio)), w = ceil(sqrt(slots x ratio))
+   *   zSpan  = by archetype
    *
-   * Sizing to the room count is half of what makes filler rooms unnecessary:
-   * the shape stays solid enough to read as a place and open enough that the
-   * layout walk can resolve a collision by stepping sideways.
+   * A per-archetype ratio replaces the old `ceil(sqrt(slots))` square. That
+   * square was the geometric root of the claustrophobia — a Rung packed 60%
+   * full with equal sides has no long axis and no corridors. A long, thin
+   * farmland Rung and a squarish town Rung read differently the moment you
+   * walk them, and a non-square footprint is a hard prerequisite for any
+   * hand-authored layout too, since the cube is allocated before the layout is
+   * drawn.
+   *
+   * Both dimensions round up independently rather than solving for the
+   * smallest w*h that covers `slots` exactly — that tighter form packs a large
+   * area almost airtight (a 20-room farmland comes out with zero spare cells),
+   * leaving the layout walk nowhere to step sideways when a placement
+   * collides. Rounding up on both axes reproduces the old formula's slack —
+   * at `ratio = 1` this is `ceil(sqrt(slots))` on both sides, identical to
+   * before — while still stretching the footprint the right way.
    */
   sizeFor(archetype: string, rooms: number, slackMultiplier = 1): CubeSize {
     const slotsPerRoom = ruleNumber(this.rules, 'WORLD.cubeSizing.slotsPerRoom');
     const slots = Math.ceil(Math.max(1, rooms) * slotsPerRoom * slackMultiplier);
-    const footprint = Math.max(1, Math.ceil(Math.sqrt(slots)));
+    const ratio = Math.max(0.1, this.footprintRatio(archetype));
+    const h = Math.max(1, Math.ceil(Math.sqrt(slots / ratio)));
+    const w = Math.max(1, Math.ceil(Math.sqrt(slots * ratio)));
     const zSpan = ruleLookup(this.rules, 'WORLD.cubeSizing.zSpanByArchetype', archetype);
-    return { w: footprint, h: footprint, d: Math.max(1, zSpan) };
+    return { w, h, d: Math.max(1, zSpan) };
+  }
+
+  /** The footprint w:h ratio for an archetype; `default` is a square. */
+  private footprintRatio(archetype: string): number {
+    return ruleLookup(this.rules, 'WORLD.cubeSizing.footprintRatioByArchetype', archetype);
   }
 
   /**
-   * Reserve a cube for the area behind a gate.
+   * Reserve a cube for the area behind a gate — one Rung lower.
    *
-   * It goes adjacent to the source area along the gate's direction, offset in
-   * Z by archetype — a warren gate drops two levels, so a warren can sit
-   * beneath farmland without either knowing about the other. Collisions slide
-   * outward along the gate axis; when the slide is exhausted the area takes
-   * the nearest free cube and the crossing is logged as a long road.
+   * The world is a downward stack, so every new cube is placed strictly *below*
+   * every cube already reserved: its top face sits one gap under the current
+   * deepest level, and it extends down by the archetype's Z span. Because each
+   * Rung owns its own Z levels, no two cubes can ever overlap in X/Y, so there
+   * is nothing to slide around and nothing to probe. The footprint is centred
+   * under the gate's X/Y so the descent reads as going down through the map
+   * rather than shooting off sideways, and the entry room lands on the cube's
+   * top face nearest that column.
    */
   allocate(request: AllocationRequest): Allocation {
-    const allocation = this.probe(request);
-    this.cubes.set(request.areaId, allocation.cube);
-    return allocation;
-  }
-
-  /**
-   * Where `allocate` *would* put this area, without reserving anything.
-   *
-   * Adjacency rules need to know what a candidate archetype would end up
-   * standing next to, and the archetype is what decides the cube's Z span and
-   * offset — so the question cannot be answered before the choice is made. This
-   * lets the choice be tried on. It is the same walk `allocate` does, and
-   * `allocate` is now written in terms of it, so the two can never drift.
-   */
-  probe(request: AllocationRequest): Allocation {
     const size = this.sizeFor(request.archetype, request.maxRooms);
     const gap = ruleNumber(this.rules, 'WORLD.cubeSizing.gap');
-    const maxSlides = ruleNumber(this.rules, 'WORLD.allocation.maxSlideAttempts');
-    const zOffsets = ruleNumberMap(this.rules, 'WORLD.allocation.zOffsetByArchetype');
-    const v = DIRECTIONS[request.gateDir];
-    const vertical = v.z !== 0;
 
-    // The slot the entry room wants: one step beyond the gate, plus the gap,
-    // dropped to the archetype's own level when the gate runs horizontally.
-    const zOffset = vertical ? 0 : (zOffsets[request.archetype] ?? 0);
-    const wanted: Coord = {
-      x: request.gateCoord.x + v.x * (gap + 1),
-      y: request.gateCoord.y + v.y * (gap + 1),
-      z: request.gateCoord.z + v.z * (gap + 1) + zOffset,
+    // The top of the new cube sits one gap below the deepest level any cube
+    // currently reaches. The Hub is the first reservation, so the first Rung
+    // drops just beneath it.
+    const z1 = this.deepestFloor() - gap - 1;
+    const z0 = z1 - (size.d - 1);
+
+    // Centre the footprint under the descending gate's column.
+    const x0 = request.gateCoord.x - Math.floor((size.w - 1) / 2);
+    const y0 = request.gateCoord.y - Math.floor((size.h - 1) / 2);
+    const cube: Cube = { x0, y0, z0, x1: x0 + size.w - 1, y1: y0 + size.h - 1, z1 };
+
+    this.cubes.set(request.areaId, cube);
+    // The entry room takes the top face, in the column nearest the gate.
+    const entryCoord: Coord = {
+      x: Math.min(Math.max(request.gateCoord.x, cube.x0), cube.x1),
+      y: Math.min(Math.max(request.gateCoord.y, cube.y0), cube.y1),
+      z: cube.z1,
     };
-
-    for (let slide = 0; slide <= maxSlides; slide++) {
-      const anchor: Coord = {
-        x: wanted.x + v.x * slide,
-        y: wanted.y + v.y * slide,
-        z: wanted.z + v.z * slide,
-      };
-      const cube = this.cubeAround(anchor, request.gateDir, size);
-      if (this.isFree(cube, request.areaId, gap) && this.inBounds(cube)) {
-        return { cube, entryCoord: this.faceSlot(cube, anchor, request.gateDir), slid: slide, longRoad: false };
-      }
-    }
-
-    const cube = this.nearestFreeCube(wanted, size, request.areaId, gap);
-    return { cube, entryCoord: this.faceSlot(cube, wanted, request.gateDir), slid: maxSlides, longRoad: true };
+    return { cube, entryCoord, slid: 0, longRoad: false };
   }
 
-  /**
-   * Every area already reserved whose cube sits within `slack` of this one.
-   *
-   * This reads cubes, which is allocation, not distance — the standing rule
-   * that hops are the only measure of how far apart two rooms are is untouched.
-   * Nothing here reaches a player; it only decides what may be built beside
-   * what.
-   */
-  neighboursNear(cube: Cube, slack: number, exceptAreaId?: string): string[] {
-    const out: string[] = [];
-    for (const [areaId, other] of this.cubes) {
-      if (areaId === exceptAreaId) continue;
-      if (cubesOverlap(cube, other, slack)) out.push(areaId);
-    }
-    return out;
+  /** The lowest Z any reserved cube reaches, or 0 when nothing is reserved. */
+  private deepestFloor(): number {
+    let low = 0;
+    for (const cube of this.cubes.values()) low = Math.min(low, cube.z0);
+    return low;
   }
 
   /**
@@ -211,78 +209,5 @@ export class WorldLattice {
     const [y0, y1] = ruleRange(this.rules, 'WORLD.bounds.y');
     const [z0, z1] = ruleRange(this.rules, 'WORLD.bounds.z');
     return cube.x0 >= x0 && cube.x1 <= x1 && cube.y0 >= y0 && cube.y1 <= y1 && cube.z0 >= z0 && cube.z1 <= z1;
-  }
-
-  /**
-   * Build a cube whose incoming face holds `anchor`: the cube extends away
-   * from the gate along its axis, and is centred on the anchor across the
-   * other two.
-   */
-  private cubeAround(anchor: Coord, dir: Direction, size: CubeSize): Cube {
-    const v = DIRECTIONS[dir];
-    const spanOn = (axis: 'x' | 'y' | 'z') => (axis === 'x' ? size.w : axis === 'y' ? size.h : size.d);
-    const range = (axis: 'x' | 'y' | 'z'): [number, number] => {
-      const span = spanOn(axis);
-      const at = anchor[axis];
-      const step = v[axis];
-      if (step > 0) return [at, at + span - 1]; // travelling up this axis
-      if (step < 0) return [at - span + 1, at]; // travelling down it
-      const before = Math.floor((span - 1) / 2);
-      return [at - before, at - before + span - 1]; // across it: centre on the anchor
-    };
-    const [x0, x1] = range('x');
-    const [y0, y1] = range('y');
-    const [z0, z1] = range('z');
-    return { x0, y0, z0, x1, y1, z1 };
-  }
-
-  /**
-   * The slot inside `cube` closest to `wanted` — the entry room's coordinate
-   * once sliding or a long road has moved the cube away from the gate.
-   */
-  private faceSlot(cube: Cube, wanted: Coord, _dir: Direction): Coord {
-    if (cubeContains(cube, wanted)) return wanted;
-    return {
-      x: Math.min(Math.max(wanted.x, cube.x0), cube.x1),
-      y: Math.min(Math.max(wanted.y, cube.y0), cube.y1),
-      z: Math.min(Math.max(wanted.z, cube.z0), cube.z1),
-    };
-  }
-
-  /**
-   * Last resort: the free cube nearest the wanted slot, searched outward in
-   * rings. The caller logs a long road, because the crossing now spans more
-   * of the world map than one step.
-   */
-  private nearestFreeCube(wanted: Coord, size: CubeSize, areaId: string, gap: number): Cube {
-    const stride = Math.max(size.w, size.h) + gap;
-    for (let ring = 1; ring <= 64; ring++) {
-      for (let dx = -ring; dx <= ring; dx++) {
-        for (let dy = -ring; dy <= ring; dy++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
-          const origin: Coord = { x: wanted.x + dx * stride, y: wanted.y + dy * stride, z: wanted.z };
-          const cube: Cube = {
-            x0: origin.x,
-            y0: origin.y,
-            z0: origin.z,
-            x1: origin.x + size.w - 1,
-            y1: origin.y + size.h - 1,
-            z1: origin.z + size.d - 1,
-          };
-          if (this.isFree(cube, areaId, gap) && this.inBounds(cube)) return cube;
-        }
-      }
-    }
-    // Nothing free within sixty-four rings means the lattice is full, which at
-    // eight thousand slots a side it never is. Take the wanted spot and let the
-    // caller log it rather than failing a generation the player is standing in.
-    return {
-      x0: wanted.x,
-      y0: wanted.y,
-      z0: wanted.z,
-      x1: wanted.x + size.w - 1,
-      y1: wanted.y + size.h - 1,
-      z1: wanted.z + size.d - 1,
-    };
   }
 }

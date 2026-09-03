@@ -22,7 +22,7 @@ import { ruleNumber, ruleString, ruleStrings } from '../engine/rules';
 import { objectiveComplete, type QuestCheckContext } from '../world/quests';
 import type { NpcRecord, ObjectRecord, RoomRecord } from '../world/types';
 import { IN_PLAYER, inObject, inRoom } from '../world/types';
-import { World, type WorldSnapshot } from '../world/world';
+import { teleporterFlag, World, type WorldSnapshot } from '../world/world';
 import {
   carriedWeight,
   execute,
@@ -583,6 +583,10 @@ export class Game {
         case 'visit': {
           const room = this.world.rooms.get(effect.roomId);
           if (room) room.visited = true;
+          // Finding a teleporter is what unlocks it — no separate action, no
+          // separate write point. It rides the same "you have been here" mark
+          // every other room already gets.
+          if (room?.type === 'teleporter') this.world.flags.add(teleporterFlag(room.id));
           break;
         }
         case 'pronoun':

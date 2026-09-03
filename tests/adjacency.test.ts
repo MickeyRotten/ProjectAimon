@@ -1,18 +1,17 @@
 /**
- * What may be built beside what.
+ * What may be reached at what depth.
  *
- * Area kind used to be a flat weighted roll off the source area's `gates`
- * table, which cannot see the case that actually matters: two areas become
- * neighbours through a *third* one's allocation, without either table naming
- * the other. So a coven could end up sharing a wall with a town however the
- * gate weights were tuned. These tests hold both layers — the directional gate
- * tables and the spatial affinity pass — and the invariant that neither may
- * strangle the world into dead ends.
+ * Under the stack every area owns a whole Z plane to itself — a newly
+ * allocated cube always sits strictly below every cube already reserved, so
+ * two areas can never stand "beside" each other however their footprints
+ * fall. The affinity matrix this file used to hold (what may stand next to
+ * what) is retired along with that possibility: `content/adjacency.json`
+ * keeps only `depthGate`, a fence on *when* an archetype may be reached at
+ * all, which is what actually kept the coven a find rather than a trip-over.
  */
 import { describe, expect, it } from 'vitest';
 import { loadCampaign } from '../src/campaign/loader';
 import type { ResolvedCampaign } from '../src/campaign/types';
-import { cubesOverlap } from '../src/world/types';
 import { World } from '../src/world/world';
 
 const campaign: ResolvedCampaign = (await loadCampaign()).campaign;
@@ -49,47 +48,19 @@ const worlds = (areas: number): Run[] =>
     return { seed, world };
   });
 
-/** Every pair of areas whose cubes sit within the adjacency radius. */
-function neighbourPairs(world: World): [string, string][] {
-  const cubes = world.lattice.entries();
-  const out: [string, string][] = [];
-  for (let i = 0; i < cubes.length; i++) {
-    for (let j = i + 1; j < cubes.length; j++) {
-      const [aId, a] = cubes[i] as [string, never];
-      const [bId, b] = cubes[j] as [string, never];
-      if (!cubesOverlap(a, b, adjacency.radius)) continue;
-      const aKind = world.areas.get(aId)?.archetype;
-      const bKind = world.areas.get(bId)?.archetype;
-      if (aKind && bKind) out.push([aKind, bKind]);
-    }
-  }
-  return out;
-}
-
-describe('the affinity table', () => {
-  it('never stands a coven beside a town', () => {
-    // The rule the whole feature was asked for. Zero in the table means zero
-    // on the ground, not "rarely".
-    expect(adjacency.affinity['coven']?.['town']).toBe(0);
+describe('the stack retires "beside"', () => {
+  it('never lets two areas share a Z level, so nothing can ever stand next to anything', () => {
+    // The structural guarantee the affinity matrix used to enforce by table —
+    // now it holds unconditionally, by allocation.
     for (const { seed, world } of worlds(14)) {
-      for (const [a, b] of neighbourPairs(world)) {
-        const pair = [a, b].sort().join('+');
-        expect(pair, `in ${seed}`).not.toBe('coven+town');
-      }
-    }
-  });
-
-  it('honours every zero in the table, both ways round', () => {
-    const forbidden = new Set<string>();
-    for (const [candidate, row] of Object.entries(adjacency.affinity)) {
-      for (const [neighbour, weight] of Object.entries(row)) {
-        if (weight === 0) forbidden.add([candidate, neighbour].sort().join('+'));
-      }
-    }
-    expect(forbidden.size).toBeGreaterThan(0);
-    for (const { seed, world } of worlds(14)) {
-      for (const [a, b] of neighbourPairs(world)) {
-        expect(forbidden.has([a, b].sort().join('+')), `${a}+${b} in ${seed}`).toBe(false);
+      const cubes = world.lattice.entries();
+      for (let i = 0; i < cubes.length; i++) {
+        for (let j = i + 1; j < cubes.length; j++) {
+          const [aId, a] = cubes[i] as [string, { z0: number; z1: number }];
+          const [bId, b] = cubes[j] as [string, { z0: number; z1: number }];
+          const shareAZLevel = a.z0 <= b.z1 && b.z0 <= a.z1;
+          expect(shareAZLevel, `${aId} shares a Z level with ${bId} in ${seed}`).toBe(false);
+        }
       }
     }
   });

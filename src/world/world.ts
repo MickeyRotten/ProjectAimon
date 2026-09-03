@@ -57,6 +57,15 @@ import {
 
 export const HUB_AREA_ID = 'hub';
 
+/**
+ * A found teleporter is "unlocked" by a flag in `world.flags` — reusing the
+ * generic mechanism that already exists for spawn upgrades and conditional
+ * stats, rather than a new field on `RoomRecord`. No schema change, and it
+ * rides along in the save automatically, since `flags` already does.
+ */
+const TELEPORTER_FLAG_PREFIX = 'teleporter:';
+export const teleporterFlag = (roomId: string): string => `${TELEPORTER_FLAG_PREFIX}${roomId}`;
+
 export interface Exit {
   dir: Direction;
   edge: EdgeRecord;
@@ -357,11 +366,6 @@ export class World {
       lattice: this.lattice,
       stub,
       flags: this.flags,
-      // Adjacency asks what kind of place a reserved cube holds. Stubs are in
-      // `areas` from the moment their gate was made, so ungenerated neighbours
-      // count the same as walked ones — which is the point, since the cube is
-      // taken either way.
-      archetypeOf: (areaId) => this.areas.get(areaId)?.archetype,
     });
 
     this.areas.set(result.area.id, result.area);
@@ -381,6 +385,25 @@ export class World {
     edge.roomB = result.area.entryRoomId;
     this.indexEdge(edge);
     return result.area;
+  }
+
+  // ── quick travel ──────────────────────────────────────────────────
+
+  /**
+   * A teleporter found and unlocked, ready to answer `RECALL` from the Hub.
+   * `depth` is the Rung it sits on — read from the area record, never
+   * recomputed, so it always agrees with what the room's own Rung actually is.
+   */
+  unlockedTeleporters(): { roomId: string; areaId: string; areaName: string; depth: number }[] {
+    const out: { roomId: string; areaId: string; areaName: string; depth: number }[] = [];
+    for (const flag of this.flags) {
+      if (!flag.startsWith(TELEPORTER_FLAG_PREFIX)) continue;
+      const room = this.rooms.get(flag.slice(TELEPORTER_FLAG_PREFIX.length));
+      const area = room ? this.areas.get(room.areaId) : undefined;
+      if (!room || !area) continue;
+      out.push({ roomId: room.id, areaId: area.id, areaName: area.name, depth: area.depth });
+    }
+    return out.sort((a, b) => a.depth - b.depth);
   }
 
   // ── quests ──────────────────────────────────────────────────────────
