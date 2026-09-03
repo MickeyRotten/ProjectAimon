@@ -130,7 +130,24 @@ describe('the wealth budget', () => {
 
   it('holds the total worth of an area to something a shop could absorb', () => {
     // The number that prompted this: one chest could roll a masterwork heirloom
-    // plate worth 7000 gold, which is more than the rest of the world.
+    // plate worth 7000 gold, which is more than the rest of the world. The
+    // ceiling scales with tier the same way the gold purse itself does — flat
+    // would either choke off a deep area's legitimately larger budget or, sized
+    // for the deep end, let a shallow area's total worth roam far past what a
+    // fresh character should ever find. Six Rungs down is now reliably tier
+    // 3-4 under the stack (one descent per Rung, so exploring N areas always
+    // means N floors down, not a branching spread of shallow ones), where the
+    // old topology's branching kept a same-sized sample mostly shallow.
+    const budgets = wealth['goldBudgetByTier'] as Record<string, number[]>;
+    const tiers = Object.keys(budgets).filter((k) => !k.startsWith('_')).map(Number);
+    const ceilingFor = (tier: number): number => {
+      const key = String(Math.min(Math.max(tier, Math.min(...tiers)), Math.max(...tiers)));
+      const goldMax = (budgets[key] as number[])[1] as number;
+      // 8x the tier's own gold-purse ceiling: comfortable headroom over what
+      // the sample actually rolls at every tier, while still landing well
+      // short of the 7000 that prompted the budget system in the first place.
+      return goldMax * 8;
+    };
     let checked = 0;
     for (const world of sample) {
       for (const area of generated(world)) {
@@ -139,7 +156,7 @@ describe('the wealth budget', () => {
           (sum, o) => sum + (o.gold ?? 0) + (itemValues(campaign, o)['price'] ?? 0),
           0,
         );
-        expect(worth, `${area.id}`).toBeLessThan(2500);
+        expect(worth, `${area.id} at tier ${area.tier}`).toBeLessThan(ceilingFor(area.tier));
       }
     }
     expect(checked).toBeGreaterThan(20);

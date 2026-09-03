@@ -357,11 +357,6 @@ export class World {
       lattice: this.lattice,
       stub,
       flags: this.flags,
-      // Adjacency asks what kind of place a reserved cube holds. Stubs are in
-      // `areas` from the moment their gate was made, so ungenerated neighbours
-      // count the same as walked ones — which is the point, since the cube is
-      // taken either way.
-      archetypeOf: (areaId) => this.areas.get(areaId)?.archetype,
     });
 
     this.areas.set(result.area.id, result.area);

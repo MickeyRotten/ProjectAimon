@@ -67,55 +67,59 @@ describe('mapModel', () => {
     expect(solid.length).toBe(4);
   });
 
-  it('reveals a gate as a way out once the room holding it is walked', () => {
+  it('marks the room holding an unexplored gate directly — there is no ghost cell for it', () => {
+    // Every gate descends now, so there is no adjacent X/Y slot to place a
+    // ghost "way out" marker in the way a horizontal gate once had one — the
+    // room carrying the stairs down wears the mark itself.
     const world = World.create({ campaign, seed: 'map-gate' });
-    // Walk to the gate room, so its ways out of the area become gate cells.
     visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
     const model = mapModel(world, 'hub_gate', { radius: 2 })!;
-    const gates = kinds(model.cells, 'gate');
-    expect(gates.length).toBeGreaterThan(0);
-    for (const cell of gates) expect(cell.label).toBe('a way out');
+    const here = kinds(model.cells, 'here')[0]!;
+    expect(here.holdsGate).toBe(true);
+    expect(here.glyph).toBe('▨');
+    // The kind stays 'here' — the player's own position is never demoted to
+    // make room for the gate mark, it is layered on top of it.
+    expect(here.kind).toBe('here');
+    expect(kinds(model.cells, 'frontier').length).toBeGreaterThanOrEqual(0);
   });
 
-  it('with no radius draws the whole floor, padded so edge gates still get a cell', () => {
+  it('marks a visited room the same way once the player has moved on from it', () => {
+    const world = World.create({ campaign, seed: 'map-gate-2' });
+    visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
+    // Standing elsewhere, hub_gate is now a plain visited cell — still marked.
+    const model = mapModel(world, 'hub_bank', { radius: 2 })!;
+    const gateCell = model.cells.find((cell) => cell.holdsGate === true);
+    expect(gateCell).toBeDefined();
+    expect(gateCell!.kind).toBe('visited');
+    expect(gateCell!.glyph).toBe('▨');
+  });
+
+  it('with no radius draws the whole floor, padded so edge rooms still get a cell', () => {
     const world = World.create({ campaign, seed: 'map-full' });
     visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
     const full = mapModel(world, 'hub_gate', {})!;
-    // The full view carries the gate cells (a padded window includes the
-    // coordinate one step past the boundary room that holds them).
-    expect(kinds(full.cells, 'gate').length).toBeGreaterThan(0);
+    expect(full.cells.some((cell) => cell.holdsGate === true)).toBe(true);
     // And it is at least as wide as the mini-map's fixed 5-room window.
     expect(full.gridCols).toBeGreaterThanOrEqual(mapModel(world, 'hub_gate', { radius: 2 })!.gridCols - 2);
   });
 
-  it('is one continuous map: a crossed gate pulls the far area onto the same model', () => {
+  it('is one floor, one area: crossing a gate always steps onto a fresh model', () => {
+    // The stack retires the old merged-map case — every gate descends, so
+    // crossing one always changes Z, and no two areas ever share a Z level.
     const world = World.create({ campaign, seed: 'map-cross' });
     visit(world, 'hub_yard', 'hub_bank', 'hub_gate');
-    // Avoid a "warren" gate: it drops two Z levels, and a merged map only ever
-    // spans one floor — pick a gate whose far entry room shares the hub's Z.
-    const gateExit = world
-      .exitsOf('hub_gate')
-      .find((exit) => exit.toRoomId === null && exit.gateArchetype !== 'warren');
+    const gateExit = world.exitsOf('hub_gate').find((exit) => exit.toRoomId === null);
     expect(gateExit).toBeDefined();
     const beyondArea = world.enterGate(gateExit!.edge.id);
     expect(beyondArea.entryRoomId).toBeTruthy();
     visit(world, beyondArea.entryRoomId!);
 
-    // Standing on the far side, the model still carries the hub's rooms —
-    // it is one map, not a fresh one that forgot where the player came from.
-    // A room drawn from a foreign area carries its area's name in the label.
+    // Standing on the far side, the model holds only that Rung's own rooms —
+    // the Hub's floor is a different Z level and a different area entirely.
     const model = mapModel(world, beyondArea.entryRoomId!, {})!;
     expect(model).toBeDefined();
-    const foreignCells = model.cells.filter((cell) => cell.label.includes(' — '));
-    expect(foreignCells.length).toBeGreaterThan(0);
-
-    // The seam between the two areas is marked, not drawn as an ordinary
-    // same-area corridor.
-    const seam = model.connectors.filter((connector) => connector.crossesArea);
-    expect(seam.length).toBeGreaterThan(0);
-
-    // areaHops: 0 is the escape hatch back to the old single-area behaviour.
-    const isolated = mapModel(world, beyondArea.entryRoomId!, { areaHops: 0 })!;
-    expect(isolated.cells.some((cell) => cell.label.includes(' — '))).toBe(false);
+    expect(model.z).not.toBe(0);
+    expect(model.areaName).not.toBe(campaign.manifest.name);
+    expect(model.cells.every((cell) => !cell.label.includes(' — '))).toBe(true);
   });
 });

@@ -27,7 +27,6 @@ import {
   ruleArray,
   ruleNumber,
   ruleObject,
-  ruleRange,
   ruleWeightedPairs,
 } from '../engine/rules';
 import { matches } from '../engine/tags';
@@ -45,12 +44,8 @@ import {
 } from './shapes';
 import type { WorldLattice } from './lattice';
 import {
-  ALL_DIRECTIONS,
   coordKey,
-  cubeContains,
   directionBetween,
-  FLAT_DIRECTIONS,
-  opposite,
   sidesInside,
   step,
   type AreaRecord,
@@ -88,12 +83,6 @@ export interface GenerateOptions {
   stub: AreaRecord;
   /** World flags, which spawn upgrades and conditional stats read. */
   flags?: ReadonlySet<string> | undefined;
-  /**
-   * What kind of place an already-reserved area is, for the adjacency rules.
-   * `World` backs it with its own area map. Omitted, adjacency still applies
-   * its depth gates but sees no neighbours.
-   */
-  archetypeOf?: ((areaId: string) => string | undefined) | undefined;
 }
 
 /**
@@ -307,7 +296,6 @@ export function generateArea(options: GenerateOptions): GenerationResult {
     edges,
     graph: kept,
     areaDef,
-    archetypeOf: options.archetypeOf,
   });
   edges.push(...gates.edges);
   notes.push(...gates.notes);
@@ -414,33 +402,22 @@ function rollRoomType(
 }
 
 /**
- * Choose what kind of place lies behind a gate.
+ * Choose what kind of place lies one Rung down.
  *
- * Two layers, and both apply. The area's own `gates` table weights the roll —
- * what this kind of place opens onto. The adjacency table then re-weights it
- * against what is already standing near the cube the candidate would take, and
- * against how far from the Hub this is. That second layer is the one `gates`
- * cannot express: two areas become neighbours through a third one's allocation
- * without either table ever naming the other.
- *
- * Every candidate is scored once and picked once. Deliberately not a
- * roll-and-reject loop: rejection burns the candidate room, and a room that
- * burns its gate is a dead end — the world invariant that most areas lead
- * onward somewhere is worth more than a perfectly obeyed affinity table. So if
- * every candidate scores zero, the unfiltered roll stands, with a note.
+ * The affinity matrix is gone with the stack — there is no "beside" any more,
+ * only "below". The area's own `gates` table is the descent sequence: what
+ * this kind of place descends into. `depthGate` still fences an archetype to a
+ * band of Rungs (a coven is never in the shallows), and if that leaves nothing
+ * the whole table rolls unfiltered rather than stranding the descent.
  */
 function pickArchetype(options: {
   campaign: ResolvedCampaign;
   rng: Rng;
-  lattice: WorldLattice;
   targets: { id: string; w: number }[];
   depth: number;
-  gateCoord: Coord;
-  gateDir: Direction;
-  archetypeOf: (areaId: string) => string | undefined;
   notes: string[];
 }): string | undefined {
-  const { campaign, rng, lattice, depth, archetypeOf, notes } = options;
+  const { campaign, rng, depth, notes } = options;
   const adjacency = campaign.adjacency;
 
   const known = options.targets.filter((target) => campaign.areas.has(target.id));
@@ -451,61 +428,24 @@ function pickArchetype(options: {
   }
   if (known.length === 0) return undefined;
 
-  const scored = known.map((target) => {
+  const allowed = known.filter((target) => {
     const gate = adjacency?.depthGate?.[target.id];
-    if (gate && (depth < (gate.minDepth ?? -Infinity) || depth > (gate.maxDepth ?? Infinity))) {
-      return { ...target, w: 0 };
-    }
-    if (!adjacency?.affinity) return target;
-
-    // Try the choice on: the cube depends on the archetype, so what it would
-    // stand next to cannot be known until the archetype is proposed.
-    const areaDef = campaign.areas.get(target.id) as AreaDef;
-    const probe = lattice.probe({
-      areaId: `probe:${target.id}`,
-      archetype: target.id,
-      maxRooms: areaDef.size[1],
-      gateCoord: options.gateCoord,
-      gateDir: options.gateDir,
-    });
-
-    let w = target.w;
-    for (const areaId of lattice.neighboursNear(probe.cube, adjacency.radius)) {
-      const neighbour = archetypeOf(areaId);
-      if (!neighbour) continue;
-      w *= affinityBetween(adjacency, target.id, neighbour);
-      if (w === 0) break;
-    }
-    return { ...target, w };
+    if (!gate) return true;
+    return depth >= (gate.minDepth ?? -Infinity) && depth <= (gate.maxDepth ?? Infinity);
   });
-
-  const allowed = scored.filter((target) => target.w > 0);
   if (allowed.length === 0) {
-    notes.push('no area kind was welcome here, so the gate table rolled unfiltered');
+    notes.push('no area kind was allowed at this depth, so the descent table rolled unfiltered');
     return rng.weighted(known).id;
   }
   return rng.weighted(allowed).id;
 }
 
 /**
- * How welcome `candidate` is beside `neighbour`. The reverse pair counts too,
- * so an opinion only has to be written down once; an unnamed pair is neutral.
- */
-function affinityBetween(
-  adjacency: { affinity: Record<string, Record<string, number>> },
-  candidate: string,
-  neighbour: string,
-): number {
-  const forward = adjacency.affinity[candidate]?.[neighbour];
-  if (typeof forward === 'number') return forward;
-  const reverse = adjacency.affinity[neighbour]?.[candidate];
-  return typeof reverse === 'number' ? reverse : 1;
-}
-
-/**
- * Roll the ways out. Each gate reserves the cube behind it immediately — that
- * reservation is the whole reason coordinates came back, and it is what makes
- * a `Distant` quest objective placeable before the area exists.
+ * Roll the way down. The world is a stack, so every gate descends to the next
+ * Rung — direction `d`, count `WORLD.descent.descentsPerRung`. Each gate
+ * reserves the cube below immediately; that reservation is the whole reason
+ * coordinates came back, and it is what makes a `Distant` quest objective
+ * placeable before the area exists.
  */
 function rollGates(options: {
   campaign: ResolvedCampaign;
@@ -516,30 +456,19 @@ function rollGates(options: {
   edges: EdgeRecord[];
   graph: Graph;
   areaDef: AreaDef;
-  /** What kind of place an already-reserved area is. Adjacency reads it. */
-  archetypeOf?: ((areaId: string) => string | undefined) | undefined;
 }): { edges: EdgeRecord[]; stubs: AreaRecord[]; notes: string[] } {
-  const { campaign, rng, lattice, area, rooms, edges, graph, areaDef } = options;
+  const { campaign, rng, lattice, area, rooms, graph, areaDef } = options;
   const rules = campaign.rules;
   const notes: string[] = [];
   const gateEdges: EdgeRecord[] = [];
   const stubs: AreaRecord[] = [];
-
-  // Adjacency asks what kind of place a neighbouring cube holds. Areas the
-  // world already knows about come from the caller; the stubs this pass is
-  // reserving right now are not there yet, so they are chained on the front —
-  // otherwise the second gate out of a room would happily put a coven beside
-  // the town the first gate just reserved.
-  const local = new Map<string, string>();
-  const archetypeOf = (areaId: string): string | undefined =>
-    local.get(areaId) ?? options.archetypeOf?.(areaId);
 
   const targets = Object.entries(areaDef.gates ?? {})
     .filter(([id]) => !id.startsWith('_'))
     .map(([id, w]) => ({ id, w }));
   if (targets.length === 0) return { edges: gateEdges, stubs, notes };
 
-  const [minGates, maxGates] = ruleRange(rules, 'WORLD.gates.perArea');
+  const wanted = Math.max(0, Math.round(ruleNumber(rules, 'WORLD.descent.descentsPerRung')));
   const minHops = ruleNumber(rules, 'WORLD.gates.minHopsFromEntry');
   const maxPerRoom = ruleNumber(rules, 'WORLD.gates.maxPerRoom');
   const requires = ruleArray(rules, 'WORLD.gates.roomRequires', []).filter(
@@ -547,17 +476,11 @@ function rollGates(options: {
   );
 
   const hops = hopsFrom(graph, 0);
+  // A room whose slot directly below is occupied by another room of this area
+  // cannot carry the stairs down — the descent edge would point at our own
+  // floor rather than out of the Rung. Flat Rungs never hit this.
   const occupied = new Set(rooms.map((room) => coordKey(room)));
-  const usedDirs = new Map<string, Set<Direction>>();
-  for (const edge of edges) {
-    dirsOf(usedDirs, edge.roomA).add(edge.dirFromA);
-    if (edge.roomB) dirsOf(usedDirs, edge.roomB).add(opposite(edge.dirFromA));
-  }
   const gatesPerRoom = new Map<string, number>();
-
-  const wanted = rng.int(minGates, maxGates);
-  const flat = area.cube.z1 === area.cube.z0;
-  const compass = flat ? FLAT_DIRECTIONS : ALL_DIRECTIONS;
 
   // `rooms[i]` is graph node `i` — they are built in node order — so the hop
   // count from the entry is a lookup rather than a second walk.
@@ -568,68 +491,44 @@ function rollGates(options: {
   for (const room of candidates) {
     if (gateEdges.length >= wanted) break;
     if ((gatesPerRoom.get(room.id) ?? 0) >= maxPerRoom) continue;
-
-    // A gate needs a side of the room with nothing on it, pointing at a slot
-    // no room of this area occupies — otherwise the crossing would be drawn
-    // straight into a neighbour.
-    const free = compass.filter(
-      (dir) => !dirsOf(usedDirs, room.id).has(dir) && !occupied.has(coordKey(step(room, dir))),
-    );
-    const outward = free.filter((dir) => !cubeContains(area.cube, step(room, dir)));
-    const dir = rng.maybePick(outward.length > 0 ? outward : free);
-    if (!dir) continue;
+    if (occupied.has(coordKey(step(room, 'd')))) continue;
 
     const archetype = pickArchetype({
       campaign,
       rng,
-      lattice,
       targets,
       depth: area.depth + 1,
-      gateCoord: room,
-      gateDir: dir,
-      archetypeOf,
       notes,
     });
     if (!archetype) continue;
 
-    const { stub, longRoad } = reserveArea({
+    const { stub } = reserveArea({
       campaign,
       rng,
       lattice,
       archetype,
       depth: area.depth + 1,
       gateCoord: room,
-      gateDir: dir,
+      gateDir: 'd',
     });
-    if (longRoad) notes.push(`${stub.id} could not sit next door — long road from ${room.id}`);
 
     stubs.push(stub);
-    local.set(stub.id, archetype);
-    dirsOf(usedDirs, room.id).add(dir);
     gatesPerRoom.set(room.id, (gatesPerRoom.get(room.id) ?? 0) + 1);
     gateEdges.push({
       campaignId: campaign.id,
       id: `${room.id}>gate:${stub.id}`,
       roomA: room.id,
       roomB: null,
-      dirFromA: dir,
+      dirFromA: 'd',
       oneWay: false,
       gateArchetype: archetype,
       gateAreaId: stub.id,
     });
   }
 
-  if (gateEdges.length === 0) notes.push('no room could carry a gate, so this area is a dead end');
+  if (gateEdges.length === 0) notes.push('no room could carry the stairs down, so this Rung is the bottom');
   return { edges: gateEdges, stubs, notes };
 }
-
-const dirsOf = (map: Map<string, Set<Direction>>, roomId: string): Set<Direction> => {
-  const existing = map.get(roomId);
-  if (existing) return existing;
-  const made = new Set<Direction>();
-  map.set(roomId, made);
-  return made;
-};
 
 const centreOf = (stub: AreaRecord): Coord => ({
   x: Math.floor((stub.cube.x0 + stub.cube.x1) / 2),

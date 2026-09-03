@@ -145,16 +145,12 @@
         "hub_gate"
       ]
     ],
+    "_gatesNote": "The world runs downward in Rungs, so the Hub offers exactly one way down. The Roadgate's steps descend into the first Rung; the descent sequence in the area tables decides what lies below it after that. `d` is the only direction a gate ever takes now.",
     "gates": [
       {
         "fromRoom": "hub_gate",
-        "dir": "e",
+        "dir": "d",
         "archetype": "farmland"
-      },
-      {
-        "fromRoom": "hub_gate",
-        "dir": "s",
-        "archetype": "town"
       }
     ],
     "npcs": [

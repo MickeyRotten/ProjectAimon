@@ -169,17 +169,15 @@ export interface DepthGateDef {
 }
 
 /**
- * What may be built next to what. `gates` on an area template says what that
- * area opens onto; this says what the world tolerates standing side by side,
- * which is the case `gates` cannot see — two areas become neighbours through a
- * third one's allocation without either naming the other.
+ * What may be reached at what depth. Under the stack there is no "beside" any
+ * more — every Rung owns a whole plane to itself, so two areas can never stand
+ * next to each other however their allocation falls. What is left is a fence
+ * on *when*: an archetype outside its depth band is never rolled at all,
+ * which is how a coven stays a thing you find rather than a thing you trip
+ * over in the first few Rungs.
  */
 export interface AdjacencyTable {
-  /** Slack, in lattice slots, for counting two cubes as neighbours. */
-  radius: number;
   depthGate: Record<string, DepthGateDef>;
-  /** `affinity[candidate][neighbour]` — a weight multiplier. 0 forbids. */
-  affinity: Record<string, Record<string, number>>;
 }
 
 // ── content/items.json ──────────────────────────────────────────────

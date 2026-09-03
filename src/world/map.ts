@@ -145,7 +145,7 @@ function glyphFor(world: World, room: RoomRecord | undefined, options: MapOption
 // state" note above, made so the map can be a navigation tool rather than only
 // a record of where the player has been.
 
-export type MapCellKind = 'here' | 'visited' | 'frontier' | 'gate';
+export type MapCellKind = 'here' | 'visited' | 'frontier';
 
 export interface MapCell {
   kind: MapCellKind;
@@ -153,6 +153,14 @@ export interface MapCell {
   glyph: string;
   /** For a screen reader, since the visible map is glyphs only. */
   label: string;
+  /**
+   * This room holds a way onward that has not been generated yet. Under the
+   * stack every gate descends (`d`), so there is no adjacent X/Y slot to place
+   * a ghost "way out" cell in the way a horizontal gate once had one — the
+   * room carrying the stairs down is marked directly instead, layered onto
+   * its `here`/`visited` styling rather than replacing it.
+   */
+  holdsGate?: boolean;
 }
 
 /** A cell placed on the doubled grid (room cells sit on odd track indices). */
@@ -192,60 +200,27 @@ export function floorLabel(z: number): string {
 const OUTWARD: Record<'w' | 'e' | 'n' | 's', Direction> = { w: 'w', e: 'e', n: 'n', s: 's' };
 
 /**
- * How many gate crossings the merged map reaches out to, beyond the player's
- * own area. One means "my area plus whatever I can see through a crossed
- * gate" — the map stays one continuous drawing rather than a wall the moment
- * you step over a threshold, without pulling in the whole visited world.
- */
-const AREA_HOP_LIMIT = 1;
-
-/**
- * Every area reachable from `startAreaId` within `maxHops` *crossed* gates —
- * an edge whose far room exists and sits in a different area. An area whose
- * gate has not been walked through yet has no rooms to contribute, so it can
- * never appear here; that is exactly the ghost `▨` gate cell's job instead.
- */
-function connectedAreas(world: World, startAreaId: string, maxHops: number): Set<string> {
-  const included = new Set<string>([startAreaId]);
-  let frontier = [startAreaId];
-  for (let hop = 0; hop < maxHops && frontier.length > 0; hop++) {
-    const next: string[] = [];
-    for (const areaId of frontier) {
-      for (const room of world.roomsOf(areaId)) {
-        for (const exit of world.exitsOf(room.id)) {
-          if (!exit.toRoomId) continue;
-          const neighborArea = world.rooms.get(exit.toRoomId)?.areaId;
-          if (neighborArea && !included.has(neighborArea)) {
-            included.add(neighborArea);
-            next.push(neighborArea);
-          }
-        }
-      }
-    }
-    frontier = next;
-  }
-  return included;
-}
-
-/**
  * The player's map as data. `radius` gives the mini-map its small fixed
  * window (centred on the player); omit it for the whole floor, as the MAP
- * command wants. `areaHops` controls how far the map reaches across crossed
- * gates into neighbouring areas — this is what makes it one continuous map
- * rather than one map per area. Only the player's own Z level is ever in one
- * model — another floor, in this or a neighbouring area, is its own map.
+ * command wants.
+ *
+ * One area, one model. Under the stack every gate descends, so crossing one
+ * always steps onto a different Z plane — no two areas ever share a Z level,
+ * which is what let an earlier version of this reach across a crossed gate to
+ * merge two areas onto one drawing. That case cannot happen any more: the
+ * room graph guarantees it. Another floor, in this or a neighbouring area, is
+ * always its own map now.
  */
 export function mapModel(
   world: World,
   roomId: string,
-  options: { radius?: number | undefined; areaHops?: number | undefined } = {},
+  options: { radius?: number | undefined } = {},
 ): MapModel | undefined {
   const here = world.rooms.get(roomId);
   if (!here) return undefined;
   const area = world.areas.get(here.areaId);
   const z = here.z;
-  const areaIds = connectedAreas(world, here.areaId, options.areaHops ?? AREA_HOP_LIMIT);
-  const level = [...areaIds].flatMap((id) => world.roomsOf(id)).filter((room) => room.z === z);
+  const level = world.roomsOf(here.areaId).filter((room) => room.z === z);
   if (level.length === 0) return undefined;
 
   // The window: a fixed square around the player for the mini-map, the whole
@@ -280,39 +255,31 @@ export function mapModel(
       .exitsOf(room.id)
       .some((exit) => exit.toRoomId !== null && visited(world.rooms.get(exit.toRoomId)));
 
-  // Gate cells: a visited room's way out of the area, placed one step along the
-  // gate's direction where no room of this area stands.
-  const gates = new Map<string, true>();
-  for (const room of level) {
-    if (!visited(room)) continue;
-    for (const exit of world.exitsOf(room.id)) {
-      if (exit.toRoomId !== null) continue;
-      const gx = room.x + dx(exit.dir);
-      const gy = room.y + dy(exit.dir);
-      if (dz(exit.dir) !== 0) continue; // a gate up or down has no slot on a flat floor
-      if (!roomAt(gx, gy)) gates.set(`${gx},${gy}`, true);
-    }
-  }
-
-  // A room drawn across a crossed gate carries its own area's name, so the
-  // merged map still reads as "two places" rather than one undifferentiated
-  // sprawl once you are looking at more than your own area.
-  const labelFor = (room: RoomRecord, suffix: string): string => {
-    if (room.areaId === here.areaId) return suffix;
-    const areaName = world.areas.get(room.areaId)?.name ?? room.areaId;
-    return `${suffix} — ${areaName}`;
-  };
-
   const cellAt = (x: number, y: number): MapCell | undefined => {
     const room = roomAt(x, y);
-    if (room) {
-      if (room.id === roomId) return { kind: 'here', glyph: stairGlyph(world, room) ?? '▣', label: `${room.name} (here)` };
-      if (room.visited) return { kind: 'visited', glyph: stairGlyph(world, room) ?? '□', label: labelFor(room, room.name) };
-      if (isFrontier(room)) return { kind: 'frontier', glyph: '?', label: 'unexplored' };
-      return undefined; // an unvisited room with no explored neighbour is not known yet
+    if (!room) return undefined;
+    // A way onward that has not been generated yet — always straight down,
+    // under the stack — has no adjacent X/Y slot to sit a ghost cell in, so
+    // the room carrying it is marked directly, layered onto its own kind.
+    const gate = visited(room) && holdsUnexploredGate(world, room);
+    if (room.id === roomId) {
+      return {
+        kind: 'here',
+        glyph: stairGlyph(world, room) ?? (gate ? '▨' : '▣'),
+        label: `${room.name} (here)`,
+        ...(gate ? { holdsGate: true } : {}),
+      };
     }
-    if (gates.has(`${x},${y}`)) return { kind: 'gate', glyph: '▨', label: 'a way out' };
-    return undefined;
+    if (room.visited) {
+      return {
+        kind: 'visited',
+        glyph: stairGlyph(world, room) ?? (gate ? '▨' : '□'),
+        label: room.name,
+        ...(gate ? { holdsGate: true } : {}),
+      };
+    }
+    if (isFrontier(room)) return { kind: 'frontier', glyph: '?', label: 'unexplored' };
+    return undefined; // an unvisited room with no explored neighbour is not known yet
   };
 
   const cols = x1 - x0 + 1;
@@ -333,63 +300,39 @@ export function mapModel(
   }
 
   // A connector is drawn only when at least one end is explored, so two
-  // unentered rooms never leak the corridor between them.
+  // unentered rooms never leak the corridor between them. Every drawn
+  // connector joins two real, adjacent rooms of this same area — a gate has
+  // no ghost cell to connect to any more, and two rooms sharing this window
+  // are guaranteed to share an area, since no two areas ever share a Z level.
   const joined = (ax: number, ay: number, bx: number, by: number): boolean => {
     const a = roomAt(ax, ay);
     const b = roomAt(bx, by);
-    const aCell = cellAt(ax, ay);
-    const bCell = cellAt(bx, by);
-    if (!aCell || !bCell) return false;
-    if (aCell.kind === 'gate' || bCell.kind === 'gate') return true; // the gate edge that placed it
-    if (!a || !b) return false;
+    if (!a || !b || !cellAt(ax, ay) || !cellAt(bx, by)) return false;
     if (!visited(a) && !visited(b)) return false;
     return world.exitsOf(a.id).some((exit) => exit.toRoomId === b.id);
-  };
-
-  // A gate cell always marks an area boundary; two real rooms mark one when
-  // a crossed gate has pulled a neighbouring area's room onto this same map.
-  const crossesArea = (ax: number, ay: number, bx: number, by: number): boolean => {
-    const aCell = cellAt(ax, ay);
-    const bCell = cellAt(bx, by);
-    if (aCell?.kind === 'gate' || bCell?.kind === 'gate') return true;
-    const a = roomAt(ax, ay);
-    const b = roomAt(bx, by);
-    return Boolean(a && b && a.areaId !== b.areaId);
   };
 
   for (let yi = 0; yi < rows; yi++) {
     for (let xi = 0; xi < cols; xi++) {
       if (xi + 1 < cols && joined(x0 + xi, y0 + yi, x0 + xi + 1, y0 + yi)) {
-        connectors.push({
-          gc: 2 * xi + 2,
-          gr: 2 * yi + 1,
-          dir: 'h',
-          stub: false,
-          crossesArea: crossesArea(x0 + xi, y0 + yi, x0 + xi + 1, y0 + yi),
-        });
+        connectors.push({ gc: 2 * xi + 2, gr: 2 * yi + 1, dir: 'h', stub: false, crossesArea: false });
       }
       if (yi + 1 < rows && joined(x0 + xi, y0 + yi, x0 + xi, y0 + yi + 1)) {
-        connectors.push({
-          gc: 2 * xi + 1,
-          gr: 2 * yi + 2,
-          dir: 'v',
-          stub: false,
-          crossesArea: crossesArea(x0 + xi, y0 + yi, x0 + xi, y0 + yi + 1),
-        });
+        connectors.push({ gc: 2 * xi + 1, gr: 2 * yi + 2, dir: 'v', stub: false, crossesArea: false });
       }
     }
   }
 
   // Stubs: an explored room on the window edge whose corridor runs on past it,
-  // toward the third ring the mini-map does not draw. Only from explored rooms,
-  // so a frontier room never reveals what lies beyond it. A stub pointing down
-  // a gate exit (crossed or not) is an area boundary too.
+  // toward the third ring the mini-map does not draw. Only from explored
+  // rooms, so a frontier room never reveals what lies beyond it. A stub is
+  // always a same-area connection now — a compass direction is never a gate,
+  // and two rooms sharing a Z level always share an area.
   const stubIf = (room: RoomRecord | undefined, out: 'w' | 'e' | 'n' | 's', gc: number, gr: number, dir: 'h' | 'v'): void => {
     if (!room || !visited(room)) return;
     const exit = world.exitsOf(room.id).find((candidate) => candidate.dir === OUTWARD[out]);
     if (!exit) return;
-    const farArea = exit.toRoomId ? world.rooms.get(exit.toRoomId)?.areaId : undefined;
-    connectors.push({ gc, gr, dir, stub: true, crossesArea: !exit.toRoomId || farArea !== room.areaId });
+    connectors.push({ gc, gr, dir, stub: true, crossesArea: false });
   };
   for (let yi = 0; yi < rows; yi++) {
     stubIf(roomAt(x0, y0 + yi), 'w', 0, 2 * yi + 1, 'h');
@@ -411,11 +354,7 @@ export function mapModel(
   };
 }
 
-const dx = (dir: Direction): number => (dir === 'e' ? 1 : dir === 'w' ? -1 : 0);
-const dy = (dir: Direction): number => (dir === 's' ? 1 : dir === 'n' ? -1 : 0);
-const dz = (dir: Direction): number => (dir === 'u' ? 1 : dir === 'd' ? -1 : 0);
-
-/** `↑`/`↓`/`↕` when a room has stairs, else undefined so the room keeps its glyph. */
+/** `↑`/`↓`/`↕` when a room has a generated connection running in Z, else undefined. */
 function stairGlyph(world: World, room: RoomRecord): string | undefined {
   let up = false;
   let down = false;
@@ -428,6 +367,13 @@ function stairGlyph(world: World, room: RoomRecord): string | undefined {
   if (up) return '↑';
   if (down) return '↓';
   return undefined;
+}
+
+/** Does this room hold a way onward — up or down — that has not been generated yet? */
+function holdsUnexploredGate(world: World, room: RoomRecord): boolean {
+  return world
+    .exitsOf(room.id)
+    .some((exit) => exit.toRoomId === null && (exit.dir === 'u' || exit.dir === 'd'));
 }
 
 /** The Z levels an area actually put rooms on, low to high. */
