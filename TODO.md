@@ -111,14 +111,61 @@ Task types:
    `src/campaign/{loader,types,validate}.ts`, `tests/adjacency.test.ts`.
 
 ---
-4. [ ] NEW:
+4. [~] NEW:
 
 I want a Game Designer's tool for adjusting tags, rules, areas, difficulty, creating new content (tags, areas, enemies, npcs, etc.), adjusting various prompt instructions, etc. It should be frictionless to use, with user friendly design that makes it easy and understandable to use for a non-programmer. This means that information should be categorised clearly, dependencies should be marked clearly as well, and some automation should also be in place for more complex actions and dependency-fixes.
 
 UX Heuristics are key.
 Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
-   **RESEARCH & BRAINSTORM (task not started — no code changed).**
+   **IN PROGRESS — the low-risk tier is built; the high-risk automation is
+   still deliberately deferred.** What shipped this pass turns the existing
+   dev-only JSON editor (`src/editor/`) from schema-blind into schema-aware,
+   which is exactly the "dependencies marked clearly / error prevention &
+   recovery" ask, and adds no engine code — it only surfaces checks the engine
+   already runs. Nothing in the player-facing app or its build changed, so this
+   stays clear of the closed "no world editor / in-app editing" list per the
+   ingredients-vs-outcomes boundary in decisions-and-history.md.
+
+   - **Live validation, anchored to the field.** `src/editor/validation.ts` is
+     a thin adapter that feeds the editor's live, unsaved files back through the
+     engine's own `validateCampaign` (the same checker that runs at campaign
+     load). Every edit re-runs it, debounced. Each issue is stamped onto the
+     exact control it names — the renderer now threads the validator's own path
+     strings (`areas/town.json.roomTypes.taproom.tags[0]`) onto every input as a
+     `data-path`, so an unknown tag lights up a red badge and border on that
+     field, not just a console line. A new right-hand **issues sidebar** lists
+     every error/warning with its path and message, each row clickable to jump
+     to and flash the field; tabs whose file has an error go red.
+   - **Closed-vocabulary tag pickers.** Tag fields (`tags`, `areaTags`,
+     `excludeTags`, `requires`, `targetTags`, `kind`, `itemKind`) autocomplete
+     against a `<datalist>` rebuilt live from `tags.json` (85 tags today,
+     labelled by namespace), so a valid tag is offered rather than typed blind —
+     Nielsen's error-prevention heuristic applied at the input. `requires` rows
+     also carry an inline hint for the `!`/`|` operators.
+   - **Recovery.** A per-file **Revert** discards unsaved edits back to the
+     loaded copy, and **Save** now opens a **review-before-write diff** (a line
+     diff of exactly what will be written to disk) with Cancel/confirm, instead
+     of writing straight through on Ctrl+S. The editor still keeps `original`
+     vs `current` per file, so revert is free.
+
+   Verified: 378 tests pass incl. new `tests/editor-validation.test.ts` (path
+   bookkeeping + "clean base / broken-tag error" parity with the loader), and a
+   headless-Chromium smoke of the live UI (loads clean, datalist populated,
+   typing a bad tag raises inline badge + sidebar error, no console errors).
+
+   **Still deferred, on purpose (the parts that need a decision or are bigger):**
+   the **high-risk automation** — an auto-solver / auto-rebalancer /
+   auto-rename-everywhere — is untouched; per the research below and rule 11 it
+   needs a narrow, reversible, previewable spec before any of it is built (e.g.
+   "rename this tag" = find-every-use + diff + one confirm, never a general
+   solver). Schema-aware pickers are today limited to tag fields (the most
+   typo-prone); closed-list dropdowns for the other closed vocabularies (gambit
+   `when`, quest `place`/`completedBy`/rewards, ability `type`) are a natural
+   next increment on the same seam. Task 4B (layout templates + visual canvas)
+   remains sequenced after this, as it was always meant to be.
+
+   **RESEARCH & BRAINSTORM (original notes below — kept for the reasoning).**
 
    **Guiding principle, settled in conversation and recorded in
    decisions-and-history.md: the Designer tool edits ingredients, never

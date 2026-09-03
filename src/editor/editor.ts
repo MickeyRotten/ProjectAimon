@@ -7,9 +7,31 @@
  * arrays as editable lists — and writes edits back in place via the File
  * System Access API (PC Chromium only; read-only elsewhere).
  *
- * Deliberately dumb: no schema awareness, no undo, no diffing. The JSON is the
- * schema.
+ * It is no longer schema-blind. Three things sit on top of the generic renderer,
+ * all in service of a non-programmer editing content safely (TODO task 4):
+ *
+ *  - **Live validation.** Every edit re-runs the engine's own cross-reference
+ *    checker (`validateCampaign`, via `validation.ts`) over the unsaved files.
+ *    Each issue is anchored to the exact field it names — the renderer stamps a
+ *    `data-path` on every control matching the validator's own path strings —
+ *    and also listed in a sidebar. This is the "dependencies marked clearly /
+ *    error prevention" ask, using a checker that already existed.
+ *  - **Closed-vocabulary pickers.** Tag fields autocomplete against `tags.json`,
+ *    so a bad tag is hard to type in the first place rather than merely caught
+ *    after.
+ *  - **Recovery.** A per-file Revert discards unsaved edits back to the loaded
+ *    copy, and Save first shows a diff of exactly what will be written to disk.
  */
+
+import { TagVocabulary } from '../engine/tags';
+import type { Json } from '../campaign/merge';
+import {
+  issueBelongsTo,
+  pathIsUnder,
+  validateFiles,
+  type ValidationIssue,
+  type ValidationReport,
+} from './validation';
 
 // ---------------------------------------------------------------------------
 // File manifest
@@ -55,15 +77,15 @@ const CATEGORIES = [...new Set(FILES.map((f) => f.category))];
 // State
 // ---------------------------------------------------------------------------
 
-type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
 interface JsonRecord {
   [key: string]: Json;
 }
 
 /** File System Access API — not yet in the TS DOM lib. */
-interface Window {
-  showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
+declare global {
+  interface Window {
+    showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
+  }
 }
 
 const isJsonRecord = (value: Json): value is JsonRecord =>
@@ -82,8 +104,13 @@ const state = new Map<string, FileState>(); // by path
 let activeCategory = CATEGORIES[0]!;
 let activePath: string | null = null;
 
+/** Latest validation over the live files. Null until the first run finishes. */
+let report: ValidationReport | null = null;
+
 /** Directory handle for in-place writes; null until the user picks one. */
 let dirHandle: FileSystemDirectoryHandle | null = null;
+
+const TAGS_PATH = `${BASE}/tags.json`;
 
 const $ = <T extends HTMLElement>(sel: string): T => {
   const el = document.querySelector<T>(sel);
@@ -112,6 +139,34 @@ function isDirty(path: string): boolean {
   if (!file) return false;
   return JSON.stringify(file.current) !== JSON.stringify(file.original);
 }
+
+// ---------------------------------------------------------------------------
+// The tag vocabulary — drives autocomplete and the closed-vocabulary pickers.
+// ---------------------------------------------------------------------------
+
+let vocabulary = new TagVocabulary({});
+
+function rebuildVocabulary(): void {
+  const tags = state.get(TAGS_PATH)?.current;
+  vocabulary = new TagVocabulary(tags ?? {});
+  const datalist = $('#tag-vocab');
+  datalist.replaceChildren(
+    ...vocabulary.all().map((tag) => {
+      const option = document.createElement('option');
+      option.value = tag;
+      const ns = vocabulary.namespaceOf(tag);
+      if (ns) option.label = ns;
+      return option;
+    }),
+  );
+}
+
+/** Keys whose value is a bag of tags — a plain list, no operators. */
+const TAG_LIST_KEYS = new Set(['tags', 'areaTags', 'excludeTags']);
+/** Keys whose value is a `requires[]` — tags with `!` and `|` operators. */
+const REQUIRES_KEYS = new Set(['requires', 'targetTags']);
+/** Keys whose value is a single tag. */
+const SINGLE_TAG_KEYS = new Set(['kind', 'itemKind']);
 
 // ---------------------------------------------------------------------------
 // Saving — File System Access API
@@ -161,32 +216,36 @@ async function saveFile(path: string): Promise<void> {
     file.original = structuredClone(file.current);
     setStatus('ok', `saved ${path}`);
     renderTabs();
+    updateButtons();
   } catch (err) {
     setStatus('err', `save failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Renderer — generic JSON → controls
+// Renderer — generic JSON → controls, each stamped with its validator path
 // ---------------------------------------------------------------------------
-
-/** Long text fields get a textarea instead of a one-line input. */
-const PROSE_KEYS = new Set(['desc', 'baseDesc', 'note', '_note', 'template', 'personaTemplate', 'text']);
 
 function isRecordArray(value: Json): value is JsonRecord[] {
   return Array.isArray(value) && value.length > 0 && value.every(isJsonRecord);
 }
 
-function renderValue(value: Json, onChange: () => void): HTMLElement {
+/** Stamp a control with the validator path it lives at, so a badge can find it. */
+function stamp(el: HTMLElement, path: string): HTMLElement {
+  el.dataset['path'] = path;
+  return el;
+}
+
+function renderValue(value: Json, path: string, onChange: () => void): HTMLElement {
   if (typeof value === 'boolean') return renderCheckbox(value, onChange);
   if (typeof value === 'number') return renderNumber(value, onChange);
-  if (typeof value === 'string') return renderText(value, onChange, PROSE_KEYS.has('') || value.length > 80);
+  if (typeof value === 'string') return renderText(value, onChange, value.length > 80);
   if (value === null) return renderText('null', onChange, false);
   if (Array.isArray(value)) {
-    if (value.every((v) => typeof v === 'string')) return renderStringList(value, onChange);
-    return renderNested(value, onChange);
+    if (value.every((v) => typeof v === 'string')) return renderStringList(value, path, onChange);
+    return renderNested(value, path, onChange);
   }
-  return renderNested(value, onChange);
+  return renderNested(value, path, onChange);
 }
 
 function renderText(value: string, onChange: () => void, prose: boolean): HTMLElement {
@@ -200,6 +259,16 @@ function renderText(value: string, onChange: () => void, prose: boolean): HTMLEl
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value;
+  input.addEventListener('input', () => onChange());
+  return input;
+}
+
+/** A single-tag text input, autocompleting against the tag vocabulary. */
+function renderTagText(value: string, onChange: () => void): HTMLElement {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value;
+  input.setAttribute('list', 'tag-vocab');
   input.addEventListener('input', () => onChange());
   return input;
 }
@@ -237,17 +306,30 @@ function renderCsvCell(list: string[], onChange: () => void): HTMLElement {
   return input;
 }
 
-/** Editable list of strings — one input per item, add/remove buttons. */
-function renderStringList(list: string[], onChange: () => void): HTMLElement {
+/**
+ * Editable list of strings — one input per item, add/remove buttons. `tagKind`
+ * turns on tag-vocabulary autocomplete: `'tag'` for a plain tag, `'requires'`
+ * for a `requires[]` term (which may carry `!` / `|`, so it is not restricted,
+ * only assisted).
+ */
+function renderStringList(
+  list: string[],
+  path: string,
+  onChange: () => void,
+  tagKind?: 'tag' | 'requires',
+): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'strlist';
+  stamp(wrap, path);
   const rebuild = () => {
-    wrap.replaceChildren(...list.map((value, i) => {
+    const rows = list.map((value, i) => {
       const row = document.createElement('div');
       row.className = 'row';
+      stamp(row, `${path}[${i}]`);
       const input = document.createElement('input');
       input.type = 'text';
       input.value = value;
+      if (tagKind) input.setAttribute('list', 'tag-vocab');
       input.addEventListener('input', () => { list[i] = input.value; onChange(); });
       const del = document.createElement('button');
       del.textContent = '×';
@@ -255,21 +337,27 @@ function renderStringList(list: string[], onChange: () => void): HTMLElement {
       del.addEventListener('click', () => { list.splice(i, 1); onChange(); rerender(); });
       row.append(input, del);
       return row;
-    }));
+    });
+    const add = document.createElement('button');
+    add.textContent = '+ add';
+    add.addEventListener('click', () => { list.push(''); onChange(); rerender(); });
+    wrap.replaceChildren(...rows, add);
+    if (tagKind === 'requires') {
+      const hint = document.createElement('div');
+      hint.className = 'hint-inline';
+      hint.textContent = 'one tag per row · "!tag" excludes · "a|b" allows either';
+      wrap.append(hint);
+    }
   };
-  const add = document.createElement('button');
-  add.textContent = '+ add';
-  add.addEventListener('click', () => { list.push(''); onChange(); rerender(); });
-  wrap.append(...(list.length ? [] : [document.createTextNode('')]));
   rebuild();
-  wrap.append(add);
   return wrap;
 }
 
 /** Collapsible section for objects and non-string arrays. */
-function renderNested(obj: Json, onChange: () => void): HTMLElement {
+function renderNested(obj: Json, path: string, onChange: () => void): HTMLElement {
   const section = document.createElement('div');
   section.className = 'section';
+  stamp(section, path);
   const head = document.createElement('div');
   head.className = 'head';
   head.innerHTML = '<span class="chev">▼</span>';
@@ -285,7 +373,8 @@ function renderNested(obj: Json, onChange: () => void): HTMLElement {
       kv.append(span('key', `[${i}]`));
       const val = document.createElement('div');
       val.className = 'val';
-      val.append(renderValue(item, onChange));
+      stamp(val, `${path}[${i}]`);
+      val.append(renderValue(item, `${path}[${i}]`, onChange));
       kv.append(val);
       body.append(kv);
     });
@@ -294,20 +383,28 @@ function renderNested(obj: Json, onChange: () => void): HTMLElement {
     const keys = Object.keys(record);
     head.append(span('key', `{${keys.length} keys}`));
     for (const key of keys) {
+      const childPath = `${path}.${key}`;
       const kv = document.createElement('div');
       kv.className = 'kv';
       kv.append(span('key', key));
       const val = document.createElement('div');
       val.className = 'val';
+      stamp(val, childPath);
       const child = record[key]!;
       if (isRecordArray(child)) {
-        val.append(renderTable(child, onChange, key));
+        val.append(renderTable(child, childPath, onChange, key));
       } else if (Array.isArray(child) && child.every((v) => typeof v === 'string')) {
-        val.append(renderStringList(child as string[], onChange));
+        const kind = TAG_LIST_KEYS.has(key) ? 'tag' : REQUIRES_KEYS.has(key) ? 'requires' : undefined;
+        val.append(renderStringList(child as string[], childPath, onChange, kind));
       } else if (typeof child === 'object' && child !== null) {
-        val.append(renderNested(child, onChange));
+        val.append(renderNested(child, childPath, onChange));
+      } else if (typeof child === 'string' && SINGLE_TAG_KEYS.has(key)) {
+        val.append(renderTagText(child, () => {
+          const input = val.querySelector('input');
+          if (input) { record[key] = input.value; onChange(); }
+        }));
       } else {
-        val.append(renderValue(child, onChange));
+        val.append(renderValue(child, childPath, onChange));
       }
       kv.append(val);
       body.append(kv);
@@ -321,8 +418,14 @@ function renderNested(obj: Json, onChange: () => void): HTMLElement {
  * Array of records → table. Columns are the union of keys across records;
  * new rows get every column. Duplicate `id` values are flagged.
  */
-function renderTable(rows: Record<string, Json>[], onChange: () => void, label: string): HTMLElement {
+function renderTable(
+  rows: Record<string, Json>[],
+  path: string,
+  onChange: () => void,
+  label: string,
+): HTMLElement {
   const wrap = document.createElement('div');
+  stamp(wrap, path);
 
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   const idCol = columns.includes('id') ? 'id' : null;
@@ -353,6 +456,7 @@ function renderTable(rows: Record<string, Json>[], onChange: () => void, label: 
       if (idCol && dupIds.has(String(row[idCol] ?? ''))) tr.classList.add('dup');
       for (const col of columns) {
         const td = document.createElement('td');
+        stamp(td, `${path}[${rowIndex}].${col}`);
         const value = row[col];
         if (typeof value === 'number') td.className = 'num';
         if (typeof value === 'boolean') td.className = 'bool';
@@ -371,10 +475,16 @@ function renderTable(rows: Record<string, Json>[], onChange: () => void, label: 
             });
             td.append(input);
           }
+        } else if (typeof value === 'string' && SINGLE_TAG_KEYS.has(col)) {
+          const input = renderTagText(value, () => {
+            const control = td.querySelector('input');
+            if (control) { row[col] = control.value; onChange(); }
+          });
+          td.append(input);
         } else {
           const cell = value as string | number | boolean;
           td.append(
-            renderValue(cell, () => {
+            renderValue(cell, `${path}[${rowIndex}].${col}`, () => {
               // Read the control's live value back into the record.
               const control = td.firstElementChild as HTMLInputElement | null;
               if (!control) return;
@@ -434,6 +544,158 @@ function th(text: string): HTMLElement {
 }
 
 // ---------------------------------------------------------------------------
+// Validation — the engine's own checker, run live over the unsaved files
+// ---------------------------------------------------------------------------
+
+let validateTimer: number | undefined;
+
+/** Debounced: rebuild the vocabulary, re-run the validator, repaint the issues. */
+function scheduleValidate(): void {
+  window.clearTimeout(validateTimer);
+  validateTimer = window.setTimeout(() => void runValidate(), 200);
+}
+
+async function runValidate(): Promise<void> {
+  rebuildVocabulary();
+  const files = new Map<string, Json>();
+  for (const [path, file] of state) files.set(path, file.current);
+  try {
+    report = await validateFiles(files);
+  } catch (err) {
+    // A validator crash must never take the editor down — show it and carry on.
+    setStatus('err', `validation failed: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  paintIssues();
+  renderSidebar();
+}
+
+/** Attach a badge to the most specific control each issue names. */
+function paintIssues(): void {
+  const editor = $('#editor');
+  editor.querySelectorAll('.issue-badge').forEach((el) => el.remove());
+  editor.querySelectorAll('[data-path]').forEach((el) => {
+    el.classList.remove('has-error', 'has-warning');
+  });
+  if (!report || !activePath) return;
+
+  const root = state.get(activePath)?.entry.path;
+  if (!root) return;
+  const mine = [...report.errors, ...report.warnings].filter((i) => issueBelongsTo(i, root));
+
+  // Longest data-path first, so a badge lands on the innermost matching field.
+  const anchors = [...editor.querySelectorAll<HTMLElement>('[data-path]')].sort(
+    (a, b) => (b.dataset['path']?.length ?? 0) - (a.dataset['path']?.length ?? 0),
+  );
+  for (const issue of mine) {
+    const host = anchors.find((el) => pathIsUnder(issue.path, el.dataset['path'] ?? '\0'));
+    if (host) attachBadge(host, issue);
+  }
+}
+
+function attachBadge(host: HTMLElement, issue: ValidationIssue): void {
+  host.classList.add(issue.level === 'error' ? 'has-error' : 'has-warning');
+  const badge = document.createElement('span');
+  badge.className = `issue-badge ${issue.level}`;
+  badge.textContent = issue.level === 'error' ? '✕' : '!';
+  badge.title = issue.message;
+  // Sit the badge on the field's row where possible, not deep inside a table.
+  const anchor = host.closest('td, .row, .val, .section') ?? host;
+  anchor.prepend(badge);
+}
+
+// ---------------------------------------------------------------------------
+// Issues sidebar
+// ---------------------------------------------------------------------------
+
+function renderSidebar(): void {
+  const aside = $('#issues');
+  aside.replaceChildren();
+
+  const head = document.createElement('div');
+  head.className = 'issues-head';
+  if (!report) {
+    head.textContent = 'validating…';
+    aside.append(head);
+    return;
+  }
+  const errs = report.errors.length;
+  const warns = report.warnings.length;
+  head.append(span('title', 'Validation'));
+  head.append(pill('errs', `${errs} error${errs === 1 ? '' : 's'}`, errs > 0));
+  head.append(pill('warns', `${warns} warning${warns === 1 ? '' : 's'}`, warns > 0));
+  aside.append(head);
+
+  if (errs === 0 && warns === 0) {
+    const ok = document.createElement('div');
+    ok.className = 'issues-clean';
+    ok.textContent = '✓ everything cross-references';
+    aside.append(ok);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'issues-list';
+  for (const issue of [...report.errors, ...report.warnings]) {
+    list.append(issueRow(issue));
+  }
+  aside.append(list);
+}
+
+function issueRow(issue: ValidationIssue): HTMLElement {
+  const row = document.createElement('div');
+  row.className = `issue ${issue.level}`;
+  const path = document.createElement('div');
+  path.className = 'issue-path';
+  path.textContent = issue.path;
+  const msg = document.createElement('div');
+  msg.className = 'issue-msg';
+  msg.textContent = issue.message;
+  row.append(path, msg);
+  const owner = fileOwning(issue);
+  if (owner) {
+    row.classList.add('clickable');
+    row.addEventListener('click', () => void jumpToIssue(owner, issue));
+  }
+  return row;
+}
+
+/** The editor file whose issue-root this issue path falls under. */
+function fileOwning(issue: ValidationIssue): FileEntry | undefined {
+  return FILES.find((entry) => issueBelongsTo(issue, entry.path));
+}
+
+async function jumpToIssue(entry: FileEntry, issue: ValidationIssue): Promise<void> {
+  if (activePath !== entry.path) {
+    await openFile(entry.path);
+  }
+  const editor = $('#editor');
+  const anchors = [...editor.querySelectorAll<HTMLElement>('[data-path]')].sort(
+    (a, b) => (b.dataset['path']?.length ?? 0) - (a.dataset['path']?.length ?? 0),
+  );
+  const host = anchors.find((el) => pathIsUnder(issue.path, el.dataset['path'] ?? '\0'));
+  const target = host?.closest('td, .row, .val, .section') ?? host;
+  if (target) {
+    // Open any collapsed ancestor sections so the field is actually visible.
+    let node: HTMLElement | null = target as HTMLElement;
+    while (node) {
+      if (node.classList.contains('section')) node.classList.remove('collapsed');
+      node = node.parentElement;
+    }
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target.classList.add('flash');
+    window.setTimeout(() => target.classList.remove('flash'), 1200);
+  }
+}
+
+function pill(cls: string, text: string, live: boolean): HTMLElement {
+  const el = document.createElement('span');
+  el.className = `pill ${cls}` + (live ? ' live' : '');
+  el.textContent = text;
+  return el;
+}
+
+// ---------------------------------------------------------------------------
 // Tabs and file view
 // ---------------------------------------------------------------------------
 
@@ -444,6 +706,7 @@ function renderTabs(): void {
     const tab = document.createElement('div');
     tab.className = 'tab' + (category === activeCategory ? ' active' : '');
     tab.textContent = category;
+    if (categoryHasError(category)) tab.classList.add('has-error');
     tab.addEventListener('click', () => {
       activeCategory = category;
       const first = FILES.find((f) => f.category === category);
@@ -460,11 +723,22 @@ function renderTabs(): void {
       const tab = document.createElement('div');
       tab.className = 'tab sub' + (file.path === activePath ? ' active' : '');
       if (isDirty(file.path)) tab.classList.add('dirty');
+      if (fileHasError(file.path)) tab.classList.add('has-error');
       tab.textContent = file.label;
       tab.addEventListener('click', () => void openFile(file.path));
       subtabs.append(tab);
     }
   }
+}
+
+function fileHasError(path: string): boolean {
+  if (!report) return false;
+  const entry = FILES.find((f) => f.path === path);
+  return entry ? report.errors.some((i) => issueBelongsTo(i, entry.path)) : false;
+}
+
+function categoryHasError(category: string): boolean {
+  return FILES.some((f) => f.category === category && fileHasError(f.path));
 }
 
 async function openFile(path: string): Promise<void> {
@@ -483,6 +757,7 @@ async function openFile(path: string): Promise<void> {
   renderTabs();
   renderFile();
   updateButtons();
+  paintIssues();
   setStatus('ok', path);
 }
 
@@ -493,29 +768,39 @@ function renderFile(): void {
   const file = state.get(activePath);
   if (!file) return;
 
+  const rootPath = issueRootFor(file.entry);
   const markDirty = () => {
     renderTabs();
     updateButtons();
+    scheduleValidate();
   };
   const root = file.current;
   if (isRecordArray(root)) {
-    editor.append(renderTable(root, markDirty, file.entry.label));
+    editor.append(renderTable(root, rootPath, markDirty, file.entry.label));
   } else if (typeof root === 'object' && root !== null) {
-    editor.append(renderNested(root, markDirty));
+    editor.append(renderNested(root, rootPath, markDirty));
   } else {
-    editor.append(renderValue(root, markDirty));
+    editor.append(renderValue(root, rootPath, markDirty));
   }
+}
+
+/** The prefix the validator roots this file's issue paths at. */
+function issueRootFor(entry: FileEntry): string {
+  return entry.path.startsWith(`${BASE}/`) ? entry.path.slice(`${BASE}/`.length) : entry.path;
 }
 
 /** Full re-render after structural changes (add/delete row, list item). */
 function rerender(): void {
   renderFile();
   updateButtons();
+  paintIssues();
+  scheduleValidate();
 }
 
 function updateButtons(): void {
   const dirty = activePath !== null && isDirty(activePath);
   ($('#save') as HTMLButtonElement).disabled = !dirty;
+  ($('#revert') as HTMLButtonElement).disabled = !dirty;
   ($('#reload') as HTMLButtonElement).disabled = activePath === null;
 }
 
@@ -526,24 +811,157 @@ function setStatus(kind: 'ok' | 'warn' | 'err', message: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Recovery — revert, and a diff review before every write
+// ---------------------------------------------------------------------------
+
+function revertFile(path: string): void {
+  const file = state.get(path);
+  if (!file || !isDirty(path)) return;
+  file.current = structuredClone(file.original);
+  renderFile();
+  updateButtons();
+  renderTabs();
+  setStatus('warn', `reverted ${path} — unsaved edits discarded`);
+  scheduleValidate();
+}
+
+/** One line of a diff between the on-disk copy and the edited copy. */
+interface DiffLine {
+  kind: ' ' | '+' | '-';
+  text: string;
+}
+
+/** A minimal line diff over the pretty-printed JSON — enough to review a write. */
+function diffLines(before: string[], after: string[]): DiffLine[] {
+  const n = before.length;
+  const m = after.length;
+  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i]![j] = before[i] === after[j]
+        ? lcs[i + 1]![j + 1]! + 1
+        : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+    }
+  }
+  const out: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (before[i] === after[j]) {
+      out.push({ kind: ' ', text: before[i]! });
+      i++; j++;
+    } else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) {
+      out.push({ kind: '-', text: before[i]! });
+      i++;
+    } else {
+      out.push({ kind: '+', text: after[j]! });
+      j++;
+    }
+  }
+  while (i < n) out.push({ kind: '-', text: before[i++]! });
+  while (j < m) out.push({ kind: '+', text: after[j++]! });
+  return out;
+}
+
+/** Show the diff for a file and resolve true if the user confirms the write. */
+function reviewChanges(path: string): Promise<boolean> {
+  const file = state.get(path);
+  return new Promise((resolve) => {
+    if (!file) return resolve(false);
+    const before = JSON.stringify(file.original, null, 2).split('\n');
+    const after = JSON.stringify(file.current, null, 2).split('\n');
+    const lines = diffLines(before, after).filter((l, idx, all) => {
+      // Trim long runs of unchanged context to keep the review readable.
+      if (l.kind !== ' ') return true;
+      const near = (k: number) => all[k] && all[k]!.kind !== ' ';
+      return near(idx - 1) || near(idx - 2) || near(idx + 1) || near(idx + 2);
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    const added = lines.filter((l) => l.kind === '+').length;
+    const removed = lines.filter((l) => l.kind === '-').length;
+    title.textContent = `Write ${path}?  (+${added} / −${removed} lines)`;
+    const pre = document.createElement('pre');
+    pre.className = 'diff';
+    let lastContext = false;
+    for (const line of lines) {
+      if (line.kind === ' ' && !lastContext) {
+        // A break marker between separated change regions.
+      }
+      lastContext = line.kind === ' ';
+      const div = document.createElement('div');
+      div.className = `dl ${line.kind === '+' ? 'add' : line.kind === '-' ? 'del' : 'ctx'}`;
+      div.textContent = `${line.kind} ${line.text}`;
+      pre.append(div);
+    }
+    if (added === 0 && removed === 0) {
+      pre.append(Object.assign(document.createElement('div'), { className: 'dl ctx', textContent: '(no changes)' }));
+    }
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel';
+    const confirm = document.createElement('button');
+    confirm.textContent = 'Write to disk';
+    confirm.className = 'primary';
+    const close = (ok: boolean) => { overlay.remove(); resolve(ok); };
+    cancel.addEventListener('click', () => close(false));
+    confirm.addEventListener('click', () => close(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    actions.append(cancel, confirm);
+    modal.append(title, pre, actions);
+    overlay.append(modal);
+    document.body.append(overlay);
+  });
+}
+
+async function saveWithReview(path: string): Promise<void> {
+  if (!isDirty(path)) return;
+  const ok = await reviewChanges(path);
+  if (ok) await saveFile(path);
+}
+
+// ---------------------------------------------------------------------------
 // Wire-up
 // ---------------------------------------------------------------------------
 
 $('#pick-dir').addEventListener('click', () => void pickDirectory());
-$('#save').addEventListener('click', () => { if (activePath) void saveFile(activePath); });
+$('#save').addEventListener('click', () => { if (activePath) void saveWithReview(activePath); });
+$('#revert').addEventListener('click', () => { if (activePath) revertFile(activePath); });
 $('#reload').addEventListener('click', () => {
   if (!activePath) return;
   const file = state.get(activePath);
   if (!file) return;
   state.delete(activePath);
-  void openFile(activePath);
+  void openFile(activePath).then(() => scheduleValidate());
   setStatus('warn', `reloaded ${activePath} — local edits discarded`);
 });
 document.addEventListener('keydown', (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === 's') {
     event.preventDefault();
-    if (activePath && isDirty(activePath)) void saveFile(activePath);
+    if (activePath && isDirty(activePath)) void saveWithReview(activePath);
   }
 });
 
-void openFile(FILES[0]!.path);
+/**
+ * Boot: load every file up front (validation is whole-campaign — it cannot
+ * check cross-references it has not loaded), then open the first tab and run the
+ * first validation pass.
+ */
+async function boot(): Promise<void> {
+  setStatus('ok', 'loading all tables…');
+  const results = await Promise.allSettled(FILES.map(loadFile));
+  const failed = results
+    .map((r, i) => (r.status === 'rejected' ? FILES[i]!.label : null))
+    .filter((x): x is string => x !== null);
+  if (failed.length) setStatus('warn', `some files failed to load: ${failed.join(', ')}`);
+  await openFile(FILES[0]!.path);
+  await runValidate();
+}
+
+void boot();
