@@ -10,9 +10,15 @@ Presence route with break-by-friendliness, the ability/gambit/primer/stance
 engine, crits and fumbles, skill growth, and the corpse run. The game is walkable,
 has work to do in it, and fights back. Step 7, the Narrator, **is built**:
 **part one** — the OpenRouter client, on-device settings with the two model
-slots, and the room narrator (two-layer descriptions: batch-generated
-`baseDesc` plus the content-signature-cached woven render), degrading to
-placeholder text whenever there is no key. **Part two** — the Tier 2/3 input
+slots, and the room narrator: one batch call per area, the first time it is
+entered, writes every room's permanent `baseDesc` and the area's name in a
+single pass — so the rooms read as one place and none pops in as the player
+walks them. The Hub ships hand-authored descriptions and so makes no call at
+all. Current contents (an NPC, a dropped sword) are not woven into the prose;
+they change turn to turn, so the screen lists them mechanically in a `Here: …`
+line beside the description. Entering a new area holds the reveal behind a
+full-screen loader over that one call. All of it degrades to placeholder text
+whenever there is no key. **Part two** — the Tier 2/3 input
 side, NPC voicing and outcome narration — is built over the same seam: a
 translator that re-enters the deterministic parser once before falling to a
 Tier 2 classifier (engine-validated, engine-picks-the-effect) and then to
@@ -183,8 +189,9 @@ tables; the engine must produce the same shapes.
 - **Conversation** — one partner at a time, opened by the talk verbs and closed
   by leaving, a fight, a farewell or addressing someone else; while open, a
   single router call decides command vs. attempt vs. speech
-- NPC appearance on EXAMINE: LLM-narrated physique and outfit, same two-layer
-  scheme as room description, grounded in what the NPC actually wears/wields
+- NPC appearance on EXAMINE: LLM-narrated physique and outfit, generated once
+  and rechecked against the transcript, grounded in what the NPC actually
+  wears/wields
 - Grid map derived from the room graph — CSS squares and connectors, a
   frontier ring of `?` cells for rooms known through a connection but not yet
   entered, gate markers for ways out, per-floor with a `Saltmere (F1)` label.

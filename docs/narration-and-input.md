@@ -487,76 +487,61 @@ turns played.
 
 ---
 
-## Room descriptions — two layers
+## Room descriptions — one layer, one call per area
 
-Contents used to be listed by code beneath a frozen description, which reads
-exactly as machine-made as it is: *"You see: a rusted sword, a chest, a corpse."*
-Instead, the narrator is **given** the contents as data and writes them into the
-prose properly.
+There is a single stored description per room, **`baseDesc`** — architecture,
+light, smell, wear, mood. It never names contents. It is the stable spine that
+keeps a room recognisable as the same place across every state it passes
+through, and it is written once and never regenerated.
 
-### The two layers
+An earlier design added a second **woven render** — `baseDesc` plus the room's
+current contents, written fresh per room and cached by a content signature — so
+a dropped sword could be folded into the prose. It was removed: it meant a fresh
+LLM call on entering each room, which the player saw as the description "popping
+in" a second or two after arrival, and in the Hub it rewrote perfectly good
+hand-authored lines into longer generated ones. The trade it bought (live
+contents inside the paragraph) was not worth the pop-in or the per-room cost.
 
-**`baseDesc`** — architecture, light, smell, wear, mood. Written once when the
-area is generated, never regenerated. **It never names contents.** This is the
-stable spine that keeps a room recognisable as the same place across every state
-it passes through.
+### Where the pieces show now
 
-**The woven render** — `baseDesc` plus the room's current contents, written as
-one paragraph. This is what the player reads.
+- **The description lives in the top pane.** `baseDesc` for the room, plus a
+  plain `Here: …` line for whatever is standing in it right now. Contents change
+  turn to turn, so they are **listed mechanically**, not woven — the same list
+  `viewRoom` already builds.
+- **The rolling log does not repeat it.** Walking into a room prints only the
+  room name and the `Here: …` arrival line. `LOOK` still prints the full
+  description into the log on demand — the deliberate "re-read".
 
-### Cached by content signature, not by visit
+### Base descriptions are batch-generated, one call per area
 
-```
-key = roomId + hash(baseDesc) + sorted(notable content ids)
-```
+The first time an area is entered, **one call** writes a `baseDesc` (and name)
+for every room in it that does not already have one, plus the area's own name.
+Each room gets two sentences from its seed, tags and theme tokens, and the model
+sees the whole area at once, so the rooms read as one place rather than fifteen
+unrelated ones.
 
-| Event | Cost |
-|---|---|
-| First entry | one call, cached |
-| Return, nothing changed | free, and **identical prose** |
-| Return after taking the sword | key changed → one call, cached |
-| Drop the sword back | free — the earlier key matches again |
+Because the whole area is written in that one pass, walking deeper into it costs
+**nothing** — every room already has its description on its record. The Hub
+ships hand-authored `baseDesc` and names in `campaign.json`, so nothing there is
+pending and the batch makes no call at all.
 
-**Cost scales with the number of distinct content states, not with visits.** Most
-rooms only ever see two or three: full, looted, repopulated. So this is roughly
-2× the calls of a frozen description, not 20×.
+Entering a new area holds the reveal behind a **full-screen loader** (status
+text and a staged progress bar) over that one call, so the player is briefly at
+the threshold rather than dropped into rooms whose text then pops in. A lone
+OpenRouter call is opaque (no token streaming), so the bar moves through named
+stages rather than a true percentage.
 
-It also removes prose drift entirely. Same room, same contents, same words —
-because it is the same cache entry. Capped at 8 renders per room, evicted
-least-recently-used.
+### With no key, the placeholder stands
 
-**Notable** means anything that should change the prose: takeable items,
-creatures, NPCs, and door open/closed state. Not scenery, not the contents of a
-closed container. Otherwise the key churns and regenerates for nothing.
+A failed or absent call leaves `baseDesc` empty; `viewRoom` builds a truthful
+structural placeholder from the room's type, tags and scenery. The game is
+always playable without a narrator.
 
-### Base descriptions are batch-generated
+### This still honours audit decision Q1
 
-All of an area's rooms in **one call** at area creation, each getting two
-sentences from its seed, tags and theme tokens.
-
-Cheaper than fifteen lazy per-room calls, and the model sees the whole area at
-once, so the rooms read as one place rather than fifteen unrelated ones. It
-trades away lazy generation, but area creation is already a moment where the
-player expects a beat.
-
-### Validation flips direction
-
-The old check rejected a description that named an object. The new one rejects a
-render naming an object **that is not there** — a hallucination check, and an
-easy one, because the content list was supplied in the prompt.
-
-**Match against each object's `nouns[]` and `adjectives[]`, not its display
-name.** "The blade" is a legal way to write "masterwork iron broadsword", and
-strict name matching would reject it and fire a pointless repair call. Those
-fields already exist for the parser, so validation and parsing stay in sync for
-free — no separate alias list to drift.
-
-### This revises audit decision Q1
-
-Q1=A said descriptions must never mention contents. That still holds for
-`baseDesc`. The **woven render** always mentions them, from the actual records.
-Same problem, better solution: the desync is fixed by giving the narrator the
-truth rather than by forbidding it the subject.
+Q1=A said descriptions must never mention contents. `baseDesc` never does.
+Contents appear beside it in the mechanical `Here: …` line, drawn straight from
+the records — the truth, kept out of the prose the model writes.
 
 
 ---
@@ -567,12 +552,11 @@ The narrator's fourth job: `EXAMINE <npc>` prints the mechanical name and
 hostile/friendly lines immediately, then waits on one appearance line, which
 replaces the old mechanical persona sentence rather than following it —
 showing both would mean the player reads a throwaway procedural line and
-then the real prose right after it, every single time. Unlike room
-description, this is **not** a two-layer scheme: there is one stored
+then the real prose right after it, every single time. There is one stored
 `description` per NPC, and what triggers a regeneration is a judgment call
-over what has been narrated since it was last checked, not a deterministic
-content signature. Room description is unaffected by any of this — see
-above.
+over what has been narrated since it was last checked. Unlike a room's
+`baseDesc`, which is written once and never regenerated, an NPC's appearance
+can be rewritten when the transcript says it should be.
 
 ### Generated once, rechecked, never blindly regenerated
 
@@ -628,11 +612,11 @@ read once, as the seed for `description`, and never written again — no
 regeneration, per the rule that loading a save never regenerates anything it
 already contains.
 
-### Grounding, the same way the woven room render is grounded
+### Grounding in what the NPC actually wears
 
 The prompt must mention every currently worn or carried item and invent no
-equipment beyond it — the identical rule `room-render.md` applies to room
-contents. Physique and mood are otherwise invented freely, the same latitude
+equipment beyond it — the model is told what the NPC has, and describes that,
+never more. Physique and mood are otherwise invented freely, the same latitude
 a room's `baseDesc` has.
 
 ### The one follow-up that blocks input

@@ -14,7 +14,7 @@
 import type { Line, LineKind } from '../game/commands';
 import type { Game } from '../game/game';
 import { mapModel, type MapModel } from '../world/map';
-import { viewRoom } from '../game/describe';
+import { sentenceList, viewRoom } from '../game/describe';
 
 const CLASSES: Record<LineKind, string> = {
   plain: 'b',
@@ -92,14 +92,15 @@ export interface Screen {
   printPending(line: Line): PendingLine;
   refresh(game: Game): void;
   focus(): void;
-  /** Show the narrator's name and woven prose for a room, until the room changes. */
-  setRoomProse(roomId: string, name: string, prose: string): void;
   /**
-   * Show a bouncing pending label in the room panel while the room's prose is
-   * being generated — the "Generating new area" beat when crossing a gate.
-   * Replaced by the next `setRoomProse` or `refresh`.
+   * The full-screen "entering a new area" loader, shown over the one batch call
+   * that writes the area's descriptions so nothing pops in. `showAreaLoader`
+   * reveals it, `setAreaLoaderStage` advances the bar and status text, and
+   * `hideAreaLoader` dismisses it.
    */
-  setRoomPending(roomId: string, label: string): void;
+  showAreaLoader(title: string): void;
+  setAreaLoaderStage(pct: number, status: string): void;
+  hideAreaLoader(): void;
   /** Open the full-floor map overlay for the given model (or an empty state). */
   showMapOverlay(model: MapModel | undefined): void;
   /** Lock or unlock input while an LLM call for the current turn is in flight. */
@@ -158,6 +159,13 @@ export function mountScreen(
           <span><i class="mswatch area-gate"></i> area gate</span>
         </div>
       </div>
+    </div>
+    <div class="area-loader" id="arealoader" role="status" aria-live="polite" hidden>
+      <div class="area-loader-panel">
+        <p class="area-loader-title" id="loadtitle"></p>
+        <div class="area-loader-track"><div class="area-loader-bar" id="loadbar"></div></div>
+        <p class="area-loader-status" id="loadstatus"></p>
+      </div>
     </div>`;
 
   const log = root.querySelector('#log') as HTMLElement;
@@ -168,10 +176,6 @@ export function mountScreen(
   // True while an LLM call for the current turn is in flight. Blocks new
   // input so a second command can't land while the first is still resolving.
   let busy = false;
-  // The narrator's render for the room the player is in. Held so a refresh does
-  // not overwrite good prose with the structural placeholder every turn; it is
-  // cleared implicitly by moving, when the room id no longer matches.
-  let prose: { roomId: string; name: string; text: string } | undefined;
 
   const print = (lines: readonly Line[]): void => {
     for (const line of lines) {
@@ -224,13 +228,15 @@ export function mountScreen(
     ].join('   ');
 
     const view = viewRoom(game.world, game.room);
-    // Narrator prose wins while it is for this room; otherwise the structural
-    // placeholder stands, which is also what shows before narration arrives.
-    const showProse = prose && prose.roomId === game.room.id && !view.dark;
+    // The top pane is the one place the description lives: the room's baseDesc
+    // (authored for the Hub, batch-generated for the rest, or the structural
+    // placeholder until then), plus a plain line for whatever is standing here
+    // now. Contents change turn to turn, so they are listed rather than woven.
+    const here = !view.dark && view.contents.length > 0 ? ` Here: ${sentenceList(view.contents)}.` : '';
     const rdesc = root.querySelector('#rdesc') as HTMLElement;
     rdesc.className = 'rdesc'; // clear any bouncing pending state
-    (root.querySelector('#rname') as HTMLElement).textContent = showProse ? prose!.name : view.name;
-    rdesc.textContent = showProse ? prose!.text : view.desc;
+    (root.querySelector('#rname') as HTMLElement).textContent = view.name;
+    rdesc.textContent = `${view.desc}${here}`;
     renderMap(game);
   };
 
@@ -323,24 +329,24 @@ export function mountScreen(
     (root.querySelector('#mappanel') as HTMLElement).focus();
   };
 
-  const setRoomProse = (roomId: string, name: string, text: string): void => {
-    prose = { roomId, name, text };
-    (root.querySelector('#rname') as HTMLElement).textContent = name;
-    const rdesc = root.querySelector('#rdesc') as HTMLElement;
-    rdesc.className = 'rdesc'; // clears any bouncing pending state
-    rdesc.textContent = text;
+  // The full-screen "entering a new area" loader. It sits over the single batch
+  // call that writes the area's descriptions, so the player is briefly at the
+  // threshold rather than dropped into blank rooms that then pop in. A lone
+  // OpenRouter call is opaque, so the bar moves through named stages rather than
+  // a true percentage — enough to read as progress.
+  const loader = root.querySelector('#arealoader') as HTMLElement;
+  const loadBar = root.querySelector('#loadbar') as HTMLElement;
+  const setAreaLoaderStage = (pct: number, status: string): void => {
+    loadBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    (root.querySelector('#loadstatus') as HTMLElement).textContent = status;
   };
-
-  /**
-   * The "Generating new area" beat: a bouncing label in the room panel while
-   * the crossed-into area's prose is written. Dropping the held prose means the
-   * next refresh won't flash stale text back over the loader.
-   */
-  const setRoomPending = (_roomId: string, label: string): void => {
-    prose = undefined;
-    const rdesc = root.querySelector('#rdesc') as HTMLElement;
-    rdesc.className = 'rdesc pending';
-    bounceInto(rdesc, label);
+  const showAreaLoader = (title: string): void => {
+    (root.querySelector('#loadtitle') as HTMLElement).textContent = title;
+    setAreaLoaderStage(10, 'Mapping the area…');
+    loader.hidden = false;
+  };
+  const hideAreaLoader = (): void => {
+    loader.hidden = true;
   };
 
   const setBusy = (active: boolean): void => {
@@ -350,5 +356,15 @@ export function mountScreen(
     prompt.classList.toggle('busy', active);
   };
 
-  return { print, printPending, refresh, focus: () => input.focus(), setRoomProse, setRoomPending, showMapOverlay, setBusy };
+  return {
+    print,
+    printPending,
+    refresh,
+    focus: () => input.focus(),
+    showAreaLoader,
+    setAreaLoaderStage,
+    hideAreaLoader,
+    showMapOverlay,
+    setBusy,
+  };
 }

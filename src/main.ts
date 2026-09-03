@@ -161,7 +161,7 @@ async function boot(): Promise<void> {
   if (!settings.apiKey) {
     screen.print([line('No narrator yet — open ⚙ to add an OpenRouter key. The world plays without one.', 'rule')]);
   }
-  screen.print(game.describeHere(true));
+  screen.print(game.describeHere(false));
   screen.refresh(game);
   screen.focus();
   void narrateHere();
@@ -229,16 +229,33 @@ async function boot(): Promise<void> {
   }
 
   /**
-   * The "Generating new area" beat. The area's structure is already generated
-   * (that happened synchronously on the gate crossing); this waits only on its
-   * prose. Input locks for the wait via `track`, and the closing `refresh`
-   * reveals the room whether the prose landed (shown by `setRoomProse`) or the
-   * call failed (falls back to the structural text), so the loader never sticks.
+   * The "entering a new area" beat. The area's structure is already generated
+   * (that happened synchronously on the gate crossing); this waits only on the
+   * one batch call that writes every room's description, behind a full-screen
+   * loader so nothing pops in as the player then walks the area. Input locks for
+   * the wait via `track`; the loader always lifts and the closing `refresh`
+   * reveals the room whether the batch landed or failed (the structural text
+   * stands in that case), so the loader never sticks.
    */
   async function enterArea(): Promise<void> {
-    screen.setRoomPending(game.room.id, 'Generating new area');
-    await track(narrateHere());
+    if (!narrator) return;
+    const room = game.room;
+    const area = game.world.areas.get(room.areaId);
+    screen.showAreaLoader(area?.name ?? room.areaId);
+    screen.setAreaLoaderStage(60, 'Writing descriptions…');
+    try {
+      // The whole area's descriptions in one batch, behind the loader — so no
+      // room pops in as the player walks it. The Hub and any already-written
+      // area make no call and this returns at once.
+      await track(narrator.ensureArea(game.world, room));
+    } catch {
+      // A failed batch leaves the structural placeholder; the loader still lifts.
+    }
+    screen.setAreaLoaderStage(100, 'Arriving');
+    screen.hideAreaLoader();
+    if (game.room.id !== room.id) return; // moved on before the batch landed
     screen.refresh(game);
+    await store.put(recordOf(game, 'auto', 'autosave'));
   }
 
   /**
@@ -367,20 +384,21 @@ async function boot(): Promise<void> {
   }
 
   /**
-   * Ask the narrator to describe the room the player is in, and show it. Never
-   * blocks the turn loop; captures the room first and drops the result if the
-   * player has moved on by the time prose comes back. A baseDesc written on
-   * first entry is persisted, so it is generated once and never again.
+   * Make sure the area the player is in has been described, then refresh the top
+   * pane from the records. For an ordinary move this is a no-op — the whole area
+   * was batched behind the loader on entry (`enterArea`), so the room's baseDesc
+   * is already on its record. It still earns its place at boot and after a key is
+   * added: an area whose descriptions were never written (no key at the time)
+   * gets its one batch here without a loader. Never blocks the turn loop; drops
+   * the refresh if the player has moved on by the time the batch lands.
    */
   async function narrateHere(): Promise<void> {
     if (!narrator) return;
     const room = game.room;
     try {
-      const rendered = await narrator.describe(game.world, room);
-      if (!rendered) return;
+      await narrator.ensureArea(game.world, room);
       if (game.room.id !== room.id) return; // moved while we waited
-      screen.setRoomProse(room.id, rendered.name, rendered.prose);
-      await store.put(recordOf(game, 'auto', 'autosave'));
+      screen.refresh(game);
     } catch {
       // A narrator failure never breaks play; the placeholder text stands.
     }
@@ -397,7 +415,7 @@ async function boot(): Promise<void> {
       line(`New world, seed ${seed}.`, 'rule'),
       line('HELP lists the verbs. Move with n s e w u d.', 'rule'),
     ]);
-    screen.print(game.describeHere(true));
+    screen.print(game.describeHere(false));
     screen.refresh(game);
     void narrateHere();
   }
@@ -417,7 +435,7 @@ async function boot(): Promise<void> {
     return [
       ...opened.notes.map((note) => line(note, 'warn')),
       line(`Loaded "${record.label}" at turn ${game.turn}.`, 'ok'),
-      ...game.describeHere(true),
+      ...game.describeHere(false),
     ];
   }
 }
