@@ -234,10 +234,33 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
 
 ---
-11. [ ] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
+11. [~] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
     earlier "engine changes for layout templates" research, which was costed
-    against the wrong problem. Nothing is built yet; this is the design being
-    settled before it is.)*
+    against the wrong problem.)*
+
+    **Status: the core reframe is built.** `WorldLattice.allocate()` stacks
+    every new Rung strictly below every cube already reserved, one plane
+    each — cube collision (probe, slide, nearest-free-cube) is gone with the
+    case it existed for. `sizeFor()` reads a per-archetype footprint ratio
+    (`WORLD.cubeSizing.footprintRatioByArchetype`) instead of the flat
+    `ceil(sqrt(slots))` square, reproducing the old formula exactly at ratio
+    1. Every gate descends (`WORLD.descent.descentsPerRung`, 1); the
+    affinity matrix in `content/adjacency.json` is retired along with the
+    "beside" it governed, leaving only `depthGate`. A dead-end room now
+    rolls its containers' band `deadEndBandShift` tiers richer
+    (`placement.json`), so reward follows position and not only tier. The
+    map marks a room holding an unwalked descent directly (`holdsGate`) now
+    that a vertical gate has no adjacent slot for the old ghost cell, and
+    the now-impossible merged-map-across-a-crossed-gate feature is retired
+    with it. CLAUDE.md's closed list, status paragraph and the "areas
+    connect to each other" open question are amended to match. Full suite
+    green throughout.
+
+    **Not yet built:** the teleporter system (a new closed-list system —
+    structural placement, save-state unlocks, a travel verb in
+    `data/verbs.json`), and the two remaining open numbers (descents per
+    Rung is set to 1; how many Rungs total is still untouched, by design —
+    open descent for now).
 
     ### The complaint this answers
 

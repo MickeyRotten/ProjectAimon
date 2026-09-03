@@ -68,6 +68,34 @@ expression, over the same seam — the deliberate opposite of the generate-once
 caching room and NPC prose get, because flavour wants aliveness where those want
 consistency. Every path still degrades to a canned line with no key.
 
+**The world runs downward, in Rungs.** A design reframe, since built: the
+world is a vertical stack rather than a branching spread of areas beside each
+other. The Hub is Rung 0; every gate descends, one Rung at a time, onto a
+fresh Z plane that sits strictly below every plane already claimed — so two
+Rungs can never overlap however their footprints fall, and the cube-collision
+machinery (probe, slide, nearest-free-cube) that this once needed is gone
+with the case it existed for. `WORLD.descent.descentsPerRung` (1) is what
+makes finding the way down the hunt rather than a free pick among several;
+`WORLD.cubeSizing.footprintRatioByArchetype` replaces the old one-size
+`ceil(sqrt(slots))` square with a per-archetype shape — long and thin for a
+farmland or ruin Rung, square for a town, matching the same formula exactly
+at ratio 1 — which is the geometric fix for the flat, over-packed areas that
+prompted the reframe. `content/adjacency.json`'s affinity matrix (what may
+stand *beside* what) is retired along with the possibility it governed; only
+`depthGate` (what may be reached *when*) still applies, since no two areas
+ever share a Z level any more. A dead-end room — the end of a branch, never
+the entry, gates excluded — now rolls its containers' loot band as if it
+were a configurable number of tiers richer (`placement.json`'s
+`deadEndBandShift`), so a side trail's promise is real: depth alone used to
+price in danger but never reward. The map already draws per floor and marks
+a room holding an unwalked descent directly (no ghost cell — a vertical exit
+has no adjacent slot to place one in), so the merged-map-across-a-crossed-gate
+feature retires too: crossing any gate now always changes Z, so it could
+never fire again. **Not yet built:** the teleporter room type (quick travel
+between the Hub and a found Rung, unlocked once and never required for
+descending), and this file's own closed-list/open-question amendments the
+design record calls for.
+
 ---
 
 ## What this is
@@ -163,14 +191,24 @@ tables; the engine must produce the same shapes.
 - **Three-tier player input** — canonical parse, free action with stakes, pure
   expression
 - **World turn** — clock, light burning down, pursuers moving, event deck firing
-- **Area generation on entry** — tables, tags, weighted rolls, graph shapes
+- **The world is a stack of Rungs** — one area per floor, reached only by
+  descending; every gate is a way down, onto a fresh Z plane that can never
+  overlap another. Depth from the Hub *is* the Rung number
+- **Area generation on entry** — tables, tags, weighted rolls, graph shapes,
+  a per-archetype footprint ratio so a Rung's shape is not always a square
 - **Area identity** — a handful of rolled traits per archetype (a town's trade
   and who runs it, a ruin's corpse and cause of death), or none at all, which is
   itself an answer. Narrator-facing only; nothing mechanical reads it
 - **Area wealth as a budget** — a container count and one gold purse per area,
-  container contents drawn from a value band, so an area has a ceiling
-- **Rule-driven adjacency** — a gate table for what a place opens onto, plus an
-  affinity matrix and depth gates for what may be built beside what
+  container contents drawn from a value band shifted further for a dead end,
+  so an area has a ceiling and a side trail's promise is real
+- **Depth gates** — when an archetype may be reached at all (a coven is never
+  in the shallows). There is no "beside" any more for an affinity matrix to
+  govern: every Rung owns a whole plane to itself
+- **Quick travel** — a teleporter, unlocked by finding it, on every Nth Rung;
+  gets the player back to a known depth. Never required for descending, and
+  never a substitute for the Hub-return consumable, which gets them *out*
+  from anywhere instead. *Designed, not yet built.*
 - **Micro-quests** — six templates, distance bands, one objective each
 - **Companions** — standing ladder, cap of four, engine-owned recruitment
 - Inventory (generous carry limit)
@@ -302,9 +340,14 @@ deleted. Consumables and companions-in-combat stay out; they land after.
 
 ## Open questions
 
-- Whether areas should ever connect back to each other, or only to the Hub. A
-  web is more explorable; a wheel is much easier to reason about. Cube allocation
-  supports either, but a web will collide more often and lean on the slide rule.
+- ~~Whether areas should ever connect back to each other, or only to the Hub.~~
+  **Answered, but not as either option was framed: a stack.** Neither a wheel
+  nor a web at the area level — every area is one Rung, reached by descending
+  from exactly one other, so there is exactly one path between any two areas,
+  always through their common ancestor. The wanted web moved down one level
+  instead: rings are lateral room connections *within* a Rung, spokes are
+  descents. Cube collision is retired along with the question — a Rung's
+  plane is its own, so nothing is ever there to collide with.
 - ~~Whether to build the world map now that cubes make it trivial, or leave the
   player with only local orientation.~~ **Answered: local, but richer.** The
   mini-map is a small fixed window on the player's own floor showing walked
