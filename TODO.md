@@ -186,6 +186,19 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    `tests/world-shapes.test.ts`.
 
 ---
-9. [ ] ITERATE: Set default font to VT323 https://fonts.google.com/specimen/VT323, font size 20.
+9. [x] ITERATE: Set default font to VT323 https://fonts.google.com/specimen/VT323, font size 20.
+
+   Done: self-hosted (no Google Fonts CDN dependency, since this is a
+   fully client-side app packaged into an offline-capable APK). The latin
+   subset `woff2` for VT323 lives at `src/assets/fonts/VT323-Regular.woff2`,
+   declared via a new `@font-face` in `src/app.css` and referenced first in
+   `body`'s font stack, ahead of the existing monospace fallback chain
+   (kept for the `font-display: swap` gap and as a safety net). Base
+   `font-size` went 15px -> 20px; the two responsive overrides that nudge it
+   by exactly ±1px for small/wide viewports were rescaled to keep that same
+   relationship (14/16 -> 19/21) rather than left as stale absolute values
+   that would have made desktop text smaller than the new base. Scope is the
+   player-facing screen only — the separate Designer/editor tool
+   (`src/editor/editor.css`) keeps its own `var(--mono)` untouched.
 
 ---

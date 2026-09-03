@@ -10,12 +10,20 @@ body[data-mono="amber"] { --grey: #ffb000; --white: #ffd88a; --cyan: #ffb000;
 body[data-mono="green"] { --grey: #33ff66; --white: #b6ffcc; --cyan: #33ff66;
   --green: #33ff66; --red: #ff8a8a; --amber: #b6ffcc; --dim: #146b2c; }
 
+@font-face {
+  font-family: "VT323";
+  src: url("./assets/fonts/VT323-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--fg);
-  font-family: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace;
-  font-size: 15px; line-height: 1.45; letter-spacing: .01em;
+  font-family: "VT323", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace;
+  font-size: 20px; line-height: 1.45; letter-spacing: .01em;
   display: flex; flex-direction: column;
   -webkit-font-smoothing: none;
 }
@@ -210,9 +218,9 @@ input:disabled { opacity: .5; }
 .mono .m1 { background: #aaaaaa; } .mono .m2 { background: #ffb000; } .mono .m3 { background: #33ff66; }
 
 @media (max-width: 560px) {
-  body { font-size: 14px; }
+  body { font-size: 19px; }
   .status { font-size: .85em; }
   .panel { gap: 12px; padding: 9px 8px 8px; }
   .log { padding: 11px 8px calc(14px + env(safe-area-inset-bottom)); }
 }
-@media (min-width: 900px) { body { font-size: 16px; } }
+@media (min-width: 900px) { body { font-size: 21px; } }
