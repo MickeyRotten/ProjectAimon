@@ -1,123 +1,123 @@
 {
-  "_note": "Canonical tag vocabulary. Everything filters on these. Closed list — adding a tag means adding it here first, or table validation fails at import.",
+  "_note": "Canonical tag vocabulary. Everything filters on these. Closed list — adding a tag means adding it here first, with a one-line description, or table validation fails at import.",
   "room": {
-    "space": [
-      "indoor",
-      "outdoor",
-      "underground"
-    ],
-    "light": [
-      "lit",
-      "dim",
-      "dark"
-    ],
-    "traffic": [
-      "path",
-      "open",
-      "dead-end",
-      "junction"
-    ],
-    "use": [
-      "dwelling",
-      "storage",
-      "workspace",
-      "shrine",
-      "market",
-      "ruin",
-      "grave",
-      "cell"
-    ],
-    "nature": [
-      "wild",
-      "cultivated",
-      "water",
-      "stone",
-      "wood",
-      "flooded",
-      "settled"
-    ],
-    "mood": [
-      "quiet",
-      "grim",
-      "lush",
-      "austere",
-      "corrupt",
-      "holy",
-      "opulent"
-    ],
-    "feature": [
-      "landmark",
-      "vantage",
-      "hazard",
-      "concealment",
-      "hearth",
-      "safe",
-      "private"
-    ]
+    "space": {
+      "indoor": "enclosed by walls or a roof — filters gate and archetype pools that assume shelter",
+      "outdoor": "open to the sky — the opposite pole to indoor",
+      "underground": "below ground level — caves, cellars, tunnels; distinct from indoor for filtering and prose"
+    },
+    "light": {
+      "lit": "bright enough to see by without a carried light source",
+      "dim": "poorly lit — sits between lit and dark for filtering and prose",
+      "dark": "no ambient light — needs a carried light source to see or act safely in"
+    },
+    "traffic": {
+      "path": "a through-room with exactly two connections, neither branch nor destination",
+      "open": "a wide, unconstrained space — a plaza or clearing, no single obvious route through",
+      "dead-end": "exactly one connection — a branch's terminus, matched against a room type's max-degree fit",
+      "junction": "three or more connections meet here — a hub of movement through the area"
+    },
+    "use": {
+      "dwelling": "someone lives here — a home, a den, a nest",
+      "storage": "goods are kept here — cellars, larders, stockrooms",
+      "workspace": "work happens here — a forge, a workshop, a kitchen",
+      "shrine": "a place of worship or ritual, however small",
+      "market": "goods change hands here — stalls, counters, a trading floor",
+      "ruin": "broken down and abandoned — no longer used for its original purpose",
+      "grave": "the dead are kept or buried here — a crypt, a barrow, a graveyard plot",
+      "cell": "a small, confining room meant to hold someone — a prison cell, a cage"
+    },
+    "nature": {
+      "wild": "untamed by hand — undergrowth, rock, or wilderness pressing in",
+      "cultivated": "shaped and maintained by people — farmland, gardens, tended ground",
+      "water": "open water or its immediate edge — a stream, a well, standing water",
+      "stone": "built or carved from stone — masonry, rock walls, a cave chamber",
+      "wood": "built or grown from wood — timber construction, or a stand of trees",
+      "flooded": "standing water covers the floor — a wetter, more hazardous kin of water",
+      "settled": "civilised and maintained — the opposite pole to wild, marks a room as part of an inhabited place"
+    },
+    "mood": {
+      "quiet": "still and undisturbed — nothing pressing happens here",
+      "grim": "bleak and foreboding — the room reads as a bad sign",
+      "lush": "abundant or richly appointed — nature or wealth in excess",
+      "austere": "spare and unadorned — deliberately plain, nothing wasted",
+      "corrupt": "tainted — morally, magically, or physically fouled",
+      "holy": "sanctified — the room carries religious or sacred weight",
+      "opulent": "conspicuously wealthy — fine materials, excess on display"
+    },
+    "feature": {
+      "landmark": "a notable point of interest — narrows a hub-shaped area's centre-room roll (e.g. a town's market square)",
+      "vantage": "a high or open point with a view over the surroundings",
+      "hazard": "eligible for a placement roll of a dangerous-looking curio (a pit, a rotten floor) — flavour, not a stat effect",
+      "concealment": "cover to hide in or hide something — gates where stealthy creatures, secretive NPCs and investigate-quest objectives can be placed",
+      "hearth": "a fire or its equivalent — warmth, a gathering point, often a dwelling's centre",
+      "safe": "no gate to another area is ever placed here — a guaranteed-quiet room",
+      "private": "somebody's specific interior — a shop, a home, a cell; excluded from the entry-room roll so the player never lands inside someone's shop"
+    }
   },
   "creature": {
-    "taxonomy": [
-      "beast",
-      "humanoid",
-      "undead",
-      "construct",
-      "fey",
-      "demon",
-      "plant"
-    ],
-    "mind": [
-      "mindless",
-      "cunning",
-      "proud",
-      "maternal",
-      "timid",
-      "relentless",
-      "kind",
-      "curious",
-      "venal"
-    ],
-    "build": [
-      "armoured",
-      "swift",
-      "hulking",
-      "frail"
-    ],
-    "appetite": [
-      "hungry",
-      "lustful",
-      "greedy",
-      "vengeful"
-    ]
+    "taxonomy": {
+      "beast": "a natural animal — no higher reasoning, acts on instinct",
+      "humanoid": "human-shaped and human-minded — people, in the broad sense",
+      "undead": "dead but still moving — animated by something other than life",
+      "construct": "built, not born — golems, animated armour, mechanisms",
+      "fey": "otherworldly and capricious — not of the mortal order",
+      "demon": "infernal in origin — malice given a body",
+      "plant": "vegetal and rooted in nature rather than flesh"
+    },
+    "mind": {
+      "mindless": "no will of its own — acts on instinct or a single directive, never negotiates",
+      "cunning": "plans and adapts — the most dangerous kind of opponent to underestimate",
+      "proud": "will not back down easily — pride outweighs self-preservation",
+      "maternal": "protective of its own — young, nest, or kin change how it fights",
+      "timid": "quick to flee or avoid a fight it isn't sure of",
+      "relentless": "does not stop pressing once it starts — rarely breaks off",
+      "kind": "well-disposed by nature — more likely to talk than fight",
+      "curious": "drawn to investigate rather than attack outright",
+      "venal": "motivated by gain — can be bought off or bribed"
+    },
+    "build": {
+      "armoured": "naturally or physically well protected — harder to land a solid hit on",
+      "swift": "fast — hard to pin down, quick to close or flee",
+      "hulking": "large and powerful — hits hard, likely slow",
+      "frail": "physically weak — goes down easily once hit"
+    },
+    "appetite": {
+      "hungry": "driven by literal hunger — food, or the player, is the target",
+      "lustful": "driven by desire — shapes how it approaches and what a Presence check plays against",
+      "greedy": "driven by wanting more — treasure and gain motivate it",
+      "vengeful": "driven by a grudge — holds and acts on a wrong done to it"
+    }
   },
   "object": {
-    "kind": [
-      "weapon",
-      "armour",
-      "shield",
-      "light",
-      "tool",
-      "key",
-      "consumable",
-      "treasure",
-      "curio",
-      "container",
-      "door"
-    ],
-    "quality": [
-      "crude",
-      "plain",
-      "fine",
-      "masterwork"
-    ],
-    "trait": [
-      "heavy",
-      "fragile",
-      "cursed",
-      "blessed",
-      "stolen",
-      "sealed",
-      "untradable"
-    ]
+    "kind": {
+      "weapon": "used to fight with — the basis of a weapon-track attack",
+      "armour": "worn to reduce damage taken",
+      "shield": "carried to block or deflect — a defensive off-hand item",
+      "light": "a light source — pushes back darkness in a dark room",
+      "tool": "used to interact with the world rather than to fight — a key-like utility item",
+      "key": "opens a specific lock or door",
+      "consumable": "used up on use — a potion, a ration, a one-shot item",
+      "treasure": "valuable for its own sake — no mechanical use beyond its price",
+      "curio": "an oddity — flavour and value, no mechanical function",
+      "container": "holds other things — a chest, a sack, a corpse's belongings",
+      "door": "blocks or grants passage — may be locked, may need a key"
+    },
+    "quality": {
+      "crude": "the lowest quality tier — cheap, rough, least effective",
+      "plain": "ordinary quality — no particular craft either way",
+      "fine": "above-average quality — noticeably better made",
+      "masterwork": "the highest quality tier — exceptional craft, rare and valuable"
+    },
+    "trait": {
+      "heavy": "encumbers more than its size suggests",
+      "fragile": "breaks or degrades easily — handle or use with care",
+      "cursed": "carries a hidden cost — flavour, something about it works against its holder",
+      "blessed": "carries a hidden benefit — flavour, sanctified in the holder's favour",
+      "stolen": "not rightfully the holder's — flavour, carries a consequence if recognised",
+      "sealed": "closed and not meant to be opened without cause — a locked or warded container",
+      "untradable": "cannot be sold or traded away — enforced on the item's flags"
+    }
   },
   "operators": {
     "_note": "How requires[] is read",

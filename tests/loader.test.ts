@@ -89,11 +89,18 @@ describe('layering a campaign over base', () => {
 
   it('extends the tag vocabulary, which is what lets it use new tags', async () => {
     const { campaign, report } = await load({
-      'tags.json': { room: { '+mood': ['briny'] } },
+      'tags.json': { room: { mood: { briny: 'a faint tang of brine and salt, common near the coast' } } },
       'areas/farmland.json': { '+areaTags': ['briny'] },
     });
     expect(report.errors).toEqual([]);
     expect(campaign.areas.get('farmland')?.areaTags).toContain('briny');
+  });
+
+  it('rejects a new tag with no description', async () => {
+    const { report } = await load({
+      'tags.json': { room: { mood: { briny: '' } } },
+    });
+    expect(messages(report)).toContain('tags.json: "briny" has no description');
   });
 
   it('applies settings-screen overrides on top of the campaign', async () => {

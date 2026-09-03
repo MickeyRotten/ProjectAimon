@@ -873,7 +873,9 @@ lives.
 
 `tags.json` is the **closed vocabulary**. Every tag used anywhere in any table
 must appear in it, and campaign import fails loudly on an unknown tag rather
-than silently never matching.
+than silently never matching. Each tag also carries a required one-line
+description (`{tag: description}` per category, not a bare array) — a tag
+with no description fails validation the same way an unknown tag does.
 
 This catches the most likely content bug by far — a typo in a `requires[]` that
 makes a rule quietly never fire. It also caught a real one during authoring:

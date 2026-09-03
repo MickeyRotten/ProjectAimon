@@ -76,6 +76,12 @@ export function validateCampaign(
     error('tags.json', 'the tag vocabulary is empty, so nothing can be validated against it');
   }
 
+  for (const tag of vocabulary.all()) {
+    if (!vocabulary.descriptionOf(tag)?.trim()) {
+      error('tags.json', `"${tag}" has no description`);
+    }
+  }
+
   /** Check a literal list of tags. */
   const checkTags = (path: string, tags: unknown, kind: TagKind): void => {
     if (tags === undefined || tags === null) return;

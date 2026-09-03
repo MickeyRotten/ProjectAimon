@@ -77,8 +77,11 @@ describe('tag-filtered rolls', () => {
 describe('TagVocabulary', () => {
   const vocabulary = new TagVocabulary({
     _note: 'ignored',
-    room: { light: ['lit', 'dim', 'dark'], nature: ['water', 'stone'] },
-    creature: { taxonomy: ['beast', 'undead'] },
+    room: {
+      light: { lit: 'bright enough to see by', dim: 'poorly lit', dark: 'no ambient light' },
+      nature: { water: 'open water', stone: 'built of stone' },
+    },
+    creature: { taxonomy: { beast: 'a natural animal', undead: 'dead but still moving' } },
     operators: { plain: 'indoor — must have' },
   });
 
@@ -89,6 +92,12 @@ describe('TagVocabulary', () => {
   it('records the namespace a tag came from', () => {
     expect(vocabulary.namespaceOf('dark')).toBe('room.light');
     expect(vocabulary.namespaceOf('beast')).toBe('creature.taxonomy');
+  });
+
+  it('records the description a tag came with', () => {
+    expect(vocabulary.descriptionOf('dark')).toBe('no ambient light');
+    expect(vocabulary.descriptionOf('beast')).toBe('a natural animal');
+    expect(vocabulary.descriptionOf('unknown')).toBeUndefined();
   });
 
   it('skips notes and the operators documentation', () => {

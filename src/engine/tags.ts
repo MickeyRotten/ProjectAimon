@@ -106,29 +106,36 @@ export function rollByTags<T extends TagFiltered & Weighted>(
 export class TagVocabulary {
   /** tag -> "room.light", "creature.taxonomy", ... */
   private readonly namespaces = new Map<string, string>();
+  /** tag -> its one-line description. */
+  private readonly descriptions = new Map<string, string>();
 
   /**
-   * Builds from the nested shape of `tags.json`: any array of strings at any
-   * depth is a category of tags, and its path is the namespace. Keys starting
-   * with `_` are notes, and `operators` documents the matcher rather than
-   * declaring tags — both are skipped.
+   * Builds from the nested shape of `tags.json`: a plain object whose values
+   * are all strings is a category — its keys are tags, its values their
+   * descriptions, and its path is the namespace. Every other object is a
+   * namespace group to recurse into. Keys starting with `_` are notes, and
+   * `operators` documents the matcher rather than declaring tags — both are
+   * skipped.
    */
   constructor(source: unknown) {
     this.collect(source, []);
   }
 
   private collect(node: unknown, path: readonly string[]): void {
-    if (Array.isArray(node)) {
+    if (node === null || typeof node !== 'object' || Array.isArray(node)) return;
+    const entries = Object.entries(node as Record<string, unknown>);
+    const isCategory = entries.length > 0 && entries.every(([, value]) => typeof value === 'string');
+    if (isCategory) {
       const namespace = path.join('.');
-      for (const entry of node) {
-        if (typeof entry === 'string' && !this.namespaces.has(entry)) {
-          this.namespaces.set(entry, namespace);
+      for (const [tag, description] of entries) {
+        if (!this.namespaces.has(tag)) {
+          this.namespaces.set(tag, namespace);
+          this.descriptions.set(tag, description as string);
         }
       }
       return;
     }
-    if (node === null || typeof node !== 'object') return;
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    for (const [key, value] of entries) {
       if (key.startsWith('_')) continue;
       if (path.length === 0 && key === 'operators') continue;
       this.collect(value, [...path, key]);
@@ -141,6 +148,11 @@ export class TagVocabulary {
 
   namespaceOf(tag: string): string | undefined {
     return this.namespaces.get(tag);
+  }
+
+  /** The tag's one-line description, if it has one. */
+  descriptionOf(tag: string): string | undefined {
+    return this.descriptions.get(tag);
   }
 
   all(): string[] {

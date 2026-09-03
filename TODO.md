@@ -209,3 +209,27 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    (`src/editor/editor.css`) keeps its own `var(--mono)` untouched.
 
 ---
+10. [x] NEW: Each tag and value used by procedural generation should also have a description field. A very short, one-line description of what the tag means, how it's used, etc.
+
+   Done. `campaigns/base/tags.json`'s leaf categories went from bare arrays
+   (`"feature": ["landmark", ...]`) to objects mapping tag -> one-line
+   description (`"feature": {"landmark": "...", ...}`), all 85 tags across
+   `room`/`creature`/`object` written for real, grounded in what each tag
+   actually gates (checked against every `requires[]`/`roomRequires` use
+   rather than guessed). `TagVocabulary.collect()` (`src/engine/tags.ts`)
+   now detects a leaf category as "a plain object whose values are all
+   strings" instead of "an array of strings," and gained `descriptionOf()`
+   alongside the existing `namespaceOf()`. `validateCampaign` fails a tag
+   with a missing or blank description the same way it fails an unknown
+   tag, so the description can't silently rot. Nothing downstream changed:
+   every consumer of a tag (`RoomRecord.tags`, `requires[]`, `matches()`)
+   still reads plain tag-id strings from generated records, never from
+   `tags.json` itself. Side effect: a campaign extending a tag category no
+   longer needs the `+key` array-append trick — object categories merge
+   key-by-key like every other object-shaped table. See
+   `src/engine/tags.ts`, `src/campaign/validate.ts`, `tests/tags.test.ts`,
+   `tests/loader.test.ts`, `docs/world-and-generation.md`. Editor follow-up
+   filed as TODO_EDITOR.md task 3 (the generic renderer still displays the
+   new shape, just not with a purpose-built tag+description row editor).
+
+---

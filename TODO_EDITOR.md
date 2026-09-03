@@ -257,3 +257,26 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    closed-vocabulary tag pickers and inline validation as everything else —
    building the canvas first means re-inventing basic form validation a
    second time, inside a canvas.
+
+---
+3. [ ] ITERATE: TODO.md task 10 gave every tag in `tags.json` a required
+   one-line description, changing each leaf category from a bare array
+   (`"feature": ["landmark", ...]`) to an object mapping tag to description
+   (`"feature": {"landmark": "...", ...}`). The engine and validator don't
+   need the editor's help — `TagVocabulary` and `validateCampaign` read the
+   new shape directly — but `editor.ts`'s own rendering of `tags.json` does
+   change: `renderStringList`'s fast path (`editor.ts:245`, gated on "array
+   of all strings") no longer matches a category, so it falls through to
+   the generic `renderNested` object renderer — a labelled text input per
+   tag, functional but not purpose-built, and with no add/remove-tag
+   affordance the way the old string-list rows had.
+
+   Two natural follow-ups, neither started:
+   - A proper tag-name + description row editor for `tags.json` itself,
+     with the same add/remove affordance `renderStringList` gave the old
+     array shape.
+   - Surface `TagVocabulary.descriptionOf()` as a `title` tooltip on the
+     `<datalist>` options `rebuildVocabulary()` builds (`editor.ts:149`),
+     so every other tag picker in the tool (the `tags`/`requires`/`kind`
+     fields across every other file) shows what a tag means while typing
+     it, not just its namespace label.
