@@ -22,7 +22,7 @@ import type { World } from '../world/world';
 import { describeObject, sentenceList, viewRoom } from './describe';
 import type { Effect } from './effects';
 import { playerCarry, playerMaxHp, playerMaxResolve, type PlayerRecord } from './player';
-import { matchPhrase, type ScopeEntry } from './scope';
+import { carriedLight, isDark, matchPhrase, type ScopeEntry } from './scope';
 
 export type LineKind = 'plain' | 'echo' | 'roll' | 'warn' | 'ok' | 'rule' | 'speak';
 
@@ -241,6 +241,19 @@ function go(ctx: CommandContext, command: Command): Reply {
   const direction = command.direction;
   const exit = ctx.world.exitsOf(ctx.room.id).find((candidate) => candidate.dir === direction);
   if (!exit) return blocked("You can't go that way.");
+
+  // Darkness is a wall, not a penalty: you cannot step into a dark room, nor
+  // through the mouth of a dark area, carrying nothing lit. Checked before the
+  // door so a blocked step never half-opens one. A carried light travels with
+  // you, so it is the only light that counts on the way in.
+  const tooDark = 'It is too dark that way without a torch.';
+  if (exit.toRoomId === null) {
+    const def = exit.gateArchetype ? ctx.campaign.areas.get(exit.gateArchetype) : undefined;
+    if (def?.areaTags.includes('dark') && !carriedLight(ctx.world)) return blocked(tooDark);
+  } else {
+    const dest = ctx.world.rooms.get(exit.toRoomId);
+    if (dest && isDark(ctx.world, dest)) return blocked(tooDark);
+  }
 
   const effects: Effect[] = [];
   const lines: Line[] = [];

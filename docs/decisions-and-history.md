@@ -67,6 +67,26 @@ losing three turns.
 
 Punishing, never fatal. A warning fires at ten turns of light remaining.
 
+**Darkness is a wall on the way in, a retreat once you are past it.** Movement
+(`go` in `commands.ts`) now refuses a step into a dark room — or through the
+mouth of a dark area behind a gate — while nothing lit is carried, printing
+*"It is too dark that way without a torch."* rather than letting you in to be
+bounced. The forced retreat above still owns the other case: a torch that
+gutters out **while** you are already deep. Only a carried light counts on the
+way in, since a lamp left on the floor does not travel; the gate check reads the
+target area's `areaTags` (the reservation is all that exists pre-generation), so
+it gates whole dark areas but leaves a rare dark entry room in an otherwise-lit
+area to the retreat. This makes "a supply problem the player solves before
+walking in" literal instead of a penalty applied after.
+
+And darkness is **reserved for underground places.** Isolated `dark` rooms
+dropped into lit surface areas (a town warehouse, a farm barn, a ruin armoury,
+a coven cell) were soft-locks with no torch on sale nearby, so they are `dim`
+now — flavour, not a mechanical block. The convention the tables hold to:
+**a `dark` room is also `underground`.** Everything still dark (the whole
+Under-Warren, a ruin's undercroft and oubliette, a coven's cellar) is genuinely
+below ground, where bringing a light is the point.
+
 ### Skill cap check
 
 At Agility 13 with a capped sword skill: `26 + 30 + 5 − 13 + 40 = 88`, under the
