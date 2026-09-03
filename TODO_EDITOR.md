@@ -259,7 +259,7 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    second time, inside a canvas.
 
 ---
-3. [ ] ITERATE: TODO.md task 10 gave every tag in `tags.json` a required
+3. [x] ITERATE: TODO.md task 10 gave every tag in `tags.json` a required
    one-line description, changing each leaf category from a bare array
    (`"feature": ["landmark", ...]`) to an object mapping tag to description
    (`"feature": {"landmark": "...", ...}`). The engine and validator don't
@@ -280,3 +280,59 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
      so every other tag picker in the tool (the `tags`/`requires`/`kind`
      fields across every other file) shows what a tag means while typing
      it, not just its namespace label.
+
+   **DONE — both follow-ups shipped, plus the delete guard they implied.**
+   Nothing player-facing changed; this is still the dev-only PC tool.
+
+   - **`tags.json` gets a purpose-built renderer.** Each category now draws as
+     tag/description rows with `+ add tag` and a per-row `x`, so the tag name
+     is data the designer edits rather than a structural key the generic object
+     renderer treats as a label. The rule for what counts as a category --
+     non-empty object, all values strings, `_`-noted keys and the top-level
+     `operators` block skipped -- is deliberately the same rule
+     `TagVocabulary` applies when the engine reads the file, and a test pins
+     the two together: if they ever drift, the editor starts offering to edit
+     tags the engine does not read. The new logic lives in
+     `src/editor/tagfile.ts`, pure and DOM-free, so it is testable.
+   - **Every guard refuses an invalid state rather than repairing one**, which
+     is the line task 1 drew around automation. A rename is committed on blur,
+     not per keystroke, and is rejected outright -- the field snapping back with
+     a reason in the status bar -- when the name is blank, padded with spaces,
+     carries a `requires[]` operator (`!`, `|`, a space), or collides with a
+     tag already declared anywhere in the vocabulary; the message names the
+     namespace the collision is in. A rename that *is* accepted says plainly in
+     the status bar that every table still spelling the old name is now broken,
+     and the live validator immediately lists all of them (23 errors, for
+     `dim`). A tag declared in two namespaces is flagged red on both rows --
+     an invisible bug otherwise, since `TagVocabulary` silently keeps the first
+     and drops the rest.
+   - **Deleting a used tag asks first, listing every use.** `findTagUsages`
+     scans the loaded tables for the tag under any tag-bearing key
+     (`tags`/`areaTags`/`excludeTags`/`requires`/`targetTags`/`kind`/`itemKind`),
+     reading `!tag` and `a|b` the way the matcher does, and the confirm modal
+     shows each one as `file - path = "term"` (20 of them, for `dark`). It does
+     not auto-patch anything -- exactly the "block and list, never auto-correct"
+     shape task 1 specified for `Delete this room type`. The modal itself is now
+     a shared `openModal()` that the review-before-save diff also uses, so both
+     get Escape-to-cancel and click-away-to-cancel for free.
+   - **Descriptions travel with the tag everywhere it is picked.** The
+     `<datalist>` options carry `namespace - description` in `label`, which is
+     what Chromium actually renders beside the value in the dropdown (`title`
+     is not rendered on a datalist option, so it is set as well but not relied
+     on). Separately, every tag input's own `title` tracks what is typed into
+     it, so a filled field explains itself on hover -- and a `requires[]` term
+     explains each alternative on its own line, operators stripped.
+   - **One engine change, and it is an address, not a rule.**
+     `validate.ts` reported "X has no description" at the bare path
+     `tags.json`, which no field could anchor. It now reports at
+     `tags.json.room.light.X`, so the badge lands on the row it is about. Same
+     error, same severity, better address.
+
+   Verified: 399 tests pass (37 files) including the new
+   `tests/editor-tagfile.test.ts` (19 tests: category detection matched against
+   `TagVocabulary` over the real base file, rename guards, order-preserving
+   rename, usage scanning over the real tables), `npm run typecheck` clean, and
+   a headless-Chromium drive of the live editor covering every path above --
+   85 rows across 14 categories, `operators` correctly not offered as one,
+   collision refused, rename flagged, Revert recovering, the delete guard
+   listing and cancelling, add-tag landing its own inline error badge.

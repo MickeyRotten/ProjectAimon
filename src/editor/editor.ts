@@ -18,9 +18,16 @@
  *    error prevention" ask, using a checker that already existed.
  *  - **Closed-vocabulary pickers.** Tag fields autocomplete against `tags.json`,
  *    so a bad tag is hard to type in the first place rather than merely caught
- *    after.
+ *    after. Each suggestion carries the tag's own one-line description, and a
+ *    filled tag field explains itself on hover.
  *  - **Recovery.** A per-file Revert discards unsaved edits back to the loaded
  *    copy, and Save first shows a diff of exactly what will be written to disk.
+ *
+ * One file gets a purpose-built renderer rather than the generic one:
+ * `tags.json`, whose categories are edited as tag/description rows with add,
+ * rename and remove — see `renderTagCategory`. It is the vocabulary every other
+ * picker is drawn from, so it is the one place a typo is not merely wrong but
+ * silently legalises itself everywhere else.
  */
 
 import { TagVocabulary } from '../engine/tags';
@@ -32,6 +39,21 @@ import {
   type ValidationIssue,
   type ValidationReport,
 } from './validation';
+import {
+  duplicateTags,
+  findTagUsages,
+  freshTagName,
+  isSkippedTagKey,
+  isTagCategory,
+  rejectTagName,
+  renameKeyInPlace,
+  termTags,
+  REQUIRES_KEYS,
+  SINGLE_TAG_KEYS,
+  TAG_LIST_KEYS,
+  type TagCategory,
+  type TagUsage,
+} from './tagfile';
 
 // ---------------------------------------------------------------------------
 // File manifest
@@ -154,19 +176,46 @@ function rebuildVocabulary(): void {
     ...vocabulary.all().map((tag) => {
       const option = document.createElement('option');
       option.value = tag;
-      const ns = vocabulary.namespaceOf(tag);
-      if (ns) option.label = ns;
+      // Chromium renders `label` as supplemental text beside the value in the
+      // dropdown, which is the only reliable way to show what a tag means while
+      // it is being picked — `title` is not rendered on a datalist option. It is
+      // set anyway, for anywhere that does honour it.
+      const meaning = describeTag(tag);
+      if (meaning) {
+        option.label = meaning;
+        option.title = meaning;
+      }
       return option;
     }),
   );
 }
 
-/** Keys whose value is a bag of tags — a plain list, no operators. */
-const TAG_LIST_KEYS = new Set(['tags', 'areaTags', 'excludeTags']);
-/** Keys whose value is a `requires[]` — tags with `!` and `|` operators. */
-const REQUIRES_KEYS = new Set(['requires', 'targetTags']);
-/** Keys whose value is a single tag. */
-const SINGLE_TAG_KEYS = new Set(['kind', 'itemKind']);
+/** "room.light — no ambient light…", as far as fits a dropdown row. */
+function describeTag(tag: string): string {
+  const ns = vocabulary.namespaceOf(tag);
+  const description = vocabulary.descriptionOf(tag);
+  if (!ns && !description) return '';
+  if (!description) return ns ?? '';
+  const trimmed = description.length > 96 ? `${description.slice(0, 95)}…` : description;
+  return ns ? `${ns} — ${trimmed}` : trimmed;
+}
+
+/** What one `requires[]` term means, a line per alternative — an input tooltip. */
+function describeTerm(term: string): string {
+  const parts = termTags(term).map((tag) => {
+    const meaning = describeTag(tag);
+    return meaning ? `${tag}: ${meaning}` : `${tag}: not in the vocabulary`;
+  });
+  return parts.join('\n');
+}
+
+/** Keep an input's hover tooltip in step with the tag currently typed into it. */
+function bindTagTitle(input: HTMLInputElement): void {
+  const sync = () => { input.title = describeTerm(input.value); };
+  sync();
+  input.addEventListener('input', sync);
+}
+
 
 // ---------------------------------------------------------------------------
 // Saving — File System Access API
@@ -269,6 +318,7 @@ function renderTagText(value: string, onChange: () => void): HTMLElement {
   input.type = 'text';
   input.value = value;
   input.setAttribute('list', 'tag-vocab');
+  bindTagTitle(input);
   input.addEventListener('input', () => onChange());
   return input;
 }
@@ -329,7 +379,10 @@ function renderStringList(
       const input = document.createElement('input');
       input.type = 'text';
       input.value = value;
-      if (tagKind) input.setAttribute('list', 'tag-vocab');
+      if (tagKind) {
+        input.setAttribute('list', 'tag-vocab');
+        bindTagTitle(input);
+      }
       input.addEventListener('input', () => { list[i] = input.value; onChange(); });
       const del = document.createElement('button');
       del.textContent = '×';
@@ -351,6 +404,183 @@ function renderStringList(
   };
   rebuild();
   return wrap;
+}
+
+// ---------------------------------------------------------------------------
+// tags.json — a purpose-built tag/description row editor
+// ---------------------------------------------------------------------------
+
+/** The prefix `tags.json`'s field paths are rooted at. */
+const TAGS_ROOT = 'tags.json';
+
+/**
+ * Is this field path inside `tags.json`? Only there does an all-strings object
+ * mean a tag category — everywhere else it is just an object of strings, and
+ * the generic renderer is right about it.
+ */
+function inTagsFile(path: string): boolean {
+  return path === TAGS_ROOT || path.startsWith(`${TAGS_ROOT}.`);
+}
+
+/**
+ * The namespace segments a key at this path sits under, as `TagVocabulary`
+ * counts them — so `isSkippedTagKey` makes the same call the engine makes.
+ */
+function tagsParentPath(path: string): string[] {
+  if (path === TAGS_ROOT) return [];
+  return path.slice(TAGS_ROOT.length + 1).split('.');
+}
+
+/** The live `tags.json`, for name-collision and usage checks. */
+function tagsJson(): Json {
+  return state.get(TAGS_PATH)?.current ?? {};
+}
+
+/**
+ * One tag category as editable rows: name, description, remove — plus an add
+ * button, which the generic object renderer cannot offer because it treats the
+ * tag name as structure rather than data.
+ *
+ * Every guard here refuses an invalid state rather than repairing one. A rename
+ * that would collide, blank a name, or smuggle a `requires[]` operator into a
+ * tag is rejected and the field snaps back; a delete of a tag other tables
+ * still filter on asks first, listing every use. Neither silently rewrites the
+ * designer's other files — that is the deliberate line drawn in TODO task 1.
+ */
+function renderTagCategory(category: TagCategory, path: string, onChange: () => void): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'tagcat';
+  stamp(wrap, path);
+
+  const table = document.createElement('table');
+  table.className = 'grid tags';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  headRow.append(th('tag'), th('description'), th(''));
+  thead.append(headRow);
+  const tbody = document.createElement('tbody');
+
+  const rebuild = () => {
+    tbody.replaceChildren();
+    const dupes = duplicateTags(tagsJson());
+    for (const name of Object.keys(category)) {
+      const tr = document.createElement('tr');
+      if (dupes.has(name)) tr.classList.add('dup');
+
+      const nameCell = document.createElement('td');
+      nameCell.className = 'tagname';
+      stamp(nameCell, `${path}.${name}`);
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = name;
+      nameInput.title = dupes.has(name)
+        ? `"${name}" is declared in more than one namespace — only the first is read`
+        : 'the tag as every requires[] spells it';
+      // Rename on commit, not per keystroke: a half-typed name is not a rename.
+      nameInput.addEventListener('change', () => {
+        const proposed = nameInput.value;
+        const reason = rejectTagName(proposed, name, tagsJson());
+        if (reason) {
+          nameInput.value = name;
+          setStatus('err', reason);
+          return;
+        }
+        if (proposed === name) return;
+        renameKeyInPlace(category, name, proposed);
+        setStatus('warn', `renamed ${name} → ${proposed} — every table still saying "${name}" is now broken; check the issues panel`);
+        onChange();
+        rerender();
+      });
+      nameCell.append(nameInput);
+
+      const descCell = document.createElement('td');
+      stamp(descCell, `${path}.${name}`);
+      const descInput = document.createElement('input');
+      descInput.type = 'text';
+      descInput.value = category[name] ?? '';
+      descInput.placeholder = 'one line: what this tag means';
+      descInput.addEventListener('input', () => {
+        category[name] = descInput.value;
+        onChange();
+      });
+      descCell.append(descInput);
+
+      const actions = document.createElement('td');
+      actions.className = 'actions';
+      const del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '×';
+      del.title = `delete ${name}`;
+      del.addEventListener('click', () => void removeTag(category, name, onChange));
+      actions.append(del);
+
+      tr.append(nameCell, descCell, actions);
+      tbody.append(tr);
+    }
+  };
+  rebuild();
+
+  const add = document.createElement('button');
+  add.textContent = '+ add tag';
+  add.addEventListener('click', () => {
+    const name = freshTagName(tagsJson());
+    category[name] = '';
+    onChange();
+    rerender();
+    // Land the caret on the placeholder name so it is renamed, not left as-is.
+    const fresh = $('#editor').querySelector<HTMLInputElement>(
+      `.tagcat[data-path="${CSS.escape(path)}"] td.tagname input[value="${CSS.escape(name)}"]`,
+    );
+    fresh?.select();
+  });
+
+  const hint = document.createElement('div');
+  hint.className = 'hint-inline';
+  hint.textContent = 'the tag name is what every requires[] spells · the description is read by the narrator prompts and shown while picking';
+
+  table.append(thead, tbody);
+  wrap.append(add, table, hint);
+  return wrap;
+}
+
+/** Delete a tag, asking first when other tables still filter on it. */
+async function removeTag(category: TagCategory, name: string, onChange: () => void): Promise<void> {
+  const files = new Map<string, Json>();
+  for (const [filePath, file] of state) files.set(filePath, file.current);
+  const usages = findTagUsages(files, name, TAGS_PATH);
+  if (usages.length > 0 && !(await confirmTagDelete(name, usages))) return;
+  delete category[name];
+  onChange();
+  rerender();
+  setStatus(
+    usages.length > 0 ? 'warn' : 'ok',
+    usages.length > 0
+      ? `deleted ${name} — ${usages.length} reference${usages.length === 1 ? '' : 's'} now point at nothing; check the issues panel, or Revert`
+      : `deleted ${name}`,
+  );
+}
+
+/** The delete guard: every place the tag is used, and one confirm. */
+function confirmTagDelete(name: string, usages: readonly TagUsage[]): Promise<boolean> {
+  const body = document.createElement('div');
+  body.className = 'usage-list';
+  const lead = document.createElement('div');
+  lead.className = 'usage-lead';
+  lead.textContent =
+    `"${name}" is still used in ${usages.length} place${usages.length === 1 ? '' : 's'}. ` +
+    'Deleting it does not remove those — each becomes a filter that quietly never fires, ' +
+    'which the issues panel will flag as an unknown tag.';
+  body.append(lead);
+  const list = document.createElement('pre');
+  list.className = 'diff';
+  for (const usage of usages) {
+    const line = document.createElement('div');
+    line.className = 'dl del';
+    line.textContent = `${usage.file.replace(`${BASE}/`, '')} · ${usage.path} = "${usage.term}"`;
+    list.append(line);
+  }
+  body.append(list);
+  return openModal(`Delete tag "${name}"?`, body, 'Delete anyway');
 }
 
 /** Collapsible section for objects and non-string arrays. */
@@ -391,7 +621,9 @@ function renderNested(obj: Json, path: string, onChange: () => void): HTMLElemen
       val.className = 'val';
       stamp(val, childPath);
       const child = record[key]!;
-      if (isRecordArray(child)) {
+      if (inTagsFile(childPath) && !isSkippedTagKey(key, tagsParentPath(path)) && isTagCategory(child)) {
+        val.append(renderTagCategory(child, childPath, onChange));
+      } else if (isRecordArray(child)) {
         val.append(renderTable(child, childPath, onChange, key));
       } else if (Array.isArray(child) && child.every((v) => typeof v === 'string')) {
         const kind = TAG_LIST_KEYS.has(key) ? 'tag' : REQUIRES_KEYS.has(key) ? 'requires' : undefined;
@@ -863,61 +1095,78 @@ function diffLines(before: string[], after: string[]): DiffLine[] {
   return out;
 }
 
-/** Show the diff for a file and resolve true if the user confirms the write. */
-function reviewChanges(path: string): Promise<boolean> {
-  const file = state.get(path);
+/**
+ * A modal question with a rendered body. Resolves true only on the confirm
+ * button — clicking away, Cancel and Escape all resolve false, so no destructive
+ * path is ever the accidental one.
+ */
+function openModal(title: string, body: HTMLElement, confirmLabel: string): Promise<boolean> {
   return new Promise((resolve) => {
-    if (!file) return resolve(false);
-    const before = JSON.stringify(file.original, null, 2).split('\n');
-    const after = JSON.stringify(file.current, null, 2).split('\n');
-    const lines = diffLines(before, after).filter((l, idx, all) => {
-      // Trim long runs of unchanged context to keep the review readable.
-      if (l.kind !== ' ') return true;
-      const near = (k: number) => all[k] && all[k]!.kind !== ' ';
-      return near(idx - 1) || near(idx - 2) || near(idx + 1) || near(idx + 2);
-    });
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const modal = document.createElement('div');
     modal.className = 'modal';
-    const title = document.createElement('div');
-    title.className = 'modal-title';
-    const added = lines.filter((l) => l.kind === '+').length;
-    const removed = lines.filter((l) => l.kind === '-').length;
-    title.textContent = `Write ${path}?  (+${added} / −${removed} lines)`;
-    const pre = document.createElement('pre');
-    pre.className = 'diff';
-    let lastContext = false;
-    for (const line of lines) {
-      if (line.kind === ' ' && !lastContext) {
-        // A break marker between separated change regions.
-      }
-      lastContext = line.kind === ' ';
-      const div = document.createElement('div');
-      div.className = `dl ${line.kind === '+' ? 'add' : line.kind === '-' ? 'del' : 'ctx'}`;
-      div.textContent = `${line.kind} ${line.text}`;
-      pre.append(div);
-    }
-    if (added === 0 && removed === 0) {
-      pre.append(Object.assign(document.createElement('div'), { className: 'dl ctx', textContent: '(no changes)' }));
-    }
+    const heading = document.createElement('div');
+    heading.className = 'modal-title';
+    heading.textContent = title;
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
     const cancel = document.createElement('button');
     cancel.textContent = 'Cancel';
     const confirm = document.createElement('button');
-    confirm.textContent = 'Write to disk';
+    confirm.textContent = confirmLabel;
     confirm.className = 'primary';
-    const close = (ok: boolean) => { overlay.remove(); resolve(ok); };
+
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(false); };
+    const close = (ok: boolean) => {
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(ok);
+    };
     cancel.addEventListener('click', () => close(false));
     confirm.addEventListener('click', () => close(true));
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(false); });
+    document.addEventListener('keydown', onKey);
+
     actions.append(cancel, confirm);
-    modal.append(title, pre, actions);
+    modal.append(heading, body, actions);
     overlay.append(modal);
     document.body.append(overlay);
+    cancel.focus();
   });
+}
+
+/** Show the diff for a file and resolve true if the user confirms the write. */
+function reviewChanges(path: string): Promise<boolean> {
+  const file = state.get(path);
+  if (!file) return Promise.resolve(false);
+  const before = JSON.stringify(file.original, null, 2).split('\n');
+  const after = JSON.stringify(file.current, null, 2).split('\n');
+  const lines = diffLines(before, after).filter((line, idx, all) => {
+    // Trim long runs of unchanged context to keep the review readable.
+    if (line.kind !== ' ') return true;
+    const near = (k: number) => all[k] && all[k]!.kind !== ' ';
+    return near(idx - 1) || near(idx - 2) || near(idx + 1) || near(idx + 2);
+  });
+
+  const pre = document.createElement('pre');
+  pre.className = 'diff';
+  for (const line of lines) {
+    const div = document.createElement('div');
+    div.className = `dl ${line.kind === '+' ? 'add' : line.kind === '-' ? 'del' : 'ctx'}`;
+    div.textContent = `${line.kind} ${line.text}`;
+    pre.append(div);
+  }
+  const added = lines.filter((line) => line.kind === '+').length;
+  const removed = lines.filter((line) => line.kind === '-').length;
+  if (added === 0 && removed === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'dl ctx';
+    empty.textContent = '(no changes)';
+    pre.append(empty);
+  }
+
+  return openModal(`Write ${path}?  (+${added} / −${removed} lines)`, pre, 'Write to disk');
 }
 
 async function saveWithReview(path: string): Promise<void> {
