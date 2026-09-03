@@ -135,6 +135,19 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    otherwise, deliberately, later. This is also what clears the closed-list
    collision below rather than just narrowing it — see that entry for why.
 
+   **Second guiding constraint: the tool is a separate, PC-only application —
+   not integrated into the main app, and never built for Android.** No APK.
+   It runs on the developer's PC only, outside the player-facing game
+   entirely — its own entry point, own build, own distribution, whatever
+   that ends up being. This also matches the "Hard constraints" table in
+   CLAUDE.md, which scopes PWA/APK packaging to the player-facing app; a
+   Designer tool was never meant to ride along in that package. It also
+   matches what already exists: `src/editor/editor.ts` (below) is already
+   dev-only, PC-only (Chromium, via the File System Access API), and never
+   part of the production build — so this constraint isn't new work, it's
+   confirming the existing tool's shape is the right one to build on rather
+   than fold the Designer tool into `src/ui/` or ship it in the APK.
+
    **This collides with a closed decision, so it needs a yes before anything is
    built.** CLAUDE.md's "Not in v1" list names *"a world editor"* and *"in-app
    campaign editing"* by name, and the correction section at the top of the
