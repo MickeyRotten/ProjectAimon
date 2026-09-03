@@ -48,7 +48,8 @@
         "dwelling",
         "hearth",
         "dim",
-        "opulent"
+        "opulent",
+        "private"
       ]
     },
     "shopfront": {
@@ -57,7 +58,8 @@
         "indoor",
         "market",
         "workspace",
-        "lit"
+        "lit",
+        "private"
       ]
     },
     "workshop": {
@@ -65,7 +67,8 @@
       "tags": [
         "indoor",
         "workspace",
-        "dim"
+        "dim",
+        "private"
       ]
     },
     "lodging": {
@@ -74,7 +77,8 @@
         "indoor",
         "dwelling",
         "dim",
-        "quiet"
+        "quiet",
+        "private"
       ]
     },
     "temple": {
@@ -84,7 +88,8 @@
         "shrine",
         "holy",
         "quiet",
-        "landmark"
+        "landmark",
+        "private"
       ]
     },
     "backalley": {
@@ -102,7 +107,8 @@
       "tags": [
         "indoor",
         "storage",
-        "dim"
+        "dim",
+        "private"
       ]
     },
     "gaol": {
@@ -112,7 +118,8 @@
         "cell",
         "dim",
         "grim",
-        "dead-end"
+        "dead-end",
+        "private"
       ]
     }
   },

@@ -38,6 +38,7 @@ import {
   chordFraction,
   degrees,
   hopsFrom,
+  hubCentreNode,
   isShape,
   type Graph,
   type Shape,
@@ -252,9 +253,13 @@ export function generateArea(options: GenerateOptions): GenerationResult {
   };
 
   const rooms: RoomRecord[] = [];
+  const centreNode = hubCentreNode(shape);
   for (let node = 0; node < kept.nodes; node++) {
     const at = layout.placements[node] as Coord;
-    const type = rollRoomType(rng, rules, areaDef, nodeDegrees[node] ?? 0);
+    const type = rollRoomType(rng, rules, areaDef, nodeDegrees[node] ?? 0, {
+      isEntry: node === 0,
+      isCentre: node === centreNode,
+    });
     rooms.push({
       campaignId: campaign.id,
       id: `${area.id}:r${String(node).padStart(2, '0')}`,
@@ -353,13 +358,31 @@ function rollShape(rng: Rng, areaDef: AreaDef, notes: string[]): Shape {
 /** A room type with a glyph, since the table may or may not supply one. */
 type RoomTypeRoll = RoomTypeDef & { id: string; glyph?: string };
 
+/** Which structural role, if any, this node plays — neither, one, never both. */
+interface RoomRoleOptions {
+  /** Node 0 — where the player lands crossing a gate into the area. */
+  isEntry: boolean;
+  /** The hub shape's node 1 — its designated centre. */
+  isCentre: boolean;
+}
+
 /**
  * Roll a room type, respecting `WORLD.roomTypeFit`: a `dead-end` type only
  * fits a leaf, a `junction` type only fits where three ways meet. When the
  * filter leaves nothing, the table rolls unfiltered — a room always gets a
  * type, because a room without one has no tags and nothing can be placed in it.
+ *
+ * The entry room and the hub's centre carry their own tag requirements —
+ * `WORLD.entry.roomRequires` and `WORLD.shapes.hub.centreRequires` — applied
+ * the same graceful way: narrow the pool, but never narrow it to nothing.
  */
-function rollRoomType(rng: Rng, rules: JsonObject, areaDef: AreaDef, degree: number): RoomTypeRoll {
+function rollRoomType(
+  rng: Rng,
+  rules: JsonObject,
+  areaDef: AreaDef,
+  degree: number,
+  role: RoomRoleOptions,
+): RoomTypeRoll {
   const fit = ruleObject(rules, 'WORLD.roomTypeFit');
   const entries = Object.entries(areaDef.roomTypes)
     .filter(([id]) => !id.startsWith('_'))
@@ -376,7 +399,18 @@ function rollRoomType(rng: Rng, rules: JsonObject, areaDef: AreaDef, degree: num
       return true;
     }),
   );
-  return rng.weighted(fits.length > 0 ? fits : entries);
+  let pool = fits.length > 0 ? fits : entries;
+
+  const narrowBy = (path: string): void => {
+    const requires = ruleArray(rules, path, []).filter((term): term is string => typeof term === 'string');
+    if (requires.length === 0) return;
+    const narrowed = pool.filter((entry) => matches(entry.tags, requires));
+    if (narrowed.length > 0) pool = narrowed;
+  };
+  if (role.isEntry) narrowBy('WORLD.entry.roomRequires');
+  if (role.isCentre) narrowBy('WORLD.shapes.hub.centreRequires');
+
+  return rng.weighted(pool);
 }
 
 /**

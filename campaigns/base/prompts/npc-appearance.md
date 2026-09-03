@@ -39,8 +39,8 @@ Bad: "A weathered figure with a striking presence, dressed for the road."
 Good: "Broad through the shoulders and running to fat at the waist, with a
 knuckle missing from the left hand; a dented buckler hangs from a strap
 worn shiny at the shoulder."
-Good (female): "Tits like a pair of fat honeydews fighting their way out of
-a tunic that wasn't built for this war, arse swelling behind her like two
+Good (female): "Massive tits like a pair of fat honeydews fighting their way out of
+a tunic that wasn't built for this war, a huge ass swelling behind her like two
 prize pumpkins crammed into homespun; a short curved blade hangs from a
 belt that's barely visible, just a strap doing its best not to get eaten by
 her hips."

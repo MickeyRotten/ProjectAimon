@@ -51,7 +51,8 @@
       "hazard",
       "concealment",
       "hearth",
-      "safe"
+      "safe",
+      "private"
     ]
   },
   "creature": {

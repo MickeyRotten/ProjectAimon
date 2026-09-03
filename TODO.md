@@ -7,7 +7,6 @@ Task types:
 - FIX: A bug, usability issue. High priority.
 - NEW: A new feature or extension of a feature.
 - ITERATE: A change to an existing feature.
-- SPIKE: Research this, suggest a plan.
 
 ---
 
@@ -112,13 +111,20 @@ Task types:
    `src/campaign/{loader,types,validate}.ts`, `tests/adjacency.test.ts`.
 
 ---
-4. [ ] NEW (OR ITERATE):
+4. [ ] NEW:
 
-Option A. I need two external, separate scripts (launched through individual .bat files). EXPORT.bat that exports all the json values related to the gameplay as a .csv, and an IMPORT.bat that parses a .csv back to json.
+I want a Game Designer's tool for adjusting tags, rules, areas, difficulty, creating new content (tags, areas, enemies, npcs, etc.), adjusting various prompt instructions, etc. It should be frictionless to use, with user friendly design that makes it easy and understandable to use for a non-programmer. This means that information should be categorised clearly, dependencies should be marked clearly as well, and some automation should also be in place for more complex actions and dependency-fixes.
 
-Option B. The Editor should be extended and improved so that it's easier to create new areas, enemies, etc. and to tweak difficulty. Right now it's a rather raw representation of all the data.
+UX Heuristics are key.
+Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
-Regardless of Option, I would like to see descriptions for each tag, even if the LLM would not use a description field (though it would make it a bit more predictable in behaviour).
+---
+4B. [ ] ITERATE: DEPENDENT ON TASK 4. Areas should have premade layout templates, where the Designer can adjust per-slot weights for different rooms. So I can create a premade layout for the Forest, and set the main path as one type of room, while brancing paths can then have a more randomised set of rooms. Treasure value caps could also then carry over to the Layouts.
+
+In the Designer Editor, I can visually create layouts on a grid, and draw connections between those rooms. If I have set a room that does not allow multiple connections (and then draw multiple connections), that should be raised as an error.
+
+UX Heuristics are key.
+Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
 ---
 5. [x] ITERATE: When I move to a new Area, the map should also show the prtaevious, connected Areas. In other words, it's one big Map that gets built, rather than separate ones (except for different floors). We can have a rule that up to X connections get rendered, but the map is still one big map. The connector between two areas can have a different color to indicate a gate between two areas.
@@ -141,5 +147,45 @@ Regardless of Option, I would like to see descriptions for each tag, even if the
    `localStorage`, entirely separate from the Dexie `saves` table, so they
    are untouched. See `src/game/save.ts`, `src/ui/settings.ts`, `src/main.ts`,
    `src/app.css`, `tests/game.test.ts`.
+
+---
+7. [x] ITERATE: Each area should have a pre-determined Entrance Room. Sometimes when the next Area is a town, the entry room is inside a shop, and that feels like a bug to a player.
+
+   Done, folded into #8 below — same root cause, same fix.
+
+---
+8. [x] SPIKE: While many areas can be random, a Town shouldn't be completely random. Towns should have a logic to how they are built. Typically (in fantasy) towns have main entrance, and at the center is the Market Square. As an example. How could we impose better logic to some areas?
+
+   Both #7 and #8 came from the same gap: `rollRoomType()` in `src/world/area.ts`
+   rolled a room's type from pure weight, with no idea whether the node was the
+   entry (graph node 0 — where the player lands crossing a gate) or, for the
+   `hub` shape, its designated centre (node 1 — already commented as "you
+   arrive at the edge of a town and walk in to the square", just never wired
+   to room-type selection).
+
+   New tag **`private`** (`room.feature` in `tags.json`) marks a room type as
+   somebody's specific interior — a shop, a home, a cell — and is now on the
+   business/dwelling-specific types in every archetype (`taproom`,
+   `shopfront`, `farmhouse`, `solar`, `nest`, etc.), leaving public/outdoor/
+   passage types alone. Two new rule paths read it: `WORLD.entry.roomRequires`
+   (`["!private"]`) narrows the entry room's roll so it's never someone's
+   shop or cell — that alone is #7. `WORLD.shapes.hub.centreRequires`
+   (`["landmark"]`, reusing the existing `landmark` tag) narrows a
+   `hub`-shaped area's centre room to a landmark type — for town that's
+   `square` or `temple`, giving hub-shaped towns their market square. Both
+   filters degrade gracefully to an unfiltered roll if nothing in the pool
+   fits, same precedent as the existing `WORLD.roomTypeFit` degree filter and
+   `WORLD.gates.roomRequires`. New `hubCentreNode(shape)` in `src/world/shapes.ts`
+   names node 1 as the centre for `hub` and `null` for every other shape.
+
+   `loop`-shaped towns (town allows both `hub` and `loop`) have no single
+   centre node, so they don't get a forced market square — left open as a
+   follow-up. See `src/world/area.ts`, `src/world/shapes.ts`,
+   `campaigns/base/tags.json`, `campaigns/base/rules.json`,
+   `campaigns/base/areas/*.json`, `tests/world.test.ts`,
+   `tests/world-shapes.test.ts`.
+
+---
+9. [ ] ITERATE: Set default font to VT323 https://fonts.google.com/specimen/VT323, font size 20.
 
 ---

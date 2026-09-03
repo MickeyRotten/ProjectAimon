@@ -46,7 +46,8 @@
         "indoor",
         "dwelling",
         "opulent",
-        "hearth"
+        "hearth",
+        "private"
       ]
     },
     "sanctum": {
@@ -56,7 +57,8 @@
         "shrine",
         "corrupt",
         "dim",
-        "landmark"
+        "landmark",
+        "private"
       ]
     },
     "stillroom": {
@@ -65,7 +67,8 @@
         "indoor",
         "workspace",
         "lush",
-        "dim"
+        "dim",
+        "private"
       ]
     },
     "bathhouse": {
@@ -74,7 +77,8 @@
         "indoor",
         "water",
         "opulent",
-        "lush"
+        "lush",
+        "private"
       ]
     },
     "cellar": {
@@ -101,7 +105,8 @@
         "cell",
         "dim",
         "grim",
-        "dead-end"
+        "dead-end",
+        "private"
       ]
     },
     "hall": {

@@ -33,6 +33,15 @@ export type Shape = (typeof SHAPES)[number];
 
 export const isShape = (value: string): value is Shape => (SHAPES as readonly string[]).includes(value);
 
+/**
+ * The hub shape's designated centre node — node 1, built as "the centre...
+ * you arrive at the edge of a town and walk in to the square" (see `hub`
+ * below). `null` for every other shape, which has no equivalent node.
+ */
+export function hubCentreNode(shape: Shape): number | null {
+  return shape === 'hub' ? 1 : null;
+}
+
 /** An abstract graph. Node 0 is always the entry. */
 export interface Graph {
   readonly nodes: number;

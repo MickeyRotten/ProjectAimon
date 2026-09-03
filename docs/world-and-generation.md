@@ -433,6 +433,20 @@ drawn at all. A `warren`'s density is therefore woven in *after* placement,
 between rooms that ended up side by side. See *What building the graph generator
 settled* in [decisions-and-history.md](decisions-and-history.md).
 
+**Two graph nodes carry a structural role, and the room-type roll knows it.**
+Node 0 is always the entry — where the player lands crossing a gate — and for
+`hub`, node 1 is its designated centre. Both are still a weighted roll over
+the archetype's `roomTypes`, same as every other room, but each is narrowed
+first by a `requires[]`-style tag filter before the roll: the entry by
+`WORLD.entry.roomRequires` (`["!private"]` in base — never someone's shop,
+home or cell), the hub centre by `WORLD.shapes.hub.centreRequires`
+(`["landmark"]` in base — a market square, a chapel, a sanctum, whatever the
+archetype tags as its landmark). Narrowing degrades the same way
+`WORLD.roomTypeFit` does: if nothing in the pool satisfies the filter, the
+unfiltered pool rolls instead — a room always gets a type. `private` is a
+`room.feature` tag like `landmark`; an archetype marks its own
+business/dwelling-specific room types with it in `roomTypes.*.tags`.
+
 
 ---
 

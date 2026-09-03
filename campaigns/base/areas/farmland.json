@@ -56,7 +56,8 @@
         "indoor",
         "dwelling",
         "hearth",
-        "dim"
+        "dim",
+        "private"
       ]
     },
     "barn": {
@@ -65,7 +66,8 @@
         "indoor",
         "storage",
         "dim",
-        "wood"
+        "wood",
+        "private"
       ]
     },
     "millhouse": {
@@ -75,7 +77,8 @@
         "workspace",
         "water",
         "dim",
-        "landmark"
+        "landmark",
+        "private"
       ]
     },
     "well": {

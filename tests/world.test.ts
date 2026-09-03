@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadCampaign } from '../src/campaign/loader';
 import type { ResolvedCampaign } from '../src/campaign/types';
 import { World } from '../src/world/world';
-import { SHAPES } from '../src/world/shapes';
+import { SHAPES, hubCentreNode } from '../src/world/shapes';
 import { adjacent, coordKey, cubeContains, cubesOverlap, roomCoord, type Coord } from '../src/world/types';
 
 const campaign: ResolvedCampaign = (await loadCampaign()).campaign;
@@ -103,6 +103,31 @@ describe('generating an area', () => {
         for (const tag of def?.areaTags ?? []) expect(room.tags).toContain(tag);
         expect(room.campaignId).toBe(campaign.id);
         expect(room.id.startsWith(`${area.id}:r`)).toBe(true);
+      }
+    }
+  });
+
+  it('never lands the player in a private interior when crossing a gate', () => {
+    for (const seed of ['entry1', 'entry2', 'entry3', 'entry4', 'entry5', 'entry6']) {
+      const world = World.create({ campaign, seed });
+      explore(world, 8);
+      for (const area of generatedAreas(world)) {
+        const entry = world.rooms.get(area.entryRoomId as string);
+        expect(entry?.tags, `${area.id} in ${seed}`).not.toContain('private');
+      }
+    }
+  });
+
+  it('gives a hub-shaped area a landmark room at its centre', () => {
+    for (const seed of ['hubc1', 'hubc2', 'hubc3', 'hubc4', 'hubc5', 'hubc6']) {
+      const world = World.create({ campaign, seed });
+      explore(world, 8);
+      for (const area of generatedAreas(world)) {
+        const centreNode = hubCentreNode(area.shape as Parameters<typeof hubCentreNode>[0]);
+        if (centreNode === null) continue;
+        const centreId = `${area.id}:r${String(centreNode).padStart(2, '0')}`;
+        const centre = world.rooms.get(centreId);
+        expect(centre?.tags, `${area.id} in ${seed}`).toContain('landmark');
       }
     }
   });

@@ -6,6 +6,7 @@ import {
   chordFraction,
   degrees,
   hopsFrom,
+  hubCentreNode,
   isBridge,
   isConnected,
   neighbourLists,
@@ -90,6 +91,13 @@ describe('graph shapes', () => {
     expect(degrees(graph)[1]).toBeGreaterThanOrEqual(3);
     const hops = hopsFrom(graph, 0);
     expect(Math.max(...hops.values())).toBeLessThanOrEqual(7);
+  });
+
+  it('names node 1 as the hub centre, and no node as the centre of any other shape', () => {
+    expect(hubCentreNode('hub')).toBe(1);
+    expect(hubCentreNode('loop')).toBeNull();
+    expect(hubCentreNode('sprawl')).toBeNull();
+    expect(hubCentreNode('warren')).toBeNull();
   });
 
   it('respects a tighter cap on the entry room, which sits on a cube face', () => {

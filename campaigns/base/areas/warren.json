@@ -67,7 +67,8 @@
         "underground",
         "storage",
         "dark",
-        "grim"
+        "grim",
+        "private"
       ]
     },
     "nest": {
@@ -76,7 +77,8 @@
         "underground",
         "dwelling",
         "dark",
-        "grim"
+        "grim",
+        "private"
       ]
     },
     "shaft": {
@@ -95,7 +97,8 @@
         "grave",
         "dark",
         "grim",
-        "landmark"
+        "landmark",
+        "private"
       ]
     },
     "seam": {
@@ -115,7 +118,8 @@
         "cell",
         "dark",
         "grim",
-        "dead-end"
+        "dead-end",
+        "private"
       ]
     }
   },

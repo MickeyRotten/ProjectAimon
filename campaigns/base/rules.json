@@ -598,6 +598,12 @@
       "onExhausted": "placeAtNearestFreeCubeAndLogLongRoad",
       "entryRoomRule": "The entry room MUST occupy the slot immediately adjacent to the incoming gate coordinate, so a one-hop crossing is one lattice step."
     },
+    "entry": {
+      "_note": "The entry room is always graph node 0 — where the player lands crossing a gate into a freshly generated area. It should never be someone's private interior.",
+      "roomRequires": [
+        "!private"
+      ]
+    },
     "shapes": {
       "_note": "Shape parameters. The four shapes themselves are engine capabilities; how branchy or how dense each one runs is a number, and numbers live here.",
       "sprawl": {
@@ -612,7 +618,11 @@
         "arms": [
           3,
           4
-        ]
+        ],
+        "centreRequires": [
+          "landmark"
+        ],
+        "_centreNote": "Node 1, the hub's centre, is the settlement's heart — a market square, a chapel, a sanctum. Falls back to an unfiltered roll if the archetype defines no landmark-tagged room type."
       },
       "warren": {
         "backWindow": 4,
