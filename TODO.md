@@ -232,169 +232,226 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    filed as TODO_EDITOR.md task 3 (the generic renderer still displays the
    new shape, just not with a purpose-built tag+description row editor).
 
+
 ---
----
-11. [ ] SPIKE: **Engine changes required by TODO_EDITOR.md task 2 (layout
-    templates + the visual layout canvas).** Research only — no code changed.
-    Task 2 is written from the editor's side; this is the same feature costed
-    from the engine's side, because most of the work is here, not in the tool.
-    The editor cannot draw a layout the generator has no way to read.
+11. [ ] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
+    earlier "engine changes for layout templates" research, which was costed
+    against the wrong problem. Nothing is built yet; this is the design being
+    settled before it is.)*
 
-    **What task 2 actually asks the engine for**, in engine terms: an authored
-    topology as an alternative to a rolled one; a named slot per node; a
-    per-slot room-type pool; and the wealth budget scoped by slot as well as
-    by tier.
+    ### The complaint this answers
 
-    ### A. A slot is a generalisation of something that already exists
+    The map felt **claustrophobic and at times illogical**. The wanted feeling,
+    in the user's own words: *"Ah, forest. That side trail probably leads down
+    to something interesting. Going forward probably takes me out of the
+    woods."* The player should be able to read a map and form a **correct**
+    prediction from it.
 
-    Today a node can be exactly two special things, both hardcoded as booleans
-    in `RoomRoleOptions` (`src/world/area.ts`): `isEntry` (node 0) and
-    `isCentre` (the `hub` shape's node 1, via `hubCentreNode()` in
-    `src/world/shapes.ts`). Each narrows the room-type pool through its own
-    rules path — `WORLD.entry.roomRequires` and
-    `WORLD.shapes.hub.centreRequires`.
+    Three things blocked that, all measured against the current code:
 
-    **Those are already slots.** The change is to replace the two booleans with
-    one `slot?: string` and make the two existing narrows the first two rows of
-    a general slot table, rather than bolting a third mechanism beside them. If
-    this lands any other way, the engine ends up with three ways to say "this
-    node is special," which is the shape of the bloat the project keeps cutting.
+    - **Every area in the game is a square.** `lattice.ts:97` computes
+      `footprint = ceil(sqrt(slots))` and returns `{ w: footprint, h: footprint }`
+      — `w === h`, always, for every archetype. With `cubeSizing.slotsPerRoom:
+      1.4`, a flat area runs 56–64% filled (farmland 15 rooms in 5x5 = 60%;
+      town 16 in 5x5 = 64%; coven 9 in 4x4 = 56%). A square packed that full
+      has no long axis and no corridors — almost every room touches two or
+      three others. **The claustrophobia is geometric and upstream of
+      everything else.**
+    - **The way out can be next door.** `WORLD.gates.minHopsFromEntry: 2`, in
+      areas of 9–20 rooms, then a free pick among everything that qualifies.
+      There is no representation of *forward* anywhere in the engine.
+    - **Nothing makes a side trail worth taking.** `bandByTier` scopes loot by
+      area tier only. Depth changes *danger* (`roomDepthBonus`) but never
+      *reward*, so a dead end at the end of a long branch is a coin flip. A map
+      that promises and does not pay teaches the player to stop reading it.
 
-    ### B. Per-slot room-type pools
+    ### The decision: the world runs downward, in Rungs
 
-    `rollRoomType()` (`src/world/area.ts:379`) rolls the archetype's whole
-    `roomTypes` table, then narrows. A slot needs its own weighted pool,
-    falling back to the archetype's when it has none — matching the
-    "degrades to an unfiltered roll" convention used by every filter in the
-    codebase (`WORLD.roomTypeFit`, `WORLD.entry.roomRequires`,
-    `WORLD.gates.roomRequires`).
+    Reference points: Diablo (descend, town at the top), Delicious in Dungeon
+    (each floor its own ecology, the trip home is a real cost), Dungeon
+    Encounters (the map *is* the game, floors are legible grids).
 
-    **The ordering matters and is not obvious.** A slot pool is a *different*
-    pool, not a narrower one, so it must still pass through
-    `WORLD.roomTypeFit` afterwards — otherwise a slot pool containing a
-    `dead-end` type puts one on a junction, and the degree/tag agreement that
-    `roomTypeFit` exists to enforce is silently gone. Order should be: slot
-    pool (or archetype pool) -> `roomTypeFit` -> any slot `requires[]`.
+    **A Rung is one floor. A Rung is one area. A Rung is one biome.** The Hub
+    is Rung 0. You descend.
 
-    ### C. An authored-topology path into graph building — the big one
+    **This is chosen because it subtracts.** Every other option on the table
+    added a system; this one retires several and gives the already-built Z axis
+    a job.
 
-    `buildGraph()` (`src/world/shapes.ts:128`) dispatches to one of four
-    generative builders through a closed `BUILDERS` record, each with the
-    signature `(rng, rules, n, options)`. There is **no** seam for a supplied
-    graph, and a template is not a fifth shape: shapes are rolled from
-    `areaDef.shapes[]` and take no template argument.
+    ### What it settles
 
-    The honest shape is a sibling path, not a fifth builder: `AreaDef` gains an
-    optional weighted `layouts` table, and `generateArea()` either picks a
-    layout *or* rolls a shape, supplying the graph directly in the first case.
+    - **CLAUDE.md's open question** — *"whether areas should ever connect back
+      to each other, or only to the Hub"* — is answered, but not as either
+      option was framed. Neither wheel nor web at the area level: a **stack**.
+      (Today it is in fact neither of those either — it is a **tree**. Every
+      gate calls `lattice.allocate()`, which reserves a *fresh* cube and
+      refuses any overlapping an existing one; there is no code path anywhere
+      where a gate opens onto an area that already exists. So there is exactly
+      one path between any two areas, always through their common ancestor.)
+    - **Difficulty becomes spatial and legible.** Depth from the Hub *is* the
+      Rung number. The gradient stops being a curve fighting against
+      shortcuts and becomes a number on the screen.
+    - **Directional coherence is free.** "Forward takes me out of the woods"
+      becomes "down", on the one axis every player already understands.
+    - **The Hub-return consumable and the corpse run become meaningful.**
+      Both are already built and both are currently conveniences. Depth gives
+      them a cost curve.
 
-    **Unresolved, and it blocks the work:** `roomCount` is rolled from
-    `areaDef.size` (`area.ts:201`), but a template's node count is fixed. Either
-    a template pins the area's room count (simple, and a template *is* a
-    topology so the size roll arguably does not apply), or templates need
-    optional nodes. Recommend the first and say so in the schema; the second is
-    a second generator.
+    ### It is already half-built
 
-    ### D. Author coordinates, not just edges — and export the structural checks
+    - `Cube` carries `z0`/`z1`. `ALL_DIRECTIONS` includes `u`/`d`, and
+      `FLAT_DIRECTIONS` exists as a *separate* constant — the code already
+      distinguishes vertical from horizontal.
+    - `cubeSizing.zSpanByArchetype` and `allocation.zOffsetByArchetype` exist;
+      `warren: -2` already drops a warren two levels below farmland.
+    - The map already renders **per floor**, with a `Saltmere (F1)` label, and
+      task 5 deliberately limited the multi-area map to the same Z.
 
-    Task 2 says "visually create layouts on a grid, and draw connections."
-    Drawing on a grid means the author places nodes at coordinates, which is
-    strictly more than a graph: it is a graph *plus* an embedding. Taking the
-    coordinates is the recommended framing, because it makes two of the three
-    structural limits impossible to violate by construction:
+    The engine is already three-dimensional and already renders per floor. This
+    commits to an axis that exists and is barely used. It is not a rewrite.
 
-    - **Degree cap.** Four ways out of a slot in a flat area, six where the
-      cube has depth (`area.ts:210`). The entry is capped tighter still, by
-      `sidesInside(cube, entryCoord)`, because it sits on the cube's face.
-    - **Parity.** The lattice is bipartite, so an **odd cycle can never be
-      embedded at all**. `shapes.ts` records this as the cause of "every single
-      `loop` failure" during development. It is the error case task 2 does
-      *not* name, and a hand-drawn layout hits it exactly as easily as the
-      over-connected room it does name.
-    - **Connectedness.**
+    ### What one-area-per-Rung retires
 
-    None of these are rules values — they are properties of a 3-D grid.
+    Areas never compete for space if each one owns a whole plane. These are
+    built systems losing their jobs, listed so the removal is deliberate rather
+    than discovered:
 
-    **The gap:** `shapes.ts` exports `isConnected`, `isBridge`,
-    `nonBridgeEdges`, `degrees`, `neighbourLists` and `hopsFrom`, but **no
-    parity check and no single "can this be embedded" predicate**. The editor
-    needs exactly that check live while the author draws. It must be one
-    exported function with three callers — the canvas, `validateCampaign` at
-    load, and generation — the same way the editor already reuses
-    `validateCampaign` rather than reimplementing it. Written twice, the two
-    copies drift and the tool starts blessing layouts the generator rejects.
+    - **Cube allocation and collision handling.** `allocate`, `probe`,
+      `nearestFreeCube`, `slideOutwardAlongGateAxis`,
+      `allocation.maxSlideAttempts: 60`, `onExhausted`, and `cubeSizing.gap`.
+    - **`content/adjacency.json` changes shape.** An affinity matrix for what
+      may sit *beside* what has no "beside" any more. It becomes a **sequence**
+      — which biome follows which as you descend. Easier to author and easier
+      to reason about than a matrix, but it is a rewrite of that table, not a
+      tuning of it.
+    - **`WORLD.gates.perArea: [1,3]` collapses.** The only way onward is the
+      descent. `areaDef.gates` (archetype -> weight) becomes "what is the next
+      Rung", which is the same sequence question as adjacency.
 
-    **One check the editor cannot have:** the tighter entry-node cap depends on
-    where the entry lands in the cube, which is not known until layout. The
-    canvas can enforce the general cap, parity and connectedness; the entry cap
-    stays a generation-time check. Worth stating so the tool does not promise it.
+    ### The spider web moves down one level
 
-    ### E. Fixed layouts vs. the `Distant` quest reservation — a real conflict
+    The stated want was a web rather than *"a perfect compass structure, where
+    each direction is a straight vector out from the middle without any
+    inter-connectivity."* With one area per Rung there are no lateral **areas**
+    to link, so the web becomes a property of the **room graph inside a Rung**:
+    **rings are lateral room connections within the floor, spokes are
+    descents.** Still a web, at room scale.
 
-    `layoutArea()` (`src/world/layout.ts:396`) calls `stretchToDepth()` to
-    lengthen a branch until it reaches a coordinate a `Distant` quest objective
-    reserved before the area existed. **A fixed authored layout cannot
-    stretch.** Something has to give, and the machinery for it already exists:
-    `LayoutResult.unfilledReservations` is the "promised and could not be kept"
-    channel, and the quest system re-places whatever was counting on it. So the
-    answer is probably "a fixed layout releases the reservation, with a note"
-    — but it is a decision, not a detail, and it should be written down before
-    the canvas ships and starts producing layouts that quietly cost quests
-    their objectives.
+    This is already built and needs only exposing: `weaveChords` weaves extra
+    connections *after* placement, between rooms that ended up side by side,
+    and `chordFraction` reads `WORLD.shapes.<shape>.extraEdges` — today only
+    `warren: 0.3` sets it. Make that a per-Rung value and the rings appear.
 
-    Related: cube sizing currently derives from `areaDef.size[1]`
-    (`lattice.grow(...)`). A template has a fixed bounding box, which has to
-    feed cube allocation instead, or the layout will not fit the cube reserved
-    for it.
+    ### Teleporter — a new universal room type
 
-    ### F. Wealth scoped by slot — and the ordering trap
+    **Quick travel between the Hub and a Rung, unlocked by finding it, spawning
+    every nth Rung.**
 
-    `placement.wealth` scopes budgets by area **tier** only: `bandByTier`,
-    `goldBudgetByTier`, `containersPerArea` (`src/world/placement.ts:111-115`).
-    Adding a slot axis is one more axis on an existing mechanism, not a new
-    one — that part is cheap.
+    - **Structurally placed, never rolled.** `roomTypes` is per-archetype
+      (`AreaDef.roomTypes`); there is no global room-type table, so "universal"
+      is new schema either way. More importantly a weighted roll can *fail*,
+      and a teleporter that does not spawn breaks quick travel silently. The
+      engine already places rooms structurally — node 0 is always the entry,
+      node 1 is always the hub centre — and a teleporter should be assigned the
+      same way, with its own glyph so the map shows it.
+    - **It is stateful, which is new.** "Unlocks" means the save remembers which
+      teleporters are active: a data-model change, plus a travel verb in the
+      global `data/verbs.json` (verbs are global — settled decision).
+    - **Keep it distinct from the Hub-return consumable**, which is a listed
+      gold sink and which a teleporter network would otherwise eat. The split:
+      **the consumable gets you *out* from anywhere; the teleporter gets you
+      *back in* to a known depth.** Escape versus re-entry. Both survive.
+    - **Descending must never require finding it.** Missing a teleporter costs
+      a long walk, never progress.
 
-    **The trap is that the budget is spent down in room order.** The placement
-    loop walks `for (const room of rooms)` and draws from a single shared purse
-    (`drawGold`, `placement.ts:432`). So "the boss slot always rolls the ultra
-    band" does not work by weighting alone: a boss room late in the list finds
-    the purse already empty. A slot-scoped budget needs either a reserved
-    allocation taken off the top before the general loop, or the loop ordered
-    by slot priority. Either is fine; neither is free, and picking neither
-    means the feature appears to work and quietly does not.
+    ### The open numbers
 
-    ### G. Schema, validation, and what has to persist
+    Three, and the first is the most load-bearing tunable in the design.
 
-    - `AreaDef` (`src/campaign/types.ts:125`) gains `layouts`. Note that a
-      template is array-shaped (nodes, edges), so per rule 9 it merges
-      wholesale in a campaign override rather than key-by-key — a campaign
-      tweaking one node replaces the template.
-    - `validateCampaign` needs new checks: every room type a slot pool names
-      exists; every slot a layout names has a pool or falls back; the template
-      passes the structural predicate from **D**; its bounding box fits the
-      cube it would get. These are what the editor surfaces live, so they are
-      the same work as the canvas's error panel.
-    - **Does the slot persist onto `RoomRecord`?** Placement runs inside
-      `generateArea()` (`area.ts:319`), generation-time only, so wealth does
-      not need it afterwards. But rule 10 forbids regenerating on load, so
-      anything *later* that wants to know a room's slot — narrator prose, a
-      future respawn, an editor "show me this area's layout" view — can only
-      have it if it was written into the save at generation. Cheap now
-      (one string field on `RoomRecord`, `src/world/types.ts:179`), and not
-      retrofittable onto worlds already generated. Recommend adding it.
+    - **`n` — Rungs between teleporters.** It sets three things at once: how
+      long a delve is, how expensive the return trip is, and **how punishing
+      death is** — because the corpse run walks you back from the Hub and
+      teleporters shorten that walk. Keep it a single rules value so it moves
+      in one place.
+    - **Descents per Rung.** One makes finding the stairs the hunt (Dungeon
+      Encounters). Several trade tension for freedom. It is a table value, but
+      it sets the whole feel.
+    - **How many Rungs.** Bounded run or open descent. Untouched so far.
 
-    ### Sequencing and scope risk
+    Also deferred by explicit decision: **Rung size.** Areas are 9–20 rooms
+    today, which is small for a whole floor. Expanding them comes later.
 
-    Split this in two and do them in order. **The data half** — slots, per-slot
-    pools, slot-scoped budget, a template read from JSON — is a genuine
-    extension of mechanisms that already exist, and is testable headless with
-    no UI at all. **The canvas half** is new work and is the piece CLAUDE.md's
-    correction section names by name ("map painter"), so it should not start
-    until the engine can already read a hand-written template JSON and generate
-    from it. Building the canvas first means authoring a format nothing
-    consumes yet.
+    ### What survives the reframe unchanged
 
-    Keep the template to **topology + per-slot type weights + budget scoping**.
-    A slot naming a specific NPC, monster or item is the ingredients/outcomes
-    line from `docs/decisions-and-history.md` being crossed, and breaks the
-    "tables, tags, probability" model the design was rebuilt around.
+    The vertical world is a better *container* for these; it does not replace
+    them. Both were the original complaint and neither is fixed by going
+    vertical:
+
+    - **Footprint shape.** A Rung of squares is still a square.
+      `footprint = ceil(sqrt(slots))` does not care what floor it is on.
+      Replace it with a per-archetype ratio: a forest Rung long and thin, a
+      town Rung squarish, a warren blobby. **This is also a hard prerequisite
+      for any hand-authored layout** — the cube is allocated by `sizeFor()`
+      before a layout is drawn, so a 3x9 forest literally cannot be placed
+      today.
+    - **Reward must follow position.** Band and content scoped by depth and
+      dead-endness alongside tier. This is what makes the side trail's promise
+      *true*, and **no amount of authored layout can substitute for it**:
+      a beautiful hand-drawn map whose trails are empty half the time teaches
+      the player that the map lies, and then the shape is worse than useless
+      because it promised.
+
+    ### What this does to TODO_EDITOR.md task 2 (layout templates)
+
+    It makes it **cheaper and more likely to happen**. One authored layout per
+    Rung, and there are perhaps ten Rungs rather than forty forests — roughly a
+    quarter of the authoring burden, aimed at a floor whose theme and role are
+    already known. The engine research that was task 11 still holds where it
+    described *mechanism* (no seam in `buildGraph` for a supplied graph; slot
+    pools must still pass `roomTypeFit`; the wealth purse is spent in room
+    order so a slot-scoped band needs a reserved allocation; `shapes.ts`
+    exports no parity or embeddability predicate for an editor canvas to
+    validate against). It no longer holds where it described *cost*, because
+    the unit of authoring changed.
+
+    ### Risk, stated plainly
+
+    This is the fourth reframe in one design conversation, and CLAUDE.md's
+    correction section exists because the predecessor project died of exactly
+    that. The reason to accept it anyway: every other candidate **added** —
+    layouts, a canvas, a world web, slot pools — while this one **subtracts**.
+    It removes the need for a lateral-difficulty rule, removes the ambiguity
+    about direction, and retires the cube-collision subsystem. That is the
+    opposite of how the predecessor died. The risk is not that it is the wrong
+    shape; it is that it is a fifth one.
+
+    ### Closed-list amendments this needs (rule 11)
+
+    Not made yet — CLAUDE.md still describes what is built, and none of this is.
+    Recorded so they are not missed:
+
+    - **Add:** quick travel / the teleporter network, as a system.
+    - **Amend:** the open question about areas connecting to each other, now
+      answered by the stack.
+    - **Amend:** "Area generation on entry" and "Rule-driven adjacency", both of
+      which change meaning under one-area-per-Rung.
+    - **Note:** "Rung" would be the third *ladder* in the vocabulary, after the
+      LLM tier ladder (`src/game/ladder.ts`) and `LAYOUT_FAILURE.order`.
+      Different domains, but `rung` and `tier` will appear in the same sentence
+      often — keep the two words clearly distinct in code and in prose.
+
+    ### Suggested order
+
+    1. **Footprint shape per archetype.** One formula, changes how every area
+      in the game feels, and unblocks everything else. Do it first even if the
+      rest waits.
+    2. **Reward follows position.** Makes the map honest. Table-shaped.
+    3. **The Rung frame** — Rung 0 = Hub, one area per Rung, descents, the
+      difficulty gradient re-keyed to Rung number.
+    4. **Room-scale web** — expose `extraEdges` per Rung.
+    5. **Teleporter** — structural placement, unlock state, travel verb.
+    6. **Authored Rung layouts**, onto a world that already reads correctly.
+
+    Steps 1 and 2 are worth doing and *playing* before 3, because they are
+    cheap, they are needed either way, and they will sharpen what the vertical
+    frame actually has to deliver.

@@ -289,16 +289,35 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    since they're the same class of "this will fail to generate" mistake and
    the validation code already exists.
 
-   **The engine side of this task is now costed separately, in TODO.md task
-   11.** Most of the work is there, not in the tool: the generator has no seam
-   for an authored topology, no notion of a named slot beyond the two
-   hardcoded ones, no per-slot room-type pool, no slot axis on the wealth
-   budget, and — the one that bites the canvas directly — no exported
-   "can this graph be embedded" predicate for the tool to validate against
-   while the author draws. Read task 11 before starting this one; it also
-   names three decisions (fixed room count, what a fixed layout does to a
-   `Distant` reservation, and whether the slot persists onto `RoomRecord`)
-   that have to be settled before either half is built.
+   **The world this authors is being rebuilt — read TODO.md task 11 first.**
+   The world is going **vertical**: one floor per Rung, one area per Rung, one
+   biome per Rung, descending from the Hub. That changes what this task
+   authors and makes it substantially cheaper — **one layout per Rung**, and
+   there are perhaps ten Rungs rather than forty forests, each aimed at a floor
+   whose theme and role are already known.
+
+   Two things from that record gate this one:
+
+   - **Footprint shape is a hard prerequisite.** Every area today is a square
+     (`lattice.ts:97` returns `w === h` for every archetype), and the cube is
+     allocated by `sizeFor()` *before* any layout is drawn. So a hand-drawn
+     3x9 forest cannot be placed at all until that formula takes a per-archetype
+     ratio. No canvas work should start before it does.
+   - **Reward must follow position, or the layout lies.** A hand-authored map
+     creates an expectation; `bandByTier` is tier-only, so the side trail it
+     promises is empty about half the time. The player learns the map lies
+     within two floors, and then the authored shape is worse than no shape at
+     all, because it promised. Position-aware placement is needed whether or
+     not anything is ever authored.
+
+   The engine mechanics costed in the earlier research still hold: no seam in
+   `buildGraph` for a supplied graph, slot pools must still pass through
+   `roomTypeFit`, the wealth purse is spent in room order so a slot-scoped band
+   needs a reserved allocation, and — the one that bites this task directly —
+   `shapes.ts` exports no parity or embeddability predicate for the canvas to
+   validate a hand-drawn graph against. Three decisions also stay open: fixed
+   room count, what a fixed layout does to a `Distant` quest reservation, and
+   whether the slot persists onto `RoomRecord`.
 
    **Sequencing and scope risk.** This is close in shape to the abandoned
    "map painter" CLAUDE.md's correction section calls out by name, so keep it
