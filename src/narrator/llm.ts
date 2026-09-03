@@ -27,6 +27,11 @@ export interface ChatRequest {
   temperature?: number | undefined;
   /** Hard ceiling on the reply. The classifier's is tiny; the narrator's isn't. */
   maxTokens?: number | undefined;
+  /**
+   * Per-call abort timeout, overriding the client default. A batch that writes
+   * a whole area at once is far slower than a single line and sets its own.
+   */
+  timeoutMs?: number | undefined;
 }
 
 export interface LlmClient {
@@ -93,11 +98,12 @@ export function openRouterClient(options: OpenRouterOptions): LlmClient {
         ...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
       });
 
+      const perCallTimeout = request.timeoutMs ?? timeoutMs;
       let lastError: unknown;
       for (let attempt = 0; attempt < attempts; attempt++) {
         if (attempt > 0) await sleep(2 ** attempt * 1000);
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const timer = setTimeout(() => controller.abort(), perCallTimeout);
         try {
           const response = await fetchImpl(ENDPOINT, { method: 'POST', headers, body, signal: controller.signal });
           if (!response.ok) {

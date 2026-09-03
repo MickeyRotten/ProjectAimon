@@ -68,6 +68,36 @@ describe('the permanent descriptions', () => {
   });
 });
 
+describe('resilience', () => {
+  it('retries a failed batch on the next entry instead of stranding the area', async () => {
+    // The bug: a single timeout on the big batch used to mark the area done and
+    // leave every room on its developer placeholder for the whole session.
+    const game = Game.begin({ campaign, seed: 'retry', name: 'Vess', archetype: 'freebooter' });
+    game.room.baseDesc = '';
+    const { narrator, client } = narratorWith([
+      new Error('timeout'),
+      '1. The Cleared Yard :: Stone and quiet. Nothing moves.',
+    ]);
+
+    await narrator.ensureArea(game.world, game.room);
+    expect(game.room.baseDesc).toBe(''); // first attempt failed
+    expect(client.calls).toHaveLength(1);
+
+    await narrator.ensureArea(game.world, game.room); // a later entry retries
+    expect(game.room.baseDesc).toContain('Stone and quiet');
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it('stops retrying after a few failures so a dead key does not cost a call a move', async () => {
+    const game = Game.begin({ campaign, seed: 'giveup', name: 'Vess', archetype: 'freebooter' });
+    game.room.baseDesc = '';
+    const { narrator, client } = narratorWith(Array.from({ length: 6 }, () => new Error('dead')));
+
+    for (let i = 0; i < 6; i += 1) await narrator.ensureArea(game.world, game.room);
+    expect(client.calls).toHaveLength(3); // capped at MAX_TRIES
+  });
+});
+
 describe('truth without a narrator', () => {
   it('leaves baseDesc empty on a failed call, so the structural placeholder stands', async () => {
     const game = Game.begin({ campaign, seed: 'nokey', name: 'Vess', archetype: 'freebooter' });
