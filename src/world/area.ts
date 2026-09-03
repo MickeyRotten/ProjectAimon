@@ -27,6 +27,8 @@ import {
   ruleArray,
   ruleNumber,
   ruleObject,
+  ruleString,
+  ruleStrings,
   ruleWeightedPairs,
 } from '../engine/rules';
 import { matches } from '../engine/tags';
@@ -243,12 +245,16 @@ export function generateArea(options: GenerateOptions): GenerationResult {
 
   const rooms: RoomRecord[] = [];
   const centreNode = hubCentreNode(shape);
+  const teleporterNode = pickTeleporterNode(rng, rules, stub.depth, kept.nodes);
   for (let node = 0; node < kept.nodes; node++) {
     const at = layout.placements[node] as Coord;
-    const type = rollRoomType(rng, rules, areaDef, nodeDegrees[node] ?? 0, {
-      isEntry: node === 0,
-      isCentre: node === centreNode,
-    });
+    const type =
+      node === teleporterNode
+        ? teleporterRoomType(rules)
+        : rollRoomType(rng, rules, areaDef, nodeDegrees[node] ?? 0, {
+            isEntry: node === 0,
+            isCentre: node === centreNode,
+          });
     rooms.push({
       campaignId: campaign.id,
       id: `${area.id}:r${String(node).padStart(2, '0')}`,
@@ -399,6 +405,41 @@ function rollRoomType(
   if (role.isCentre) narrowBy('WORLD.shapes.hub.centreRequires');
 
   return rng.weighted(pool);
+}
+
+/**
+ * Which node hosts this Rung's teleporter, if any — structurally assigned,
+ * the same way node 0 is always the entry and node 1 is always the hub's
+ * centre, rather than rolled off an archetype's own `roomTypes` table. A
+ * weighted roll can fail to place a thing; this can't, which matters because
+ * a teleporter that silently failed to spawn would break quick travel with
+ * no sign anything had gone wrong.
+ *
+ * One in every `teleporterEveryNRungs` Rungs gets one, never the entry room —
+ * arriving to find the way back already standing open would cost the walk its
+ * whole point. `undefined` when this Rung does not qualify, or when it has
+ * fewer than two rooms to choose from (never true for any real archetype, but
+ * a campaign table is data the engine cannot fully trust).
+ */
+function pickTeleporterNode(
+  rng: Rng,
+  rules: JsonObject,
+  depth: number,
+  nodeCount: number,
+): number | undefined {
+  const every = ruleNumber(rules, 'WORLD.descent.teleporterEveryNRungs');
+  if (every <= 0 || depth <= 0 || depth % every !== 0) return undefined;
+  if (nodeCount < 2) return undefined;
+  return rng.int(1, nodeCount - 1);
+}
+
+/** The teleporter's room type: read from the table, never rolled. */
+function teleporterRoomType(rules: JsonObject): RoomTypeRoll {
+  return {
+    id: 'teleporter',
+    tags: ruleStrings(rules, 'WORLD.descent.teleporterRoom.tags'),
+    glyph: ruleString(rules, 'WORLD.descent.teleporterRoom.glyph', '◈'),
+  };
 }
 
 /**

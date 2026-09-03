@@ -18,7 +18,7 @@ import type { Command, FailureCode, Phrase } from '../engine/parser';
 import { ruleNumber, ruleStrings } from '../engine/rules';
 import type { NpcRecord, ObjectRecord, RoomRecord } from '../world/types';
 import { heldBy, IN_PLAYER, inObject, inRoom } from '../world/types';
-import type { World } from '../world/world';
+import { HUB_AREA_ID, type World } from '../world/world';
 import { describeObject, sentenceList, viewRoom } from './describe';
 import type { Effect } from './effects';
 import { playerCarry, playerMaxHp, playerMaxResolve, type PlayerRecord } from './player';
@@ -182,6 +182,8 @@ export function execute(ctx: CommandContext, command: Command): Reply {
       return farewell(ctx);
     case 'list':
       return wares(ctx, command);
+    case 'recall':
+      return recall(ctx, command);
     case 'attack':
       return attackOutOfCombat(ctx);
     case 'flee':
@@ -837,6 +839,46 @@ function waresTarget(ctx: CommandContext, command: Command): { npc: NpcRecord } 
     };
   }
   return { reply: blocked('There is no one here selling anything.', 'NOT_IN_SCOPE') };
+}
+
+// ── quick travel ────────────────────────────────────────────────────
+
+/**
+ * RECALL — quick travel from the Hub to a teleporter already found. Bare
+ * RECALL lists what answers; `RECALL <place>` travels to one.
+ *
+ * The complement of the Hub-return consumable, not a substitute for it: that
+ * gets the player out from anywhere, this gets them back in to a floor
+ * already reached. Only ever usable from the Hub, and only ever to a Rung
+ * whose teleporter has actually been walked to — descending itself is never
+ * shortened by this, only the walk back down to somewhere already cleared.
+ */
+function recall(ctx: CommandContext, command: Command): Reply {
+  if (ctx.room.areaId !== HUB_AREA_ID) {
+    return blocked('The waygate only answers a call made from the Hub.', 'WRONG_VERB');
+  }
+  const unlocked = ctx.world.unlockedTeleporters();
+  if (unlocked.length === 0) {
+    return say('No waygate has answered you yet. Find one, first — walking there is the only way.');
+  }
+  if (!command.object) {
+    const lines = [line('Waygates answer to:', 'ok')];
+    for (const dest of unlocked) lines.push(line(`  ${dest.areaName} (Rung ${dest.depth})`));
+    return free(lines);
+  }
+
+  const query = command.object.words.join(' ').toLowerCase();
+  const matches = unlocked.filter((dest) => dest.areaName.toLowerCase().includes(query));
+  if (matches.length === 0) return blocked(`No waygate answers to "${query}".`, 'UNKNOWN_NOUN');
+  if (matches.length > 1) {
+    return say(`Which one: ${sentenceList(matches.map((dest) => dest.areaName))}? Say more of the name.`);
+  }
+  const dest = matches[0] as { roomId: string; areaName: string };
+  return {
+    lines: [line(`The waygate takes you down to ${dest.areaName}.`, 'ok')],
+    effects: [{ kind: 'movePlayer', roomId: dest.roomId }],
+    free: false,
+  };
 }
 
 /**

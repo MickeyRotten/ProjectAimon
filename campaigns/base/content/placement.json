@@ -45,7 +45,8 @@
     "chance": 0.22,
     "requires": [
       "!hearth",
-      "!shrine"
+      "!shrine",
+      "!safe"
     ]
   },
   "npc": {

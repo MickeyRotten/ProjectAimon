@@ -157,9 +157,18 @@ describe('the wealth budget', () => {
     let deadEndCount = 0;
     let throughTotal = 0;
     let throughCount = 0;
-    for (const world of worlds(20, 8)) {
+    // A larger sample than the file's other tests: the shift is one tier's
+    // worth of band weights, not a hard cap, so the average needs enough
+    // rooms behind it to separate a real effect from seed-to-seed noise.
+    for (const world of worlds(60, 10)) {
       for (const area of generated(world)) {
         for (const room of world.roomsOf(area.id)) {
+          // The teleporter is structurally forced (WORLD.descent.teleporterRoom)
+          // and tagged safe, which excludes it from hostile placement but not
+          // from containers — a third category with its own placement
+          // behaviour, not the ordinary dead-end/through-room split this test
+          // means to isolate.
+          if (room.type === 'teleporter') continue;
           const value = containerValue(world, room.id);
           if (value === undefined) continue;
           if (isDeadEnd(world, room.id, area.entryRoomId)) {
