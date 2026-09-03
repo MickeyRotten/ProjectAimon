@@ -529,13 +529,27 @@ Entering a new area holds the reveal behind a **full-screen loader** (status
 text and a staged progress bar) over that one call, so the player is briefly at
 the threshold rather than dropped into rooms whose text then pops in. A lone
 OpenRouter call is opaque (no token streaming), so the bar moves through named
-stages rather than a true percentage.
+stages rather than a true percentage. The batch describes ten or more rooms at
+once, so it is slow — it gets a longer per-call timeout than the small voice and
+outcome lines (`ChatRequest.timeoutMs`).
+
+### A failed batch is retried, not stranded
+
+Because this one call is now the *only* thing that writes a room's description —
+there is no per-room fallback behind it any more — a single timeout must not
+leave a whole area on its placeholder for the session. `ensureArea` keeps an
+area retryable and re-attempts it on the next entry, capped at a few tries so a
+genuinely dead key still stops costing a call every move. The Hub and any
+already-written area settle immediately with no call.
 
 ### With no key, the placeholder stands
 
 A failed or absent call leaves `baseDesc` empty; `viewRoom` builds a truthful
-structural placeholder from the room's type, tags and scenery. The game is
-always playable without a narrator.
+structural placeholder from the room's type, its area name and any scenery. It
+is deliberately plain, but it is prose a player reads, so it never prints the
+raw tag list — that was developer scaffolding, and it leaked through on the rare
+turn a room was shown before the narrator had filled it in. The game is always
+playable without a narrator.
 
 ### This still honours audit decision Q1
 

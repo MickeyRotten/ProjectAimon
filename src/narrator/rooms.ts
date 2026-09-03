@@ -33,8 +33,21 @@ export class RoomNarrator {
   private readonly client: LlmClient;
   private readonly settings: NarratorSettings;
 
-  /** Areas whose baseDescs are being (or have been) generated, so we batch once. */
-  private readonly baseDone = new Set<string>();
+  /** Areas we will not attempt again: written, or given up on after MAX_TRIES. */
+  private readonly settled = new Set<string>();
+  /** Areas with a batch call in flight right now, so a second move can't double it. */
+  private readonly inFlight = new Set<string>();
+  /** How many times each area's batch has been attempted this session. */
+  private readonly tries = new Map<string, number>();
+
+  /** Batch attempts before an area is left to its placeholder for good. */
+  private static readonly MAX_TRIES = 3;
+  /**
+   * The batch describes a whole area at once — ten or more rooms in one reply —
+   * so it needs far longer than a single voice or outcome line. The default
+   * client timeout is tuned for those small calls; this one gets its own.
+   */
+  private static readonly BATCH_TIMEOUT_MS = 30_000;
 
   constructor(deps: { campaign: ResolvedCampaign; client: LlmClient; settings: NarratorSettings }) {
     this.campaign = deps.campaign;
@@ -44,34 +57,45 @@ export class RoomNarrator {
 
   /**
    * Ensure the room's whole area has been described: fill every empty
-   * `baseDesc` in it, and its name, in one batch call. Done once per area per
-   * session; a persisted baseDesc from an earlier visit — or the Hub's
-   * hand-authored one — is left alone, so an area with nothing pending makes no
-   * call. The prose lands on the records via `world.writeProse`; the screen
-   * reads it back from there, so this returns nothing.
+   * `baseDesc` in it, and its name, in one batch call. A persisted baseDesc
+   * from an earlier visit — or the Hub's hand-authored one — is left alone, so
+   * an area with nothing pending makes no call. The prose lands on the records
+   * via `world.writeProse`; the screen reads it back from there, so this
+   * returns nothing.
+   *
+   * A failed batch is **retried** on a later entry rather than left forever: a
+   * single timeout on this large, slow call used to strand a whole area on its
+   * developer placeholder for the rest of the session. Retries are capped at
+   * `MAX_TRIES`, so a genuinely dead key still stops stalling every move.
    */
   async ensureArea(world: World, room: RoomRecord): Promise<void> {
-    if (this.baseDone.has(room.areaId)) return;
-    this.baseDone.add(room.areaId);
+    const areaId = room.areaId;
+    if (this.settled.has(areaId) || this.inFlight.has(areaId)) return;
 
-    const rooms = world.roomsOf(room.areaId).sort((a, b) => a.id.localeCompare(b.id));
-    const pending = rooms.filter((entry) => entry.baseDesc.trim().length === 0);
-    if (pending.length === 0) return;
+    const pending = world
+      .roomsOf(areaId)
+      .filter((entry) => entry.baseDesc.trim().length === 0)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    if (pending.length === 0) return this.settle(areaId); // authored, or already written
 
     const template = this.campaign.prompts['prompts/room-base.md'];
-    if (!template) return; // no prompt, no batch — placeholders stand
+    if (!template) return this.settle(areaId); // no prompt, no batch — placeholders stand
 
-    const area = world.areas.get(room.areaId);
+    const attempt = (this.tries.get(areaId) ?? 0) + 1;
+    this.tries.set(areaId, attempt);
+
+    const area = world.areas.get(areaId);
     const roster = pending
       .map((entry, index) => `${index + 1}. ${entry.type} [${entry.tags.join(', ')}]`)
       .join('\n');
     const user = fill(template, {
-      area: area?.name ?? room.areaId,
+      area: area?.name ?? areaId,
       theme: area?.themeTokens.join(', ') || '—',
       identity: describeIdentity(area?.identity),
       rooms: roster,
     });
 
+    this.inFlight.add(areaId);
     try {
       const reply = await this.client.complete({
         model: this.settings.narratorModel,
@@ -80,19 +104,29 @@ export class RoomNarrator {
           { role: 'user', content: user },
         ],
         temperature: this.settings.temperature,
-        maxTokens: Math.max(this.settings.maxTokens, pending.length * 80),
+        maxTokens: Math.max(this.settings.maxTokens, pending.length * 120),
+        timeoutMs: RoomNarrator.BATCH_TIMEOUT_MS,
       });
       const { areaName, rooms: parsed } = parseBaseLines(reply, pending.length);
-      if (areaName) world.writeAreaName(room.areaId, areaName);
+      if (areaName) world.writeAreaName(areaId, areaName);
       pending.forEach((entry, index) => {
         const written = parsed[index];
         if (written) world.writeProse(entry.id, written);
       });
+      this.settle(areaId); // written — never again
     } catch {
-      // A failed batch leaves baseDesc empty; the render falls back to the
-      // structural placeholder, which is still true. We do not retry per turn —
-      // the area is marked done so a dead key does not stall every move.
+      // A failed batch leaves baseDesc empty and the structural placeholder
+      // stands, which is still true. It stays retryable so the next entry into
+      // the area can try again — unless we have burned through MAX_TRIES, at
+      // which point a dead key or a stubborn model stops costing a call a move.
+      if (attempt >= RoomNarrator.MAX_TRIES) this.settle(areaId);
+    } finally {
+      this.inFlight.delete(areaId);
     }
+  }
+
+  private settle(areaId: string): void {
+    this.settled.add(areaId);
   }
 
   private systemPrompt(): string {

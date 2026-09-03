@@ -54,9 +54,12 @@ export function viewRoom(world: World, room: RoomRecord): RoomView {
   ];
 
   const area = world.areas.get(room.areaId);
+  // The player-facing stand-in shown until (or if) the narrator writes a real
+  // baseDesc. It stays deliberately plain, but it is prose a player reads, so it
+  // never exposes the raw tag list — that was developer scaffolding leaking
+  // through on the rare turn the narrator has not filled the room in yet.
   const placeholder = [
     `${titleCase(room.type)}${area ? ` in ${area.name}` : ''}.`,
-    room.tags.length > 0 ? `Tags: ${room.tags.join(', ')}.` : '',
     scenery.length > 0 ? `${sentenceList(scenery.map((object) => object.name))} here.` : '',
   ]
     .filter((line) => line.length > 0)
