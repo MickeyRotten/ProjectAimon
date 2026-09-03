@@ -128,6 +128,56 @@ describe('the wealth budget', () => {
     expect(checked).toBeGreaterThan(20);
   });
 
+  it('rewards a dead end over a through-room, at the value that lives in containers', () => {
+    // The complaint this answers: depth used to price in danger via tier but
+    // never reward, so a branch that dead-ended was a coin flip on whether the
+    // walk was worth it. A room's own tier already varies with depth and
+    // jitter, so this compares dead ends against through-rooms in aggregate
+    // across many areas rather than tier-matching pairs — the shift is applied
+    // per container regardless of tier, so it should show up in the average
+    // however the sample's tiers happen to fall.
+    const isDeadEnd = (world: World, roomId: string, entryRoomId: string | null): boolean => {
+      if (roomId === entryRoomId) return false;
+      return world.exitsOf(roomId).filter((exit) => exit.toRoomId !== null).length <= 1;
+    };
+    const containerValue = (world: World, roomId: string): number | undefined => {
+      const containers = world.objectsIn(roomId).filter((object) => object.flags.container === true);
+      if (containers.length === 0) return undefined;
+      return containers.reduce(
+        (sum, container) =>
+          sum +
+          world
+            .contentsOfObject(container.id)
+            .reduce((s, item) => s + (itemValues(campaign, item)['price'] ?? 0), 0),
+        0,
+      );
+    };
+
+    let deadEndTotal = 0;
+    let deadEndCount = 0;
+    let throughTotal = 0;
+    let throughCount = 0;
+    for (const world of worlds(20, 8)) {
+      for (const area of generated(world)) {
+        for (const room of world.roomsOf(area.id)) {
+          const value = containerValue(world, room.id);
+          if (value === undefined) continue;
+          if (isDeadEnd(world, room.id, area.entryRoomId)) {
+            deadEndTotal += value;
+            deadEndCount++;
+          } else {
+            throughTotal += value;
+            throughCount++;
+          }
+        }
+      }
+    }
+
+    expect(deadEndCount).toBeGreaterThan(15);
+    expect(throughCount).toBeGreaterThan(15);
+    expect(deadEndTotal / deadEndCount).toBeGreaterThan(throughTotal / throughCount);
+  });
+
   it('holds the total worth of an area to something a shop could absorb', () => {
     // The number that prompted this: one chest could roll a masterwork heirloom
     // plate worth 7000 gold, which is more than the rest of the world. The

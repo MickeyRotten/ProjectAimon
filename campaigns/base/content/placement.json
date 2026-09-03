@@ -295,6 +295,8 @@
     },
     "looseItemBand": "low",
     "_looseNote": "Items lying about a room are pinned to the low band so containers are where value lives. A room can still be worth searching; it is not worth looting.",
+    "deadEndBandShift": 1,
+    "_deadEndNote": "A container at the end of a branch (not a through-room, not the entry) rolls its band as if the room were this many tiers higher. Depth already prices in danger via the room's own tier; this is reward following position on top of that, so a side trail's promise is real rather than a coin flip.",
     "goldBudgetByTier": {
       "_note": "One purse for the whole area, spent down by gold piles and by any purse that rolls as loot. When it runs out, later coin is whatever is left, and a spill with nothing behind it is simply not made.",
       "1": [
