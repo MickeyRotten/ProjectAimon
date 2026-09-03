@@ -323,3 +323,26 @@ table.grid.tags tr.dup td.tagname input { color: var(--err); }
 
 .usage-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; }
 .usage-lead { color: var(--text); font-size: 12px; line-height: 1.45; }
+
+/* ---- closed-vocabulary pickers ---- */
+
+select.picker {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 6px;
+  width: 100%;
+}
+select.picker:focus { outline: none; border-color: var(--accent); }
+/* A value already on disk that the closed list does not contain. */
+select.picker.stray { border-color: var(--err); color: var(--err); }
+table.grid td select.picker { border-color: transparent; background: transparent; }
+table.grid td select.picker:hover { border-color: var(--line); }
+table.grid td select.picker:focus { border-color: var(--accent); background: var(--bg); }
+table.grid td select.picker.stray { border-color: var(--err); }
+.picker.templated { display: block; width: 100%; }
+.strlist .row select.picker { flex: 1; }
+.strlist .row .picker.templated { flex: 1; }

@@ -48,12 +48,18 @@ import {
   rejectTagName,
   renameKeyInPlace,
   termTags,
-  REQUIRES_KEYS,
-  SINGLE_TAG_KEYS,
-  TAG_LIST_KEYS,
   type TagCategory,
   type TagUsage,
 } from './tagfile';
+import {
+  keyOf,
+  vocabularyFor,
+  TEMPLATED,
+  type Vocabulary,
+} from './pickers';
+import { PLACE_KINDS, PREDICATE_KINDS, REWARD_KINDS } from '../world/quests';
+import { SHAPES } from '../world/shapes';
+import { ALL_DIRECTIONS } from '../world/types';
 
 // ---------------------------------------------------------------------------
 // File manifest
@@ -313,13 +319,13 @@ function renderText(value: string, onChange: () => void, prose: boolean): HTMLEl
 }
 
 /** A single-tag text input, autocompleting against the tag vocabulary. */
-function renderTagText(value: string, onChange: () => void): HTMLElement {
+function renderTagText(value: string, commit: (next: string) => void): HTMLElement {
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value;
   input.setAttribute('list', 'tag-vocab');
   bindTagTitle(input);
-  input.addEventListener('input', () => onChange());
+  input.addEventListener('input', () => commit(input.value));
   return input;
 }
 
@@ -357,17 +363,13 @@ function renderCsvCell(list: string[], onChange: () => void): HTMLElement {
 }
 
 /**
- * Editable list of strings — one input per item, add/remove buttons. `tagKind`
- * turns on tag-vocabulary autocomplete: `'tag'` for a plain tag, `'requires'`
- * for a `requires[]` term (which may carry `!` / `|`, so it is not restricted,
- * only assisted).
+ * Editable list of strings — one control per item, add/remove buttons. Each row
+ * gets whatever its own path earns: a closed dropdown, a tag-autocompleting
+ * text input, or a plain one.
  */
-function renderStringList(
-  list: string[],
-  path: string,
-  onChange: () => void,
-  tagKind?: 'tag' | 'requires',
-): HTMLElement {
+function renderStringList(list: string[], path: string, onChange: () => void): HTMLElement {
+  const key = keyOf(path);
+  const tagKind = tagPickerFor(`${path}[0]`, key);
   const wrap = document.createElement('div');
   wrap.className = 'strlist';
   stamp(wrap, path);
@@ -375,15 +377,21 @@ function renderStringList(
     const rows = list.map((value, i) => {
       const row = document.createElement('div');
       row.className = 'row';
-      stamp(row, `${path}[${i}]`);
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = value;
-      if (tagKind) {
-        input.setAttribute('list', 'tag-vocab');
-        bindTagTitle(input);
+      const itemPath = `${path}[${i}]`;
+      stamp(row, itemPath);
+      const commit = (next: string) => { list[i] = next; onChange(); };
+      const picked = renderChoice(value, itemPath, commit);
+      const input = picked ?? document.createElement('input');
+      if (!picked) {
+        const text = input as HTMLInputElement;
+        text.type = 'text';
+        text.value = value;
+        if (tagKind) {
+          text.setAttribute('list', 'tag-vocab');
+          bindTagTitle(text);
+        }
+        text.addEventListener('input', () => commit(text.value));
       }
-      input.addEventListener('input', () => { list[i] = input.value; onChange(); });
       const del = document.createElement('button');
       del.textContent = '×';
       del.title = 'remove';
@@ -404,6 +412,177 @@ function renderStringList(
   };
   rebuild();
   return wrap;
+}
+
+// ---------------------------------------------------------------------------
+// Closed-vocabulary pickers for the non-tag fields
+// ---------------------------------------------------------------------------
+
+/** One offered value, with the label that explains it in the dropdown. */
+interface Choice {
+  readonly value: string;
+  readonly label?: string | undefined;
+}
+
+/** Compass letters are unreadable as a bare list; these are UI copy, not rules. */
+const DIRECTION_LABELS: Record<string, string> = {
+  n: 'north', s: 'south', e: 'east', w: 'west', u: 'up', d: 'down',
+};
+
+/** Keys of a live JSON object, minus the `_note`-style commentary. */
+function liveKeys(path: string, ...at: string[]): string[] {
+  let node: Json | undefined = state.get(path)?.current;
+  for (const step of at) {
+    if (node === null || typeof node !== 'object' || Array.isArray(node)) return [];
+    node = (node as JsonRecord)[step];
+  }
+  if (node === null || typeof node !== 'object' || Array.isArray(node)) return [];
+  return Object.keys(node).filter((key) => !key.startsWith('_'));
+}
+
+/** `id` of every record in a live array, e.g. every ability, every hub room. */
+function liveIds(path: string, ...at: string[]): string[] {
+  let node: Json | undefined = state.get(path)?.current;
+  for (const step of at) {
+    if (node === null || node === undefined || typeof node !== 'object' || Array.isArray(node)) return [];
+    node = (node as JsonRecord)[step];
+  }
+  if (!Array.isArray(node)) return [];
+  return node
+    .map((row) => (row !== undefined && isJsonRecord(row) ? row['id'] : undefined))
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+/**
+ * Every area archetype id, read from the area files themselves rather than
+ * their file names — the id is what a gate actually resolves against.
+ */
+function archetypeIds(): string[] {
+  return FILES.filter((file) => file.path.startsWith(`${BASE}/areas/`)).map((file) => {
+    const area = state.get(file.path)?.current;
+    const id = area !== undefined && isJsonRecord(area) ? area['id'] : undefined;
+    return typeof id === 'string' && id.length > 0 ? id : file.label;
+  });
+}
+
+/**
+ * What a vocabulary currently offers. The engine's own constants for the fixed
+ * lists; the live, unsaved files for the ones the content defines — so an
+ * ability added in one tab is offered in the gambit tab immediately, before any
+ * save.
+ */
+function choicesFor(vocabulary: Vocabulary): Choice[] {
+  const plain = (values: Iterable<string>): Choice[] =>
+    [...values].map((value) => ({ value }));
+  switch (vocabulary) {
+    case 'questPlace':
+      return plain(PLACE_KINDS);
+    case 'questPredicate':
+      return plain(PREDICATE_KINDS);
+    case 'questReward':
+      return plain(REWARD_KINDS);
+    case 'shape':
+      return plain(SHAPES);
+    case 'direction':
+      return ALL_DIRECTIONS.map((dir) => ({ value: dir, label: DIRECTION_LABELS[dir] }));
+    case 'archetype':
+      return plain(archetypeIds());
+    // `hub` is not an area file, but `startingArea` accepts it — the player
+    // beginning at the Hub rather than out in the world.
+    case 'archetypeOrHub':
+      return plain(['hub', ...archetypeIds()]);
+    case 'hubRoom':
+      return plain(liveIds(`${BASE}/campaign.json`, 'hub', 'rooms'));
+    case 'abilityType':
+      return plain(liveKeys(`${BASE}/content/abilities.json`, 'types'));
+    case 'abilityId':
+      return plain(liveIds(`${BASE}/content/abilities.json`, 'table'));
+    case 'primerId':
+      return plain(liveKeys(`${BASE}/content/abilities.json`, 'primers'));
+    case 'gambitCondition': {
+      const node = state.get(`${BASE}/content/abilities.json`)?.current;
+      const list = node !== undefined && isJsonRecord(node) ? node['gambitConditions'] : undefined;
+      const patterns = Array.isArray(list) ? list.filter((p): p is string => typeof p === 'string') : [];
+      return patterns.map((pattern) => ({
+        value: pattern,
+        label: /[NX]/.test(pattern)
+          ? `template — replace ${pattern.includes('N') ? 'N with a number' : 'X with a primer'}`
+          : undefined,
+      }));
+    }
+    default:
+      return [];
+  }
+}
+
+/**
+ * The control a field deserves, or null when nothing closed applies and the
+ * generic renderer should have it.
+ *
+ * A closed list becomes a `<select>`: the invalid value is not typeable, which
+ * is the whole point. A value already on disk that is *not* in the list is
+ * still shown — offered as its own option, flagged — because silently
+ * substituting a legal value for the designer's illegal one would hide the very
+ * mistake the validator is complaining about. A templated vocabulary
+ * (`self.hp<N`) cannot be a closed list, so it gets an assisted text input over
+ * its own datalist instead.
+ */
+function renderChoice(
+  value: string,
+  path: string,
+  commit: (next: string) => void,
+): HTMLElement | null {
+  const vocabulary = vocabularyFor(path, keyOf(path));
+  if (!vocabulary || vocabulary === 'tag' || vocabulary === 'requires') return null;
+  const choices = choicesFor(vocabulary);
+  if (choices.length === 0) return null;
+
+  if (TEMPLATED.has(vocabulary)) {
+    const wrap = document.createElement('span');
+    wrap.className = 'picker templated';
+    const list = document.createElement('datalist');
+    list.id = `vocab-${vocabulary}`;
+    for (const choice of choices) list.append(optionFor(choice));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    input.setAttribute('list', list.id);
+    input.title = choices.map((c) => c.value).join('\n');
+    input.addEventListener('input', () => commit(input.value));
+    wrap.append(input, list);
+    return wrap;
+  }
+
+  const select = document.createElement('select');
+  select.className = 'picker';
+  if (!choices.some((choice) => choice.value === value)) {
+    const stray = document.createElement('option');
+    stray.value = value;
+    stray.textContent = value === '' ? '— not set —' : `${value} — not one of the allowed values`;
+    select.append(stray);
+    select.classList.add('stray');
+  }
+  for (const choice of choices) select.append(optionFor(choice));
+  select.value = value;
+  select.addEventListener('change', () => {
+    select.classList.remove('stray');
+    commit(select.value);
+  });
+  return select;
+}
+
+function optionFor(choice: Choice): HTMLOptionElement {
+  const option = document.createElement('option');
+  option.value = choice.value;
+  option.textContent = choice.label ? `${choice.value} — ${choice.label}` : choice.value;
+  if (choice.label) option.label = choice.label;
+  return option;
+}
+
+/** Does a tag picker belong on this field? The path overrides the key name. */
+function tagPickerFor(path: string, key: string): 'tag' | 'requires' | undefined {
+  const vocabulary = vocabularyFor(path, key);
+  return vocabulary === 'tag' || vocabulary === 'requires' ? vocabulary : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -626,15 +805,15 @@ function renderNested(obj: Json, path: string, onChange: () => void): HTMLElemen
       } else if (isRecordArray(child)) {
         val.append(renderTable(child, childPath, onChange, key));
       } else if (Array.isArray(child) && child.every((v) => typeof v === 'string')) {
-        const kind = TAG_LIST_KEYS.has(key) ? 'tag' : REQUIRES_KEYS.has(key) ? 'requires' : undefined;
-        val.append(renderStringList(child as string[], childPath, onChange, kind));
+        val.append(renderStringList(child as string[], childPath, onChange));
       } else if (typeof child === 'object' && child !== null) {
         val.append(renderNested(child, childPath, onChange));
-      } else if (typeof child === 'string' && SINGLE_TAG_KEYS.has(key)) {
-        val.append(renderTagText(child, () => {
-          const input = val.querySelector('input');
-          if (input) { record[key] = input.value; onChange(); }
-        }));
+      } else if (typeof child === 'string') {
+        const commit = (next: string) => { record[key] = next; onChange(); };
+        const picked = renderChoice(child, childPath, commit);
+        if (picked) val.append(picked);
+        else if (tagPickerFor(childPath, key)) val.append(renderTagText(child, commit));
+        else val.append(renderValue(child, childPath, onChange));
       } else {
         val.append(renderValue(child, childPath, onChange));
       }
@@ -644,6 +823,32 @@ function renderNested(obj: Json, path: string, onChange: () => void): HTMLElemen
   }
   section.append(head, body);
   return section;
+}
+
+/**
+ * A closed-vocabulary or tag control for one table cell, appended in place.
+ * Returns false when the cell has earned neither and the generic renderer
+ * should take it.
+ */
+function cellPicker(
+  td: HTMLElement,
+  row: Record<string, Json>,
+  col: string,
+  path: string,
+  onChange: () => void,
+): boolean {
+  const value = String(row[col] ?? '');
+  const commit = (next: string) => { row[col] = next; onChange(); };
+  const picked = renderChoice(value, path, commit);
+  if (picked) {
+    td.append(picked);
+    return true;
+  }
+  if (tagPickerFor(path, col)) {
+    td.append(renderTagText(value, commit));
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -707,12 +912,8 @@ function renderTable(
             });
             td.append(input);
           }
-        } else if (typeof value === 'string' && SINGLE_TAG_KEYS.has(col)) {
-          const input = renderTagText(value, () => {
-            const control = td.querySelector('input');
-            if (control) { row[col] = control.value; onChange(); }
-          });
-          td.append(input);
+        } else if (typeof value === 'string' && cellPicker(td, row, col, `${path}[${rowIndex}].${col}`, onChange)) {
+          // Handled by a closed-vocabulary or tag control.
         } else {
           const cell = value as string | number | boolean;
           td.append(
