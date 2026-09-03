@@ -232,4 +232,226 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
    filed as TODO_EDITOR.md task 3 (the generic renderer still displays the
    new shape, just not with a purpose-built tag+description row editor).
 
+
 ---
+11. [ ] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
+    earlier "engine changes for layout templates" research, which was costed
+    against the wrong problem. Nothing is built yet; this is the design being
+    settled before it is.)*
+
+    ### The complaint this answers
+
+    The map felt **claustrophobic and at times illogical**. The wanted feeling,
+    in the user's own words: *"Ah, forest. That side trail probably leads down
+    to something interesting. Going forward probably takes me out of the
+    woods."* The player should be able to read a map and form a **correct**
+    prediction from it.
+
+    Three things blocked that, all measured against the current code:
+
+    - **Every area in the game is a square.** `lattice.ts:97` computes
+      `footprint = ceil(sqrt(slots))` and returns `{ w: footprint, h: footprint }`
+      — `w === h`, always, for every archetype. With `cubeSizing.slotsPerRoom:
+      1.4`, a flat area runs 56–64% filled (farmland 15 rooms in 5x5 = 60%;
+      town 16 in 5x5 = 64%; coven 9 in 4x4 = 56%). A square packed that full
+      has no long axis and no corridors — almost every room touches two or
+      three others. **The claustrophobia is geometric and upstream of
+      everything else.**
+    - **The way out can be next door.** `WORLD.gates.minHopsFromEntry: 2`, in
+      areas of 9–20 rooms, then a free pick among everything that qualifies.
+      There is no representation of *forward* anywhere in the engine.
+    - **Nothing makes a side trail worth taking.** `bandByTier` scopes loot by
+      area tier only. Depth changes *danger* (`roomDepthBonus`) but never
+      *reward*, so a dead end at the end of a long branch is a coin flip. A map
+      that promises and does not pay teaches the player to stop reading it.
+
+    ### The decision: the world runs downward, in Rungs
+
+    Reference points: Diablo (descend, town at the top), Delicious in Dungeon
+    (each floor its own ecology, the trip home is a real cost), Dungeon
+    Encounters (the map *is* the game, floors are legible grids).
+
+    **A Rung is one floor. A Rung is one area. A Rung is one biome.** The Hub
+    is Rung 0. You descend.
+
+    **This is chosen because it subtracts.** Every other option on the table
+    added a system; this one retires several and gives the already-built Z axis
+    a job.
+
+    ### What it settles
+
+    - **CLAUDE.md's open question** — *"whether areas should ever connect back
+      to each other, or only to the Hub"* — is answered, but not as either
+      option was framed. Neither wheel nor web at the area level: a **stack**.
+      (Today it is in fact neither of those either — it is a **tree**. Every
+      gate calls `lattice.allocate()`, which reserves a *fresh* cube and
+      refuses any overlapping an existing one; there is no code path anywhere
+      where a gate opens onto an area that already exists. So there is exactly
+      one path between any two areas, always through their common ancestor.)
+    - **Difficulty becomes spatial and legible.** Depth from the Hub *is* the
+      Rung number. The gradient stops being a curve fighting against
+      shortcuts and becomes a number on the screen.
+    - **Directional coherence is free.** "Forward takes me out of the woods"
+      becomes "down", on the one axis every player already understands.
+    - **The Hub-return consumable and the corpse run become meaningful.**
+      Both are already built and both are currently conveniences. Depth gives
+      them a cost curve.
+
+    ### It is already half-built
+
+    - `Cube` carries `z0`/`z1`. `ALL_DIRECTIONS` includes `u`/`d`, and
+      `FLAT_DIRECTIONS` exists as a *separate* constant — the code already
+      distinguishes vertical from horizontal.
+    - `cubeSizing.zSpanByArchetype` and `allocation.zOffsetByArchetype` exist;
+      `warren: -2` already drops a warren two levels below farmland.
+    - The map already renders **per floor**, with a `Saltmere (F1)` label, and
+      task 5 deliberately limited the multi-area map to the same Z.
+
+    The engine is already three-dimensional and already renders per floor. This
+    commits to an axis that exists and is barely used. It is not a rewrite.
+
+    ### What one-area-per-Rung retires
+
+    Areas never compete for space if each one owns a whole plane. These are
+    built systems losing their jobs, listed so the removal is deliberate rather
+    than discovered:
+
+    - **Cube allocation and collision handling.** `allocate`, `probe`,
+      `nearestFreeCube`, `slideOutwardAlongGateAxis`,
+      `allocation.maxSlideAttempts: 60`, `onExhausted`, and `cubeSizing.gap`.
+    - **`content/adjacency.json` changes shape.** An affinity matrix for what
+      may sit *beside* what has no "beside" any more. It becomes a **sequence**
+      — which biome follows which as you descend. Easier to author and easier
+      to reason about than a matrix, but it is a rewrite of that table, not a
+      tuning of it.
+    - **`WORLD.gates.perArea: [1,3]` collapses.** The only way onward is the
+      descent. `areaDef.gates` (archetype -> weight) becomes "what is the next
+      Rung", which is the same sequence question as adjacency.
+
+    ### The spider web moves down one level
+
+    The stated want was a web rather than *"a perfect compass structure, where
+    each direction is a straight vector out from the middle without any
+    inter-connectivity."* With one area per Rung there are no lateral **areas**
+    to link, so the web becomes a property of the **room graph inside a Rung**:
+    **rings are lateral room connections within the floor, spokes are
+    descents.** Still a web, at room scale.
+
+    This is already built and needs only exposing: `weaveChords` weaves extra
+    connections *after* placement, between rooms that ended up side by side,
+    and `chordFraction` reads `WORLD.shapes.<shape>.extraEdges` — today only
+    `warren: 0.3` sets it. Make that a per-Rung value and the rings appear.
+
+    ### Teleporter — a new universal room type
+
+    **Quick travel between the Hub and a Rung, unlocked by finding it, spawning
+    every nth Rung.**
+
+    - **Structurally placed, never rolled.** `roomTypes` is per-archetype
+      (`AreaDef.roomTypes`); there is no global room-type table, so "universal"
+      is new schema either way. More importantly a weighted roll can *fail*,
+      and a teleporter that does not spawn breaks quick travel silently. The
+      engine already places rooms structurally — node 0 is always the entry,
+      node 1 is always the hub centre — and a teleporter should be assigned the
+      same way, with its own glyph so the map shows it.
+    - **It is stateful, which is new.** "Unlocks" means the save remembers which
+      teleporters are active: a data-model change, plus a travel verb in the
+      global `data/verbs.json` (verbs are global — settled decision).
+    - **Keep it distinct from the Hub-return consumable**, which is a listed
+      gold sink and which a teleporter network would otherwise eat. The split:
+      **the consumable gets you *out* from anywhere; the teleporter gets you
+      *back in* to a known depth.** Escape versus re-entry. Both survive.
+    - **Descending must never require finding it.** Missing a teleporter costs
+      a long walk, never progress.
+
+    ### The open numbers
+
+    Three, and the first is the most load-bearing tunable in the design.
+
+    - **`n` — Rungs between teleporters.** It sets three things at once: how
+      long a delve is, how expensive the return trip is, and **how punishing
+      death is** — because the corpse run walks you back from the Hub and
+      teleporters shorten that walk. Keep it a single rules value so it moves
+      in one place.
+    - **Descents per Rung.** One makes finding the stairs the hunt (Dungeon
+      Encounters). Several trade tension for freedom. It is a table value, but
+      it sets the whole feel.
+    - **How many Rungs.** Bounded run or open descent. Untouched so far.
+
+    Also deferred by explicit decision: **Rung size.** Areas are 9–20 rooms
+    today, which is small for a whole floor. Expanding them comes later.
+
+    ### What survives the reframe unchanged
+
+    The vertical world is a better *container* for these; it does not replace
+    them. Both were the original complaint and neither is fixed by going
+    vertical:
+
+    - **Footprint shape.** A Rung of squares is still a square.
+      `footprint = ceil(sqrt(slots))` does not care what floor it is on.
+      Replace it with a per-archetype ratio: a forest Rung long and thin, a
+      town Rung squarish, a warren blobby. **This is also a hard prerequisite
+      for any hand-authored layout** — the cube is allocated by `sizeFor()`
+      before a layout is drawn, so a 3x9 forest literally cannot be placed
+      today.
+    - **Reward must follow position.** Band and content scoped by depth and
+      dead-endness alongside tier. This is what makes the side trail's promise
+      *true*, and **no amount of authored layout can substitute for it**:
+      a beautiful hand-drawn map whose trails are empty half the time teaches
+      the player that the map lies, and then the shape is worse than useless
+      because it promised.
+
+    ### What this does to TODO_EDITOR.md task 2 (layout templates)
+
+    It makes it **cheaper and more likely to happen**. One authored layout per
+    Rung, and there are perhaps ten Rungs rather than forty forests — roughly a
+    quarter of the authoring burden, aimed at a floor whose theme and role are
+    already known. The engine research that was task 11 still holds where it
+    described *mechanism* (no seam in `buildGraph` for a supplied graph; slot
+    pools must still pass `roomTypeFit`; the wealth purse is spent in room
+    order so a slot-scoped band needs a reserved allocation; `shapes.ts`
+    exports no parity or embeddability predicate for an editor canvas to
+    validate against). It no longer holds where it described *cost*, because
+    the unit of authoring changed.
+
+    ### Risk, stated plainly
+
+    This is the fourth reframe in one design conversation, and CLAUDE.md's
+    correction section exists because the predecessor project died of exactly
+    that. The reason to accept it anyway: every other candidate **added** —
+    layouts, a canvas, a world web, slot pools — while this one **subtracts**.
+    It removes the need for a lateral-difficulty rule, removes the ambiguity
+    about direction, and retires the cube-collision subsystem. That is the
+    opposite of how the predecessor died. The risk is not that it is the wrong
+    shape; it is that it is a fifth one.
+
+    ### Closed-list amendments this needs (rule 11)
+
+    Not made yet — CLAUDE.md still describes what is built, and none of this is.
+    Recorded so they are not missed:
+
+    - **Add:** quick travel / the teleporter network, as a system.
+    - **Amend:** the open question about areas connecting to each other, now
+      answered by the stack.
+    - **Amend:** "Area generation on entry" and "Rule-driven adjacency", both of
+      which change meaning under one-area-per-Rung.
+    - **Note:** "Rung" would be the third *ladder* in the vocabulary, after the
+      LLM tier ladder (`src/game/ladder.ts`) and `LAYOUT_FAILURE.order`.
+      Different domains, but `rung` and `tier` will appear in the same sentence
+      often — keep the two words clearly distinct in code and in prose.
+
+    ### Suggested order
+
+    1. **Footprint shape per archetype.** One formula, changes how every area
+      in the game feels, and unblocks everything else. Do it first even if the
+      rest waits.
+    2. **Reward follows position.** Makes the map honest. Table-shaped.
+    3. **The Rung frame** — Rung 0 = Hub, one area per Rung, descents, the
+      difficulty gradient re-keyed to Rung number.
+    4. **Room-scale web** — expose `extraEdges` per Rung.
+    5. **Teleporter** — structural placement, unlock state, travel verb.
+    6. **Authored Rung layouts**, onto a world that already reads correctly.
+
+    Steps 1 and 2 are worth doing and *playing* before 3, because they are
+    cheap, they are needed either way, and they will sharpen what the vertical
+    frame actually has to deliver.
