@@ -310,3 +310,16 @@ pre.diff .dl.add { color: var(--accent); background: rgba(111, 191, 143, 0.08); 
 pre.diff .dl.del { color: var(--err); background: rgba(217, 107, 107, 0.08); }
 pre.diff .dl.ctx { color: var(--dim); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---- tags.json: tag/description rows ---- */
+
+.tagcat { display: flex; flex-direction: column; gap: 4px; }
+table.grid.tags td.tagname { width: 200px; }
+table.grid.tags td.tagname input { color: var(--accent); }
+table.grid.tags td.actions { width: 30px; }
+table.grid.tags tr.dup td.tagname input { color: var(--err); }
+
+/* ---- delete guard: where a tag is still used ---- */
+
+.usage-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; }
+.usage-lead { color: var(--text); font-size: 12px; line-height: 1.45; }

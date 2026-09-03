@@ -78,7 +78,10 @@ export function validateCampaign(
 
   for (const tag of vocabulary.all()) {
     if (!vocabulary.descriptionOf(tag)?.trim()) {
-      error('tags.json', `"${tag}" has no description`);
+      // Addressed at the tag itself, not the file, so an editor can anchor the
+      // complaint to the row it is about.
+      const namespace = vocabulary.namespaceOf(tag);
+      error(namespace ? `tags.json.${namespace}.${tag}` : 'tags.json', `"${tag}" has no description`);
     }
   }
 

@@ -100,7 +100,7 @@ describe('layering a campaign over base', () => {
     const { report } = await load({
       'tags.json': { room: { mood: { briny: '' } } },
     });
-    expect(messages(report)).toContain('tags.json: "briny" has no description');
+    expect(messages(report)).toContain('tags.json.room.mood.briny: "briny" has no description');
   });
 
   it('applies settings-screen overrides on top of the campaign', async () => {
