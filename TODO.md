@@ -234,7 +234,7 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
 
 
 ---
-11. [~] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
+11. [x] SPIKE: **THE VERTICAL WORLD — Rungs.** *(Decision record. Supersedes the
     earlier "engine changes for layout templates" research, which was costed
     against the wrong problem.)*
 
@@ -256,11 +256,26 @@ Especially ERROR PREVENTION & RECOVERY are to be kept in mind.
     connect to each other" open question are amended to match. Full suite
     green throughout.
 
-    **Not yet built:** the teleporter system (a new closed-list system —
-    structural placement, save-state unlocks, a travel verb in
-    `data/verbs.json`), and the two remaining open numbers (descents per
-    Rung is set to 1; how many Rungs total is still untouched, by design —
-    open descent for now).
+    **The teleporter is built too.** A universal room type — structurally
+    assigned to a non-entry room on every `teleporterEveryNRungs`th Rung,
+    never a weighted roll that could fail to spawn one, tagged `safe` (which
+    now also excludes a room from hostile placement — a first, since no
+    generated room carried that tag before). Walking to it unlocks it: one
+    flag in `world.flags` (`teleporter:<roomId>`), written at the same
+    `visit` write point every room already gets, no schema change and no
+    separate action. `RECALL`, the new (64th) verb, is Hub-only: bare
+    `RECALL` lists what has answered, `RECALL <place>` steps straight there.
+    It is the complement of the Hub-return consumable, not a substitute —
+    that (not yet built) gets the player *out* from anywhere, this gets them
+    *back in* to a depth already found, and descending itself is never
+    shortened by either. `tests/teleporter.test.ts` covers structural
+    placement, the unlock write-point, and RECALL's Hub-only gating,
+    listing and matching.
+
+    **Left open, by design rather than by omission:** how many Rungs total
+    — the doc's own third open number, explicitly "untouched so far,"
+    bounded run vs. open descent. Not a build gap; a question for later
+    play to answer.
 
     ### The complaint this answers
 

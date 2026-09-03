@@ -91,10 +91,16 @@ price in danger but never reward. The map already draws per floor and marks
 a room holding an unwalked descent directly (no ghost cell — a vertical exit
 has no adjacent slot to place one in), so the merged-map-across-a-crossed-gate
 feature retires too: crossing any gate now always changes Z, so it could
-never fire again. **Not yet built:** the teleporter room type (quick travel
-between the Hub and a found Rung, unlocked once and never required for
-descending), and this file's own closed-list/open-question amendments the
-design record calls for.
+never fire again. Quick travel is built too: the teleporter is a universal
+room type, structurally assigned — never rolled — to a non-entry room on
+every `WORLD.descent.teleporterEveryNRungs`th Rung, tagged `safe` so it never
+draws a hostile or the way down. Walking to it is the whole unlock, one flag
+in `world.flags` set at the same write point that marks any room visited, no
+separate action and no schema change. `RECALL`, Hub-only, lists what has
+answered and, given a place, steps straight to it — the complement of the
+Hub-return consumable rather than a substitute for it: that (not yet built)
+gets the player *out* from anywhere, this gets them *back in* to a depth
+already found, and descending itself is never shortened by either.
 
 ---
 
@@ -205,10 +211,11 @@ tables; the engine must produce the same shapes.
 - **Depth gates** — when an archetype may be reached at all (a coven is never
   in the shallows). There is no "beside" any more for an affinity matrix to
   govern: every Rung owns a whole plane to itself
-- **Quick travel** — a teleporter, unlocked by finding it, on every Nth Rung;
-  gets the player back to a known depth. Never required for descending, and
-  never a substitute for the Hub-return consumable, which gets them *out*
-  from anywhere instead. *Designed, not yet built.*
+- **Quick travel** — a teleporter, structurally placed and unlocked by
+  walking to it, on every Nth Rung; `RECALL` from the Hub gets the player
+  back to a known depth. Never required for descending, and never a
+  substitute for the Hub-return consumable, which gets them *out* from
+  anywhere instead
 - **Micro-quests** — six templates, distance bands, one objective each
 - **Companions** — standing ladder, cap of four, engine-owned recruitment
 - Inventory (generous carry limit)
