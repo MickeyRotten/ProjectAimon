@@ -143,11 +143,17 @@ export function matchPhrase(entries: readonly ScopeEntry[], phrase: Phrase): Sco
 const wordsOf = (entry: ScopeEntry): string[] =>
   [...entry.nouns, ...entry.adjectives].map((word) => word.toLowerCase());
 
+const givesLight = (object: ObjectRecord) =>
+  object.flags.lightSource === true && object.flags.lit === true && object.burnRemaining > 0;
+
+/** A lit source in the player's own pack — the light that travels with them. */
+export function carriedLight(world: World): ObjectRecord | undefined {
+  return world.contentsOf(IN_PLAYER).objects.find(givesLight);
+}
+
 /** Does anything here, carried or in the room, give light? */
 export function anyLight(world: World, roomId: string): ObjectRecord | undefined {
-  const lit = (object: ObjectRecord) =>
-    object.flags.lightSource === true && object.flags.lit === true && object.burnRemaining > 0;
-  return world.contentsOf(IN_PLAYER).objects.find(lit) ?? world.objectsIn(roomId).find(lit);
+  return carriedLight(world) ?? world.objectsIn(roomId).find(givesLight);
 }
 
 /** A dark room with nothing lit in it. The one place darkness is decided. */

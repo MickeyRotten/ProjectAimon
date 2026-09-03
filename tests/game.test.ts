@@ -270,6 +270,33 @@ describe('light, and running out of it', () => {
     // Your own kit is still in scope: you can rummage, and light a torch.
     expect(text(game, 'light torch')).toContain('catches');
   });
+
+  /** A walkable neighbour of wherever the player stands, forced dark. */
+  const darkNextDoor = (game: Game) => {
+    const step = game.world.exitsOf(game.player.roomId).find((exit) => exit.toRoomId !== null);
+    if (!step?.toRoomId) throw new Error('the start room has no walkable exit');
+    const dest = game.world.rooms.get(step.toRoomId);
+    if (!dest) throw new Error('the exit points nowhere');
+    dest.tags = [...dest.tags.filter((tag) => tag !== 'lit'), 'dark'];
+    return step;
+  };
+
+  it('refuses a step into a dark room, naming the torch as the fix', () => {
+    const game = start();
+    const here = game.player.roomId;
+    const step = darkNextDoor(game);
+    // The kit torch is carried but unlit, so nothing lights the way in.
+    expect(text(game, step.dir)).toContain('too dark');
+    expect(game.player.roomId).toBe(here);
+  });
+
+  it('lets you into the dark once a carried torch is lit', () => {
+    const game = start();
+    const step = darkNextDoor(game);
+    game.submit('light torch');
+    game.submit(step.dir);
+    expect(game.player.roomId).toBe(step.toRoomId);
+  });
 });
 
 describe('saving', () => {

@@ -84,7 +84,7 @@ means changing a number.**
     "field":     { "w": 30, "tags": ["outdoor","open","wild"] },
     "lane":      { "w": 20, "tags": ["outdoor","open","path"] },
     "farmhouse": { "w": 10, "tags": ["indoor","dwelling"] },
-    "barn":      { "w":  8, "tags": ["indoor","dark","storage"] },
+    "barn":      { "w":  8, "tags": ["indoor","dim","storage"] },
     "well":      { "w":  5, "tags": ["outdoor","water","landmark"] },
     "shrine":    { "w":  4, "tags": ["outdoor","landmark","quiet"] }
   },
